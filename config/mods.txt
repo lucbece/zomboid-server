@@ -13,4 +13,5 @@
 #
 # Ver docs/mods.md para el procedimiento completo.
 
-3750253491  VB_CommonSense  # Common Sense [B42.20+]
+# Partida de prueba sin mods. Descomentar para la partida definitiva:
+# 3750253491  VB_CommonSense  # Common Sense [B42.20+]

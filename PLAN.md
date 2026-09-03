@@ -227,6 +227,15 @@ de Steam, tarea 10).
 - **Decidir `PVP`**: el `.tpl` quedó en `PVP=false` (co-op puro) como pedía el plan; si se quiere
   PvP opcional, `PVP=true` + `SafetySystem=true`.
 
+### Cambio de enfoque (2026-09-03, decisión del usuario)
+
+La PC local tiene recursos limitados y el usuario no quiere instalar el cliente de PZ en ella. Por lo tanto:
+- La tarea 10 de Fase 1 (prueba con cliente Steam en local) **se cancela**. El server local se apagó y no se vuelve a usar salvo para probar scripts.
+- La validación end-to-end se hace **en la nube con un amigo**: primer deploy con **partida limpia, sin mods** (`config/mods.txt` con todo comentado) y sandbox por defecto.
+- Una vez validado: **wipe** (`scripts/wipe.sh`: stop limpio, backup final, borrar `Saves/Multiplayer/servertest` y el `db/`), definir `SandboxVars.lua` + `mods.txt` definitivos y arrancar la partida real.
+- El repo necesita un remoto para que cloud-init lo clone en la VM: **repo privado en GitHub `lucbece/zomboid-server`** con deploy key de solo lectura generada por OpenTofu (pendiente de confirmación del usuario; alternativa sin GitHub: `make sync` que hace rsync del repo por SSH).
+- La alerta de presupuesto de OCI se crea desde OpenTofu (`oci_budget_budget` + `oci_budget_alert_rule`), no a mano.
+
 ### Fase 2: nube, cloud-init, backups y runbook
 
 Proveedor decidido: OCI Vinhedo (§4).
@@ -237,9 +246,12 @@ Tareas:
 3. **Backups**: `scripts/backup.sh` (RCON `save` → esperar 5 s → `tar` de `Saves/Multiplayer/servertest` + `Server/` → `rclone copy` a un bucket de object storage del proveedor, retención 14 días por nombre con fecha). Cron diario a las 06:00 hora local y siempre dentro de `stop.sh`. `scripts/restore.sh` documentado y **probado una vez** restaurando en un contenedor local.
 4. **DNS** (si hay dominio): registro A en Cloudflare apuntando a la IP reservada. Si el proveedor no da IP fija, script en boot que actualiza el registro con la API de Cloudflare.
 5. **`docs/runbook.md`**: conectar, ver jugadores, dar admin, reiniciar, agregar mods (flujo completo), actualizar el juego (`scripts/update.sh`: stop limpio, `compose pull`, up; el server también actualiza el juego al arrancar vía steamcmd), restaurar backup, qué hacer si "server has different version" o mismatch de mods (ver research 04 §6).
-6. Deploy real, sesión de prueba con 3+ amigos, medir RAM/CPU (`docker stats`) y ajustar `MAX_MEMORY` y tamaño de VM.
+6. **`scripts/wipe.sh`**: stop limpio → backup final etiquetado `pre-wipe` → borrar `data/zomboid/Saves/Multiplayer/servertest`, `data/zomboid/db/` y los backups nativos → confirmar interactivamente antes de borrar. Documentar en el runbook el flujo "partida de prueba → wipe → partida definitiva".
+7. **Presupuesto**: `oci_budget_budget` mensual (variable, default 25 USD) con `oci_budget_alert_rule` al 80% (FORECAST) y 100% (ACTUAL) al mail del admin.
+8. **Operación remota desde la PC del admin**: targets `make remote-status`, `remote-logs`, `remote-restart`, `remote-down`, `remote-rcon CMD=...` que hacen `ssh` a la VM y corren el Makefile allí; `make sync` (rsync de `config/` + `scripts/` + `Makefile` a la VM) para iterar config sin commitear.
+9. Deploy real con partida limpia y sin mods; un amigo se conecta desde Argentina; medir ping, RAM/CPU (`docker stats`) y ajustar `MAX_MEMORY` y tamaño de VM.
 
-Aceptación: `tofu apply` desde cero deja un server accesible en menos de 15 minutos; `tofu destroy` + `tofu apply` + `restore.sh` recupera el mundo; backup diario visible en el bucket.
+Aceptación: `tofu apply` desde cero deja un server accesible en menos de 15 minutos; un amigo entra desde Argentina con ping < 60 ms; `tofu destroy` + `tofu apply` + `restore.sh` recupera el mundo; backup diario visible en el bucket; alerta de presupuesto visible en la consola de OCI.
 
 ### Fase 3: on-demand y bot de Discord (obligatoria por decisión del usuario; ahorra ~85% del costo)
 
