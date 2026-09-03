@@ -120,6 +120,14 @@ cargarla en **GitHub → el repo → Settings → Deploy keys → Add deploy key
 arranca. Si la deploy key no está cargada todavía, el clon falla y hay que rehacer el boot. Ver §2
 para la secuencia correcta.
 
+
+### Un amigo no puede conectarse (timeout al unirse)
+
+1. Verificar que la VM está RUNNING y el server arriba: `make remote-status`.
+2. Verificar que el amigo usa la IP reservada y el puerto `16261`, y la server password correcta.
+3. Confirmar que está en Build 42 estable (sin beta) y con la misma versión que el server (`make remote-rcon CMD=players` muestra la versión en el log; ver "server has different version").
+4. Si todo lo anterior está bien, abrir también **UDP 8766-8767**: guías viejas y el compose de referencia de la imagen los listan como puertos de Steam; pzwiki para B42 solo lista 16261-16262 (incertidumbre documentada en `docs/research/01-b42-server-install.md`). Para abrirlos: agregar la regla al NSG en `infra/terraform/modules/oci/main.tf` (rango 8766-8767/udp), publicar `8766-8767/udp` en `docker-compose.yml`, `make infra-apply` y `make sync RESTART=1`.
+
 ### 1.8 Averiguar la IP pública del admin
 
 ```bash
@@ -157,6 +165,8 @@ make infra-plan     # revisar: ~20 recursos
 # 1. Crear todo menos la VM, y sacar la deploy key.
 tofu apply -target=module.zomboid.tls_private_key.deploy
 tofu output -raw deploy_public_key
+# Atajo con GitHub CLI (ya autenticado en lucpc), en vez de pegarla a mano en la web:
+tofu output -raw deploy_public_key > /tmp/zomboid-deploy.pub && gh repo deploy-key add /tmp/zomboid-deploy.pub --title zomboid-vm -R lucbece/zomboid-server && rm /tmp/zomboid-deploy.pub
 # 2. Pegarla en GitHub -> Settings -> Deploy keys (read-only).
 # 3. Ahora sí, el resto.
 make infra-apply

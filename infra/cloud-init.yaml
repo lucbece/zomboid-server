@@ -208,7 +208,9 @@ runcmd:
   - install -d -m 0700 -o ${vm_user} -g ${vm_user} /home/${vm_user}/.ssh
   - su - ${vm_user} -c 'ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null'
   - chmod 600 /home/${vm_user}/.ssh/known_hosts
-  - install -d -m 0755 -o ${vm_user} -g ${vm_user} /opt
+  # Se crea el destino vacio con el owner correcto (git clone acepta un directorio vacio) en vez
+  # de cambiar el owner de /opt entero.
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} ${repo_dir}
   - su - ${vm_user} -c 'git clone --branch ${repo_branch} ${repo_url} ${repo_dir}'
 
   # --- .env y directorios de datos ---------------------------------------------------------
