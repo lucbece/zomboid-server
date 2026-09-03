@@ -238,7 +238,9 @@ elegir_clave_ssh() {
 }
 
 ssh_pub_file=""
-if ssh_pub_file="$(elegir_clave_ssh)"; then
+if [[ -n "${ZS_SSH_PUBLIC_KEY:-}" ]]; then
+  ui_ok "clave SSH tomada de ZS_SSH_PUBLIC_KEY"
+elif ssh_pub_file="$(elegir_clave_ssh)"; then
   ui_ok "clave SSH: ${ssh_pub_file}"
 else
   ui_miss "no tenés una clave SSH (es lo que te deja entrar a la máquina de la nube)"
@@ -246,7 +248,7 @@ else
     ssh-keygen -t ed25519 -N '' -C "zomboid-server" -f "${HOME}/.ssh/id_ed25519"
     ssh_pub_file="${HOME}/.ssh/id_ed25519.pub"
     ui_ok "clave creada en ${ssh_pub_file}"
-  elif [[ -z "${ZS_SSH_PUBLIC_KEY:-}" ]]; then
+  else
     ui_die "hace falta una clave SSH. Creala con:  ssh-keygen -t ed25519"
   fi
 fi
