@@ -230,7 +230,6 @@ imagen de 10.4 GB). Seguirlo:
 ssh pz@$(tofu -chdir=infra/terraform/envs/prod output -raw public_ip)
 sudo cloud-init status --wait
 sudo tail -f /var/log/cloud-init-output.log
-cd /opt/zomboid-server && make logs        # el log del juego (SERVER STARTED) está en Docker, no en journalctl
 cd /opt/zomboid-server && make logs     # listo cuando aparece '*** SERVER STARTED ****'
 ```
 
