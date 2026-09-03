@@ -58,9 +58,11 @@ Para prender y apagar a mano:
 > tiene sentido si querés controlar la máquina, los backups y los mods vos mismo, o si vas a
 > jugar por ratos.
 
-**Antes de empezar, Oracle te va a pedir una tarjeta de crédito.** Es normal: hace una retención
-de aproximadamente 1 USD que después devuelve. Igual, configurá el aviso de gasto que te propone
-`./setup.sh` (viene en 25 USD por defecto).
+**Antes de empezar, Oracle te va a pedir una tarjeta de crédito.** Al pasar la cuenta a "Pay As
+You Go" hace una **retención de 100 USD** (o el equivalente en tu moneda) para verificar la tarjeta.
+No es un pago: Oracle la revierte enseguida, aunque tu banco puede mostrarla como "pendiente" unos
+días. Si la tarjeta la rechaza, habilitá compras en el exterior o probá con otra. Igual, configurá
+el aviso de gasto que te propone `./setup.sh` (viene en 25 USD por defecto).
 
 ---
 
