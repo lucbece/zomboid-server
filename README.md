@@ -1,529 +1,277 @@
-# Tu propio servidor de Project Zomboid
+# zomboid-server
 
-*[English version](README.en.md) · Guía completa en castellano*
+*Leer en español: [README.es.md](README.es.md)*
 
-Esto es una receta para armar **tu propio servidor de Project Zomboid (Build 42)** en internet,
-para jugar con amigos, sin depender de ningún servicio de hosting.
+A reproducible dedicated server for **Project Zomboid Build 42**, run with Docker Compose. The
+game rules, the server settings and the mod list live in `config/` under version control, so the
+same world can be rebuilt on any machine from this repository plus a backup archive. Operation is
+done through `make` targets that always shut the game down cleanly over RCON, so the world is
+saved before the process exits.
 
-No hace falta saber programar. Son tres pasos, y las computadoras hacen el resto:
+It runs on any Linux machine with Docker: a spare desktop, a home server, or a VPS. Deploying to
+a cloud provider is supported as one option, not as a requirement — see
+[Deploying to a cloud provider](#deploying-to-a-cloud-provider).
 
-```bash
-git clone https://github.com/lucbece/zomboid-server.git && cd zomboid-server
-./setup.sh      # te pregunta cuatro cosas y prepara todo
-make deploy     # crea el servidor (una vez; tarda entre 20 y 40 minutos)
-```
+## Features
 
-Cuando termina, te muestra la IP y la contraseña que le tenés que pasar a tus amigos.
+- Build 42 dedicated server on a pinned image digest: the game version only changes when you
+  change it.
+- Game rules, spawn points, spawn regions and server settings versioned in `config/`; secrets
+  kept out of git in `.env`.
+- Workshop mods declared in a single text file (`config/mods.txt`) that also defines load order.
+- Clean shutdown and restart: RCON `save` + `quit`, never a bare `docker stop`.
+- Backups: a `save`-then-archive script with optional upload to object storage, plus restore and
+  wipe procedures.
+- Optional web survey for the group to vote on the sandbox rules before the world is created.
+- Optional one-command deployment to Oracle Cloud with OpenTofu, including a reserved public IP,
+  daily off-machine backups and a monthly budget alert.
 
-## Qué obtenés
+## Requirements
 
-- Un servidor dedicado para **8 a 16 jugadores**, prendido las 24 horas si querés.
-- Una **IP fija** que no cambia nunca: tus amigos la guardan como favorito y listo.
-- **Copias de seguridad automáticas** todos los días, guardadas fuera de la máquina.
-- **Mods** del Workshop: se agregan editando un archivo de texto.
-- Todas las reglas de la partida en archivos que podés versionar y compartir.
-- Un aviso por mail si el gasto del mes se pasa de lo que vos digas.
-- Apagado limpio siempre: el mundo se guarda antes de cerrar, nunca se pierde progreso.
+- Linux with Docker Engine and the Docker Compose plugin. On Windows, use WSL2.
+- `make`, `bash` 4 or newer, `git`, `gcc` (to build the RCON client), and `gettext-base` for
+  `envsubst`.
+- About 15 GB of free disk: the server image is roughly 10.4 GB, plus the world and backups.
+- RAM: the JVM heap is set by `MAX_MEMORY` in `.env`. 8 GB of heap is enough for up to 8 players,
+  12 GB for up to 16. Leave about 4 GB on top of the heap for the operating system and Docker.
+- Every player needs Project Zomboid on Steam on the **stable branch (Build 42)**, with no beta
+  selected.
 
-Lo que **no** es: no es un servicio administrado. La máquina es tuya, la tarjeta es tuya, y si
-la dejás prendida sin jugar, pagás igual. La última sección de esta guía explica cómo apagar
-todo en un comando.
+## Quick start
 
----
-
-## Cuánto cuesta
-
-El servidor corre en **Oracle Cloud**. Se paga por hora de máquina prendida.
-
-| Cómo lo usás | Qué pagás por mes | Para quién |
-|---|---|---|
-| **Siempre prendido** (24/7) | **~90 USD** | Grupos grandes que juegan a cualquier hora y quieren que el mundo esté siempre disponible |
-| **Lo prendés cuando juegan** (~20 h por semana) | **~11 a 15 USD** | Lo normal para un grupo de amigos |
-
-En los dos casos hay un costo fijo chico que **se paga aunque la máquina esté apagada**:
-
-- **Disco: 2 a 3 USD por mes.** Es donde vive el mundo. Solo desaparece si borrás todo.
-- Copias de seguridad: unos centavos (0,03 USD por GB por mes).
-- La IP fija: gratis.
-
-Para prender y apagar a mano:
-
-```bash
-./scripts/cloud-stop.sh    # guarda la partida, hace una copia y apaga la máquina
-./scripts/cloud-start.sh   # la prende de nuevo; la IP es la misma de siempre
-```
-
-> Como referencia: un hosting administrado de Project Zomboid cuesta entre 24 y 48 USD por mes.
-> Si no querés operar nada y el server va a estar siempre prendido, puede convenirte. Este repo
-> tiene sentido si querés controlar la máquina, los backups y los mods vos mismo, o si vas a
-> jugar por ratos.
-
-**Antes de empezar, Oracle te va a pedir una tarjeta de crédito.** Al pasar la cuenta a "Pay As
-You Go" hace una **retención de 100 USD** (o el equivalente en tu moneda) para verificar la tarjeta.
-No es un pago: Oracle la revierte enseguida, aunque tu banco puede mostrarla como "pendiente" unos
-días. Si la tarjeta la rechaza, habilitá compras en el exterior o probá con otra. Igual, configurá
-el aviso de gasto que te propone `./setup.sh` (viene en 25 USD por defecto).
-
----
-
-## Qué necesitás
-
-1. **Una computadora con Linux o macOS.**
-   Si usás **Windows**, hace falta WSL2 (es Linux adentro de Windows, gratis y oficial). Abrí
-   PowerShell **como administrador** y corré:
-
-   ```powershell
-   wsl --install -d Ubuntu
-   ```
-
-   Reiniciá, abrí "Ubuntu" desde el menú Inicio, creá tu usuario, y a partir de ahí seguí esta
-   guía adentro de esa ventana como si fuera Linux.
-
-2. **Una tarjeta de crédito** para la cuenta de Oracle Cloud.
-
-3. **Una cuenta de GitHub: opcional.** Si solo querés levantar el server tal cual, no hace falta.
-   Solo la vas a necesitar si querés guardar tus propias reglas y tu lista de mods (ver
-   [Hacer que la configuración sea tuya](#hacer-que-la-configuración-sea-tuya)).
-
-4. **Project Zomboid comprado en Steam**, vos y cada uno de tus amigos. La versión tiene que ser
-   la **estable (Build 42)**, que es la que Steam instala por defecto.
-
-Las demás herramientas (OpenTofu, el programa de Oracle) las instala `./setup.sh` solo, sin
-pedirte contraseña de administrador.
-
----
-
-## Paso 1: crear la cuenta de Oracle Cloud
-
-Esto es lo único que se hace en la web y lo único que lleva un rato. Reservate 20 minutos.
-
-### 1.1 Registrarte
-
-1. Entrá a <https://www.oracle.com/cloud/free/> y creá la cuenta.
-2. **Prestá atención a la "Home Region"**: es dónde va a vivir tu servidor y **no se puede
-   cambiar después**. Elegí la más cercana a donde viven los jugadores:
-
-   | Si los jugadores están en... | Elegí | Ping aproximado |
-   |---|---|---|
-   | Argentina, Uruguay, Chile, Brasil | **Brazil East (São Paulo)** | ~30 ms |
-   | Argentina o Chile (alternativa) | Chile Central (Santiago) | ~25-35 ms |
-   | Estados Unidos, costa este | US East (Ashburn) | ~20 ms |
-   | Estados Unidos, costa oeste | US West (Phoenix) | ~20 ms |
-   | España | Spain Central (Madrid) | ~20 ms |
-   | Resto de Europa | Germany Central (Frankfurt) | ~20 ms |
-   | Reino Unido | UK South (London) | ~15 ms |
-
-3. Verificá el mail y cargá la tarjeta.
-4. **Esperá el mail que dice que la cuenta está lista** ("Your Oracle Cloud Account is ready" o
-   similar). Puede tardar entre 10 minutos y algunas horas. Hasta que llegue, no sigas.
-
-### 1.2 Pasar la cuenta a "Pay As You Go"
-
-La cuenta gratuita **no puede crear** la máquina que hace falta: el deploy falla con un error de
-límites. Hay que convertirla a cuenta paga (que igual solo cobra lo que usás).
-
-En la consola de Oracle: arriba a la derecha, menú de la cuenta → **Upgrade to Paid** (o
-*Billing & Cost Management* → *Upgrade and Payment*). Tarda unos minutos en aplicarse.
-
-### 1.3 Crear la llave de acceso (API key)
-
-Es lo que le permite a tu computadora crear cosas en tu cuenta. Suena técnico, pero es
-copiar y pegar:
-
-1. En la consola de Oracle, arriba a la derecha, **ícono de la persona** → **My profile**.
-2. Menú de la izquierda → **API keys** → botón **Add API key**.
-3. Dejá marcado **Generate API key pair** y apretá **Download private key**. Se te baja un
-   archivo `.pem`. Guardalo, es tu llave.
-4. Apretá **Add**. Oracle te muestra un cuadro de texto con cuatro líneas
-   (`user=`, `fingerprint=`, `tenancy=`, `region=`). **Copialo entero.**
-5. En tu terminal (la de Ubuntu si estás en Windows):
-
-   ```bash
-   mkdir -p ~/.oci && chmod 700 ~/.oci
-   mv ~/Descargas/*.pem ~/.oci/oci_api_key.pem     # o ~/Downloads, según tu sistema
-   chmod 600 ~/.oci/oci_api_key.pem
-   nano ~/.oci/config
-   ```
-
-6. Pegá el cuadro que copiaste (en nano se pega con clic derecho o Ctrl+Shift+V) y **agregá al
-   final una línea más**, con tu nombre de usuario en lugar de `TU_USUARIO`:
-
-   ```
-   key_file=/home/TU_USUARIO/.oci/oci_api_key.pem
-   ```
-
-   El archivo entero tiene que quedar así:
-
-   ```ini
-   [DEFAULT]
-   user=ocid1.user.oc1..aaaa...
-   fingerprint=aa:bb:cc:...
-   tenancy=ocid1.tenancy.oc1..aaaa...
-   region=sa-saopaulo-1
-   key_file=/home/TU_USUARIO/.oci/oci_api_key.pem
-   ```
-
-7. Guardá con **Ctrl+O**, Enter, **Ctrl+X**, y protegé el archivo:
-
-   ```bash
-   chmod 600 ~/.oci/config
-   ```
-
-Si algo de esto salió mal, no importa: `./setup.sh` te lo va a decir con todas las letras y te
-deja volver a intentar.
-
----
-
-## Paso 2: `./setup.sh`
-
-En tu terminal:
+Run the server on a Linux machine you already have.
 
 ```bash
 git clone https://github.com/lucbece/zomboid-server.git
 cd zomboid-server
-./setup.sh
+cp .env.example .env
 ```
 
-El asistente:
+Edit `.env` and set at least `ADMINPASSWORD`, `RCONPASSWORD` and `SERVER_PASSWORD`. These are
+three different passwords:
 
-- revisa que estén las herramientas y **te ofrece instalar las que falten** (sin pedirte
-  contraseña de administrador);
-- **inventa las contraseñas por vos**, del tipo `arena-tulipan-molino-4821`: fáciles de dictar
-  por Discord y difíciles de adivinar;
-- detecta tu IP de internet, tu llave de acceso y tu región;
-- te pregunta cuatro cosas: nombre del server, cuántos jugadores, tu mail para los avisos de
-  gasto, y a partir de cuántos dólares avisarte.
+| Name in `.env` | What it is |
+|---|---|
+| `SERVER_PASSWORD` | The **server password**. Players type it to join. This is the one you hand out. |
+| `ADMINPASSWORD` | The **admin password** for the in-game `admin` account. Keep it to yourself. |
+| `RCONPASSWORD` | The **RCON password**, used by the management scripts. Never exposed to players. |
 
-En todas las preguntas podés apretar Enter para aceptar lo que propone.
+Passwords must be 8 to 64 characters and must not contain spaces, quotes, backslashes or `$`:
+`.env` is read both by bash and by Docker Compose, which do not escape the same way.
 
-**Se puede volver a correr las veces que quieras.** La segunda vez te muestra lo que ya elegiste
-y solo cambia lo que cambies. Útil, por ejemplo, cuando tu proveedor de internet te cambia la IP.
-
-Para ver si quedó todo en orden:
+Then start the server:
 
 ```bash
-make doctor
+make mcrcon    # builds ./bin/mcrcon, the RCON client used by the scripts
+make up        # renders config/ into the data directory and starts the container
+make logs      # the server is ready when it prints "*** SERVER STARTED ****"
 ```
 
-Cada línea dice `OK`, `AVISO` o `FALTA`, y debajo de cada `FALTA` está exactamente qué hacer.
-
----
-
-## Paso 3: `make deploy`
+The first start downloads the image and generates the world; expect several minutes. To stop:
 
 ```bash
-make deploy
+make down      # warns players, saves over RCON, then quits
 ```
 
-Te muestra la lista de lo que va a crear, te avisa que a partir de ahí se empieza a cobrar, y
-pide confirmación **una sola vez**. Después no te pregunta nada más.
+Do not stop the container with `docker stop` or `docker kill`. The game does not handle SIGTERM
+reliably and the world can be left in an inconsistent state.
 
-Tarda entre **20 y 40 minutos la primera vez**: la máquina se prende, instala todo y baja el
-juego entero (unos 10 GB). Vas viendo en qué está. Podés dejarlo corriendo e irte a hacer otra
-cosa; si cortás con Ctrl+C no rompés nada, y volvés a entrar con `make deploy` cuando quieras.
+### Connecting from the game
 
-Cuando termina, te muestra un bloque como este:
+In Project Zomboid on the stable branch, with no Steam beta selected:
 
-```
-   PASALE ESTO A TUS AMIGOS
-
-     Nombre .................. Mi server de Zomboid
-     IP ...................... 150.230.x.y
-     Puerto .................. 16261
-     Contraseña del server ... arena-tulipan-molino-4821
-```
-
-`make deploy` se puede correr todas las veces que quieras: si ya está todo creado, no cambia
-nada y te vuelve a mostrar esos datos.
-
----
-
-## Cómo entran tus amigos
-
-En Project Zomboid, con la versión estable (Build 42, **sin** ninguna beta activada en Steam):
-
-1. Menú principal → **Join**.
-2. Pestaña **Favorites** → botón **Add server** (abajo).
-3. Completar:
-   - **Name**: lo que quieran, es solo para ellos.
-   - **IP**: la que les pasaste.
+1. Main menu → **Join**.
+2. **Favorites** tab → **Add server**.
+3. Fill in:
+   - **Name**: any label, local to the player.
+   - **IP**: the server's address. On a local network, the machine's LAN address.
    - **Port**: `16261`.
-   - **Account username** y **Account password**: **las eligen ellos**, son suyas y se crean
-     solas la primera vez que entran. No son la contraseña del server.
-   - **Server password**: la contraseña del server que les pasaste.
-4. **Save** y después **Join**.
+   - **Account username** and **Account password**: chosen by each player. They are created on
+     first join and are not the server password.
+   - **Server password**: the value of `SERVER_PASSWORD`.
+4. **Save**, then **Join**.
 
-El server no aparece en la lista pública de servidores a propósito: solo entra quien tenga la IP
-y la contraseña.
-
-Para darte a vos (o a un amigo) poderes de administrador dentro del juego, una vez que entraron
-por primera vez con su usuario:
+To grant in-game administrator rights to a player who has already logged in once:
 
 ```bash
-make remote-rcon CMD='setaccesslevel "tu_usuario" admin'
+make rcon CMD='setaccesslevel "player_name" admin'
 ```
 
----
+## Configuration
 
-## Los 5 comandos del día a día
+Everything under `config/` is the source of truth. Files under `data/` are generated and must not
+be edited by hand: `make render` (run automatically by `make up` and `make restart`) rewrites them
+from `config/` plus `.env`.
 
-| Comando | Qué hace |
+| File | What it controls |
 |---|---|
-| `make remote-status` | ¿Está arriba? ¿Quién está jugando? |
-| `make remote-logs` | Ver qué está pasando en vivo (Ctrl+C para salir) |
-| `make remote-restart` | Reiniciar con aviso a los jugadores: aplica cambios de mods y reglas |
-| `make remote-backup` | Guardar una copia de la partida ahora mismo |
-| `make destroy-all` | Borrar todo y dejar de pagar |
+| `config/servertest.ini.tpl` | Server settings: PVP, max players, visibility, chat, anti-cheat, native backups. Secrets are placeholders filled from `.env`. |
+| `config/servertest_SandboxVars.lua` | Game rules: zombie count and behaviour, loot, weather, XP rates, erosion. Each value is documented in place. |
+| `config/servertest_spawnpoints.lua` | Where new characters spawn. |
+| `config/servertest_spawnregions.lua` | Which spawn regions are offered. |
+| `config/mods.txt` | Workshop mods, one per line; file order is load order. |
+| `.env` | Passwords, ports, JVM heap, backup settings. Not in git. |
 
-Y dos más que vas a usar seguido:
+Apply configuration changes with:
 
-| Comando | Qué hace |
+```bash
+make restart
+```
+
+Note: several sandbox options are fixed when the world is first generated — the loot map size,
+the initial zombie population and the erosion speed among them. Changing them later has no
+effect on an existing world. Decide those before the first real session, or start a new world
+with `make wipe`.
+
+Two keys in `config/servertest.ini.tpl` should not be changed on a live world: `ServerPlayerID`
+and `ResetID`. If they change, every client is forced to create a new character. They are
+versioned precisely so a rebuilt server keeps the same identity.
+
+By default the template sets `Public=true`, so the server is listed in the in-game browser and
+protected by the server password. Set `Public=false` if you want it to be reachable only by
+direct IP.
+
+### Mods
+
+Add a line to `config/mods.txt` with the Workshop ID and the Mod ID, then `make restart`:
+
+```
+3750253491  VB_CommonSense  # Common Sense
+```
+
+Removing a mod from a world that already contains its items or map cells can corrupt saves. Take
+a backup first. Full procedure, including how to read a mod's `require=` dependencies and how to
+diagnose a mod that fails to load: [`docs/mods.md`](docs/mods.md).
+
+## Operations
+
+| Command | What it does |
 |---|---|
-| `make sync RESTART=1` | Subir tus cambios de configuración al server y reiniciarlo |
-| `make doctor` | Revisar que esté todo bien y qué falta |
+| `make up` | Render the config and start the server |
+| `make down` | Clean shutdown: warning, `save`, `quit` |
+| `make restart` | Clean shutdown, re-render, start — the way to apply config and mod changes |
+| `make logs` | Follow the server log |
+| `make status` | Container state and connected players |
+| `make rcon CMD=players` | Run any admin command over RCON |
+| `make backup` | `save`, archive the world, upload if a bucket is configured. `LABEL=` adds a suffix |
+| `make restore FILE=…` | Restore an archive over the current world |
+| `make wipe` | Delete the world after a `pre-wipe` backup. Asks for confirmation |
+| `make update` | Backup, clean shutdown, `docker compose pull`, start |
+| `make render` | Regenerate the rendered config without restarting |
+| `make mcrcon` | Build the RCON client into `./bin/mcrcon` |
 
----
+Run `make help` for the full list, including the cloud targets.
 
-## Agregar mods
+### Backups
 
-1. Buscá el mod en el Workshop de Steam. Necesitás **dos identificadores**:
-   - el **Workshop ID**: el número que aparece en la URL, después de `?id=`.
-     Por ejemplo, en `steamcommunity.com/sharedfiles/filedetails/?id=3750253491` es
-     `3750253491`.
-   - el **Mod ID**: un nombre corto sin espacios. Casi siempre está escrito en la descripción
-     del mod, en una línea que dice `Mod ID: VB_CommonSense`. Si no está, `make remote-logs`
-     lo muestra cuando el server intenta cargarlo.
+`make backup` runs `save` over RCON, archives `Saves/Multiplayer/servertest`, `Server/` and `db/`
+into `backups/` as a `.tar.zst`, and copies it to object storage when `BACKUP_BUCKET` is set in
+`.env`. Local archives older than `BACKUP_KEEP_LOCAL_DAYS` are removed. It also works with the
+server stopped, in which case the `save` step is skipped.
 
-2. Agregá una línea a `config/mods.txt`, en el orden en que querés que carguen:
+The game's own rolling backups are configured in `config/servertest.ini.tpl`
+(`BackupsCount`, `BackupsPeriod`, `BackupsOnStart`) and land in `data/zomboid/backups/`. They are
+a short-term safety net, not a substitute for off-machine copies.
 
-   ```
-   3750253491  VB_CommonSense  # Common Sense
-   ```
-
-3. Subilo al server y reiniciá:
-
-   ```bash
-   make sync RESTART=1
-   ```
-
-Tus amigos no tienen que hacer nada: el juego les baja los mods solo cuando se conectan.
-
-Para sacar un mod, borrá o comentá la línea (poniéndole un `#` adelante) y `make sync RESTART=1`.
-**Sacar un mod de una partida en curso puede romper el mundo** (desaparecen objetos y recetas que
-ya existían): hacé `make remote-backup` antes.
-
-Más detalle: [`docs/mods.md`](docs/mods.md).
-
----
-
-## Cambiar las reglas de la partida
-
-Las reglas (cantidad de zombies, si corren, cuánto loot hay, clima, velocidad de aprendizaje…)
-están en `config/servertest_SandboxVars.lua`. Está lleno de comentarios que explican cada valor.
+Restoring asks for confirmation, stops the server, archives the current world as `pre-restore`,
+and then extracts the chosen archive:
 
 ```bash
-nano config/servertest_SandboxVars.lua
-make sync RESTART=1
+make restore FILE=backups/zomboid-20260903-0600.tar.zst
 ```
 
-> **Definí las reglas ANTES de empezar la partida en serio.** Varias opciones —el tamaño del
-> mapa de loot, la población inicial de zombies, la velocidad de erosión— quedan grabadas cuando
-> el mundo se crea, y cambiarlas después no tiene efecto.
+### Updating the game
 
-Si ya empezaste y querés arrancar de cero con las reglas nuevas:
+The image is pinned by digest in `docker-compose.yml`, so nothing updates on its own. To move to
+a newer build, resolve the digest of the tag you want, edit `docker-compose.yml`, and run
+`make update`. A new image can bring a new game version; clients on an older version will be
+rejected until Steam updates them. The procedure is in [`docs/runbook.md`](docs/runbook.md).
+
+## Exposing the server from a home network
+
+The server listens on UDP `16261` and `16262`. RCON listens on TCP `27015` and is bound to
+`127.0.0.1`, so it is not reachable from outside the host.
+
+To let friends connect to a machine on your home network:
+
+1. Give the machine a static address on the LAN, or a DHCP reservation.
+2. Forward UDP `16261-16262` from the router to that address. Do not forward `27015`.
+3. Hand out your public IP address and the server password.
+
+Two caveats. Most residential connections have a dynamic public IP, so the address changes
+periodically; a dynamic DNS hostname avoids re-sending it after every change. And connections
+behind CGNAT have no forwardable public address at all. In both cases a tunnel service or an
+overlay network (Tailscale, ZeroTier, Cloudflare Tunnel and similar) is the usual workaround;
+this repository does not configure one.
+
+## Deploying to a cloud provider
+
+If you would rather not run the server at home, the repository can provision a virtual machine
+and configure it end to end. **Oracle Cloud** is the provider supported today, for three reasons:
+it has a São Paulo region, a stopped instance is not billed for compute, and its reserved public
+IP addresses are free, so the address survives stop/start cycles.
+
+Two commands, after the Oracle Cloud account exists:
 
 ```bash
-ssh USUARIO@TU_IP 'cd /opt/zomboid-server && ./scripts/wipe.sh'
+./setup.sh      # interactive wizard: checks tools, generates passwords, writes the config
+make deploy     # creates the infrastructure and waits for the game to come up
 ```
 
-`wipe.sh` guarda una copia de seguridad de la partida vieja antes de borrarla, y te pide escribir
-`wipe` para confirmar. (`make deploy` te muestra el usuario y la IP; el usuario es `pz`.)
+`setup.sh` sizes the machine from the number of players you declare: up to 8 players it selects
+2 OCPU / 12 GB with an 8 GB heap, above that 4 OCPU / 16 GB with a 12 GB heap. Set `ZS_OCPUS`
+and `ZS_MEMORY_GB` to override.
 
-Otras cosas que podés ajustar: PVP, cantidad máxima de jugadores, chat y anticheat, en
-`config/servertest.ini.tpl`. Dónde aparecen los jugadores nuevos, en
-`config/servertest_spawnpoints.lua`.
+Approximate list prices for the `VM.Standard.E5.Flex` shape as of 2026-09
+(0.03 USD per OCPU-hour, 0.002 USD per GB-hour). Re-check them before committing: prices change,
+and local taxes on foreign digital services are charged on top.
 
-### Que decidan tus amigos
+| VM size | Players | Per hour | ~20 h/week | ~6 h/day | 24/7 |
+|---|---|---|---|---|---|
+| 2 OCPU / 12 GB | up to 8 | 0.084 USD | ~7 USD/month | ~15 USD/month | ~61 USD/month |
+| 4 OCPU / 16 GB | up to 16 | 0.152 USD | ~13 USD/month | ~28 USD/month | ~111 USD/month |
 
-Si preferís que las reglas las vote el grupo, hay una encuesta web que se hospeda en la misma VM:
-tus amigos abren un link desde el celular, votan (todo viene con el default del juego ya marcado) y
-vos aplicás lo más votado de una.
+The 80 GB boot volume costs about 2 USD/month and is billed whether the machine is running or
+not. Backups in object storage cost cents. The reserved IP is free.
 
-```bash
-make encuesta-up          # te imprime el link http://TU_IP:8080 para pasarles
-make encuesta-estado      # cuántos votaron
-make encuesta-resultados  # el conteo, con barritas, y qué cambiaría
-make encuesta-aplicar     # escribe lo votado en config/ (después: make sync RESTART=1)
-make encuesta-down        # cerrar la votación
-```
+Note: a running VM is billed whether or not players are connected. Stop it with
+`./scripts/cloud-stop.sh`, which saves the world, takes a backup and shuts the instance down;
+`./scripts/cloud-start.sh` brings it back with the same address. `make destroy-all` deletes
+everything and stops all charges.
 
-Antes de la primera vez hay que abrir el puerto: `survey_port = 8080` en
-`infra/terraform/envs/prod/terraform.tfvars` y `make infra-apply`. Cuando termina la votación,
-volvelo a `0` y aplicá de nuevo. El detalle está en
-[`docs/runbook.md` §8.2](docs/runbook.md).
+Account setup, API keys, the full deployment walkthrough, cost details and Oracle-specific
+troubleshooting are in [`docs/deploy-oracle.md`](docs/deploy-oracle.md).
 
----
+### Other providers
 
-## Copias de seguridad
+The Terraform code is organised as `infra/terraform/modules/<provider>` with a thin environment
+in `infra/terraform/envs/prod`, so another provider can be added as a sibling module. A new
+module has to supply: an Ubuntu 24.04 VM with a public address, ingress for UDP 16261-16262 from
+anywhere and TCP 22 restricted to the administrator, the rendered `infra/cloud-init.yaml` as user
+data, and — optionally — an object storage bucket plus credentials for the backup upload. The
+cloud-init file itself is provider-neutral.
 
-Hay tres capas, y no tenés que hacer nada para que funcionen:
+## Rules survey
 
-1. El propio juego guarda una copia cada hora y en cada arranque.
-2. **Todos los días a las 6 de la mañana** se hace una copia completa y se sube a la nube,
-   fuera de la máquina del server. Se guardan 30 días.
-3. Cada vez que se apaga o reinicia el server, se guarda el mundo antes de cerrar.
+`tools/encuesta/` is a small self-hosted web survey that lets a group vote on the sandbox rules
+before the world is created. It serves a mobile-friendly page, records one JSON line per vote,
+tallies the results and can write the winning options straight into `config/`. It is optional and
+off by default. See [`docs/survey.md`](docs/survey.md), including the security considerations of
+running it over plain HTTP.
 
-Copia manual, cuando vas a hacer algo arriesgado:
+## Documentation
 
-```bash
-make remote-backup
-```
-
-Volver atrás a una copia:
-
-```bash
-ssh pz@TU_IP
-cd /opt/zomboid-server
-rclone lsl oci:zomboid-backups                      # lista las copias disponibles
-./scripts/restore.sh oci:zomboid-backups/ARCHIVO.tar.zst
-```
-
-Te pide confirmación, apaga el server, guarda una copia de lo que hay ahora (por las dudas) y
-restaura la que elegiste.
-
----
-
-## Apagar todo y dejar de pagar
-
-**Para dejar de pagar por unos días o semanas** (el mundo se conserva; seguís pagando el disco,
-2-3 USD por mes):
-
-```bash
-./scripts/cloud-stop.sh     # guarda, copia y apaga
-./scripts/cloud-start.sh    # lo vuelve a prender, con la misma IP
-```
-
-**Para borrar todo y no pagar nada más**:
-
-```bash
-make destroy-all
-```
-
-Antes de borrar guarda una última copia de la partida en la nube, te pide escribir el nombre de
-tu server para confirmar, y al final te explica qué quedó (solo las copias de seguridad, que son
-centavos) y cómo borrarlo también si querés no dejar rastro.
-
----
-
-## Hacer que la configuración sea tuya
-
-Podés usar este repo tal cual: la máquina baja la configuración de acá y con `make sync` le
-mandás tus cambios locales. Funciona perfecto, pero si un día recreás la máquina, tus mods y tus
-reglas no vuelven solos.
-
-Para que la configuración sea realmente tuya y sobreviva a todo:
-
-1. Entrá a <https://github.com/lucbece/zomboid-server> y apretá **Fork** (arriba a la derecha).
-2. En tu computadora, apuntá el repo a tu copia y subí tus cambios:
-
-   ```bash
-   git remote set-url origin https://github.com/TU_USUARIO/zomboid-server.git
-   git add config/ && git commit -m "mis mods y mis reglas" && git push
-   ./setup.sh      # detecta el repo nuevo
-   make deploy
-   ```
-
-Si dejás tu fork **público**, no hay ningún paso extra. Si lo hacés **privado**, `make deploy` se
-encarga de darle permiso de lectura a la máquina (te lo pide una vez, o lo hace solo si tenés la
-herramienta `gh` de GitHub instalada y conectada).
-
----
-
-## Problemas frecuentes
-
-**1. "Server has different version than client"**
-El juego de tu amigo está en otra versión. En Steam: clic derecho en Project Zomboid →
-Propiedades → **Betas** → tiene que estar en **None**. Después dejá que Steam actualice.
-
-**2. Mis amigos no pueden entrar y yo sí**
-Casi siempre están poniendo mal el puerto (tiene que ser **16261**) o están escribiendo su
-contraseña de cuenta donde va la del server. Revisá con ellos los campos del formulario.
-
-**3. Yo no puedo entrar y ellos sí, o `make remote-status` no anda**
-Cambió tu IP de internet (pasa solo, cada tanto). Solución:
-
-```bash
-./setup.sh      # detecta la IP nueva, Enter a todo
-make deploy     # aplica el cambio, no toca la partida
-```
-
-**4. `make deploy` falla con `LimitExceeded` o `NotAuthorizedOrNotFound`**
-Casi siempre es una de dos: la cuenta de Oracle todavía es gratuita (hay que pasarla a *Pay As
-You Go*, paso 1.2) o la región que elegiste no es la misma que la de tu cuenta. `make doctor` te
-dice cuál de las dos es.
-
-**5. `make deploy` dice que Oracle no acepta la clave**
-Algo quedó mal en `~/.oci/config`. Revisá que la primera línea sea exactamente `[DEFAULT]` y que
-la línea `key_file=` apunte al archivo `.pem` que bajaste, con la ruta completa. Para ver el
-error real: `oci iam region-subscription list`.
-
-**6. Pasaron 40 minutos y el juego no arranca**
-Mirá qué está haciendo: `make remote-logs`. Si dice `Permission denied (publickey)`, la máquina
-no puede bajar tu repo privado: corré `make deploy` otra vez y cargá la llave que te muestra.
-Si simplemente está bajando cosas, esperá: son 10 GB.
-
-**7. "You have different mods" / "Checksum mismatch"**
-Tu amigo tiene una versión distinta de un mod. Que se desuscriba y se vuelva a suscribir en el
-Workshop, y que borre la carpeta `Zomboid/Workshop` de su computadora. Si sigue, reiniciá el
-server con `make remote-restart` para que tome la versión nueva del mod.
-
-**8. Agregué un mod y ahora el server no arranca**
-Sacá la línea del mod de `config/mods.txt`, `make sync RESTART=1`. Si el mundo quedó dañado,
-restaurá la última copia buena (sección "Copias de seguridad").
-
-**9. Se cortó la luz / se apagó todo, ¿perdí la partida?**
-Casi seguro que no: el juego guarda solo cada hora y hay copias diarias fuera de la máquina.
-Prendé de nuevo con `./scripts/cloud-start.sh` y fijate.
-
-**10. Me llegó un mail de Oracle avisando del gasto**
-Es la alerta que configuraste, funcionando. Si no estás jugando, apagá la máquina con
-`./scripts/cloud-stop.sh`, o borrá todo con `make destroy-all`.
-
-Para cualquier otra cosa, corré `make doctor` y abrí un issue con esa salida:
-[plantilla "No puedo conectarme"](.github/ISSUE_TEMPLATE/no-puedo-conectarme.yml).
-
----
-
-## Si querés entender cómo funciona
-
-| Documento | Qué hay adentro |
+| Document | Contents |
 |---|---|
-| [`docs/runbook.md`](docs/runbook.md) | Referencia completa de operación: alta de la cuenta, deploy, backups, wipe, troubleshooting, cómo validar cambios de infraestructura |
-| [`PLAN.md`](PLAN.md) | Por qué está hecho así: decisiones, comparación de proveedores y precios, fases |
-| [`docs/research/`](docs/research/) | La investigación con fuentes: instalación del server B42, Docker, hosting, configuración y mods |
-| [`docs/mods.md`](docs/mods.md) | Todo sobre mods |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Cómo mandar un cambio |
+| [`docs/architecture.md`](docs/architecture.md) | How the pieces fit together and the design decisions in force |
+| [`docs/runbook.md`](docs/runbook.md) | Operations reference: deployment, backups, wipes, updates, troubleshooting |
+| [`docs/deploy-oracle.md`](docs/deploy-oracle.md) | Deploying to Oracle Cloud: account, API key, `setup.sh`, `make deploy`, costs |
+| [`docs/mods.md`](docs/mods.md) | Adding, removing and debugging Workshop mods |
+| [`docs/survey.md`](docs/survey.md) | The rules survey: running it, tallying it, closing it |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run before opening a pull request |
+| [`docs/history/`](docs/history/) | The original plan and research notes, in Spanish. Historical, not maintained |
 
-En resumen: **OpenTofu** crea la máquina en Oracle Cloud, **cloud-init** la prepara sola en el
-primer arranque, **Docker** corre el juego, **systemd** lo levanta y lo apaga limpio, y **cron**
-hace las copias de seguridad. La configuración de la partida vive en `config/` y es la única
-fuente de verdad.
+## License
 
-### Correr el server en tu propia computadora
-
-Si querés probar sin nube (hace falta Docker, ~15 GB de disco y 10 GB de RAM libre):
-
-```bash
-make mcrcon      # compila la herramienta de administración
-make up          # levanta el server local
-make logs        # está listo cuando dice "*** SERVER STARTED ****"
-make down        # apagado limpio: NUNCA uses docker stop
-```
-
-Tus amigos de la misma casa entran con la IP local de tu computadora (`ip -4 addr`) y el puerto
-16261.
-
----
-
-Licencia [MIT](LICENSE). Project Zomboid es de The Indie Stone; este repo no tiene relación con
-ellos.
+[MIT](LICENSE). Project Zomboid is a product of The Indie Stone; this project is not affiliated
+with them.
