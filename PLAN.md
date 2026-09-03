@@ -7,7 +7,7 @@ Fecha del plan: 2026-09-03. Investigación completa en `docs/research/` (leer an
 - **Objetivo**: servidor privado de PZ **Build 42** para 8 a 16 amigos, con mods de Workshop, corriendo en una VM en la nube, con toda la configuración (ini, sandbox, mods) versionada en este repo y deploy reproducible.
 - **Estado de B42 (verificado 2026-09-03)**: **B42 es la rama estable por defecto de Steam desde el 29-jul-2026 (42.20)**. No hace falta `-beta`. El multiplayer B42 existe desde 42.13 (dic-2025). Versión actual: 42.20.x. Para B41 habría que usar `-beta legacy41`.
 - **Arquitectura elegida**: Docker Compose + imagen `danixu86/project-zomboid-dedicated-server` (la única mantenida activamente con soporte explícito para B42 y opción de no pisar el ini) + directorio `config/` bind-mounteado desde git + scripts de RCON/backup + cloud-init + Terraform/OpenTofu para la VM.
-- **Hosting**: todavía sin decidir. Jugadores en Argentina, prioridad ping bajo. Recomendación: región **São Paulo** (~30 ms desde Buenos Aires; US-East ~140 ms; Alemania ~230 ms) con **Oracle Cloud Vinhedo (x86 Flex, pago por uso)** y patrón "encender solo para jugar". Ping mínimo absoluto (~5-15 ms): **AWS Local Zone Buenos Aires**, al doble o triple de costo. Ver §4.
+- **Hosting (decidido)**: **Oracle Cloud Vinhedo (São Paulo)**, ~30 ms desde Buenos Aires, x86 Flex 4 OCPU / 16 GB, pago por uso. **On-demand**: la VM se apaga sola sin jugadores y se prende con un bot de Discord; sin dominio (IP reservada gratis). Ver §4 y §4.1.
 - **Tamaño**: apuntar a **4 vCPU / 16 GB RAM / 60-80 GB SSD** para las dos variantes (8 y 16 jugadores); el heap de la JVM se ajusta con `MAX_MEMORY` (8 GB para 8 jugadores, 12 GB para 16). Con 8 GB de host solo alcanza para 8 jugadores y ajustado (B42 es más pesado que B41).
 
 ## 1. Decisiones ya tomadas (no re-litigar al implementar)
@@ -38,19 +38,21 @@ zomboid-server/
 │   ├── servertest_SandboxVars.lua
 │   ├── servertest_spawnregions.lua
 │   └── mods.txt                # (opcional) lista "workshop_id  mod_id  # nombre" → genera Mods/WorkshopItems
+├── bot/                        # bot de Discord (Fase 3): discord.py + SDK oci
 ├── scripts/
 │   ├── render-config.sh        # .tpl + .env (+ mods.txt) → config/servertest.ini
 │   ├── rcon.sh                 # wrapper de mcrcon (players, save, servermsg, quit)
 │   ├── restart.sh              # aviso a jugadores, save, quit, compose up
 │   ├── backup.sh               # save → tar → rclone
 │   ├── restore.sh              # bajar server, restaurar tar, subir
-│   └── update.sh               # actualiza imagen/juego respetando shutdown limpio
+│   ├── update.sh               # actualiza imagen/juego respetando shutdown limpio
+│   ├── idle-shutdown.sh        # cron: 0 jugadores por N min → stop.sh + shutdown
+│   └── cloud-start.sh / cloud-stop.sh  # oci cli desde la PC del admin
 ├── infra/
 │   ├── cloud-init.yaml         # docker + git clone del repo + systemd unit que hace compose up
 │   ├── systemd/zomboid.service # compose up en boot, ExecStop = scripts/stop.sh (save+quit)
 │   └── terraform/
-│       ├── modules/oci/        # o el proveedor elegido
-│       ├── modules/linode/
+│       ├── modules/oci/        # VCN, security list, IP reservada, instancia, bucket
 │       └── envs/prod/
 ├── docs/
 │   ├── research/               # 4 documentos de investigación con fuentes
@@ -104,11 +106,34 @@ Detalle y fuentes con fecha: `docs/research/03-cloud-hosting.md`. Precios USD/me
 
 **Recomendación**: Oracle Cloud Vinhedo, shape `VM.Standard.E5.Flex` (o E4) con 4 OCPU / 16 GB, boot volume 80 GB, con el patrón on-demand de la Fase 3. Da ~30 ms, que para PZ es indistinguible de jugar en LAN, a una fracción del costo de la Local Zone de Buenos Aires. Si el grupo quiere sí o sí el mínimo ping y el presupuesto lo permite, la alternativa es AWS Local Zone BA con t3.xlarge on-demand (~$47/mes con disco). Si nadie quiere operar nada y el server va a estar siempre prendido, considerar hosting administrado en São Paulo y usar este repo solo para la config.
 
-**Decisiones pendientes del usuario** (bloquean la Fase 2, no la Fase 1):
-1. Proveedor: OCI Vinhedo (recomendado) vs AWS Local Zone BA vs otro.
-2. Always-on vs on-demand.
-3. ¿Dominio propio para `pz.tudominio.com`? (Cloudflare DNS gratis; si no, se usa la IP reservada).
-4. ¿Discord del grupo? Habilita integración de chat (`DiscordEnable`) y, en Fase 3, un bot para prender/apagar.
+**Decisiones tomadas por el usuario (2026-09-03)**:
+1. **Proveedor: Oracle Cloud, región Vinhedo (São Paulo)**, shape `VM.Standard.E5.Flex` 4 OCPU / 16 GB, boot volume 80 GB. AWS descartado por precio.
+2. **Modelo de encendido: on-demand obligatorio.** El mundo se pausa con `PauseEmpty=true` (ajuste nativo de PZ: el tiempo de juego no avanza sin jugadores), pero eso no baja el costo: la VM prendida cobra igual (~$90/mes). Por eso la VM **se apaga sola cuando no hay jugadores** y **se prende desde Discord**. En OCI una instancia Standard detenida no cobra cómputo (verificado en docs.oracle.com, "Resource Billing for Stopped Instances"); queda solo el boot volume (~$2-3/mes) y la IP reservada (gratis). Costo esperado: $10-20/mes según horas jugadas. La Fase 3 deja de ser opcional.
+3. **Sin dominio.** No es necesario: OCI da una **IP pública reservada gratis** que no cambia entre stop/start; los amigos se conectan por `IP:16261` y la guardan como favorito en el cliente. OCI no provee un hostname público para VMs. Si algún día se quiere un nombre, un dominio barato + Cloudflare DNS (gratis) es un cambio de 10 minutos.
+4. **Discord: hay grupo.** Se usan las dos integraciones de §4.1.
+
+### 4.1 Integración con Discord
+
+Hay dos piezas independientes:
+
+**a) Puente nativo de PZ (config del ini, sin código)**. El server trae un cliente de Discord incorporado; hace falta crear una app/bot en el Developer Portal de Discord, invitarlo al servidor con permisos de leer/escribir mensajes y poner su token en `.env`.
+- `DiscordEnable=true`, `DiscordToken=${DISCORD_TOKEN}`.
+- `DiscordChatChannel=<nombre-canal>`: puente **bidireccional** entre el chat global del juego y ese canal. Lo que se escribe en Discord aparece en el juego y viceversa.
+- `DiscordLogChannel=<nombre-canal>`: logs del server (conexiones, desconexiones, eventos).
+- `DiscordCommandChannel=<nombre-canal>`: ejecutar comandos de admin desde Discord (restringir el canal a admins con permisos de Discord).
+- Limitación: solo funciona mientras el server está prendido. No puede prender la VM.
+
+**b) Bot propio para operar la VM (Fase 3, código nuestro)**. Corre **fuera** de la VM del juego, porque tiene que poder prenderla. Opción recomendada: instancia **Always Free ARM de OCI** (2 OCPU / 12 GB, gratis, en la misma tenancy; los recursos Always Free viven en la home region, así que la home region debe ser Vinhedo) con un bot Python (`discord.py` + SDK `oci`). Alternativas: Cloudflare Worker con Discord Interactions (gratis, más complejo de firmar requests a OCI) o una Raspberry/PC local siempre prendida.
+Funciones, en orden de valor:
+1. `/pz start`: prende la VM, espera a que el server responda por RCON y anuncia "Server listo en IP:16261" en el canal. Cualquier miembro con el rol `zomboid` puede usarlo.
+2. `/pz status`: estado de la VM (running/stopped), jugadores conectados (RCON `players`), tiempo desde el último backup, versión del juego.
+3. `/pz stop` (solo admins): aviso de 60 s en el juego, `save`, `quit`, backup, apagar VM.
+4. **Auto-apagado**: cron en la VM cada 5 min consulta `players`; tras 30 min con 0 jugadores ejecuta el stop limpio y `shutdown -h now` (OCI deja la instancia en STOPPED). El bot detecta el apagado y avisa en Discord.
+5. Avisos automáticos: entradas y salidas de jugadores (si no se usa el `DiscordLogChannel` nativo), muertes de personajes (parseo de logs del server), inicio y fin de backups, reinicio programado para tomar updates de mods.
+6. `/pz restart` (admins): reinicio limpio para aplicar cambios de mods/config después de un `git pull` en la VM.
+7. `/pz mods`: lista de mods activos leyendo el ini.
+8. `/pz backup` (admins) y `/pz backups`: forzar backup y listar los disponibles en object storage.
+9. Opcional: `/pz whitelist add <usuario>` vía RCON `adduser` si se pasa a whitelist en lugar de password compartido.
 
 ## 5. Fases de implementación
 
@@ -134,11 +159,11 @@ Aceptación: `make up` desde clon limpio + `.env` levanta el server en menos de 
 
 ### Fase 2: nube, cloud-init, backups y runbook
 
-Requiere decisiones 1-3 de §4.
+Proveedor decidido: OCI Vinhedo (§4).
 
 Tareas:
 1. **`infra/cloud-init.yaml`**: Ubuntu 24.04, crear usuario `pz` con Docker, instalar `docker`, `docker compose`, `git`, `mcrcon`, `rclone`, `unattended-upgrades`; `git clone` de este repo a `/opt/zomboid-server`; escribir `.env` desde variables del cloud-init (o desde un secret del proveedor); instalar `infra/systemd/zomboid.service` (`ExecStart=make up`, `ExecStop=scripts/stop.sh`, `TimeoutStopSec=180`) y habilitarlo. Firewall (`ufw` o security list del proveedor): `16261-16262/udp` abierto, `22/tcp` y `27015/tcp` solo a la IP del admin.
-2. **OpenTofu** en `infra/terraform/`: módulo del proveedor elegido (VM 4 vCPU/16 GB, boot volume 80 GB, IP pública reservada, security list, cloud-init como user-data), `envs/prod/` con `terraform.tfvars` gitignored. Salidas: IP pública, comando SSH, string de conexión para el juego.
+2. **OpenTofu** en `infra/terraform/` con el provider `oracle/oci`: compartment, VCN + subnet pública + internet gateway, security list (`16261-16262/udp` a todos, `22/tcp` y `27015/tcp` solo a la IP del admin), **IP pública reservada**, instancia `VM.Standard.E5.Flex` 4 OCPU / 16 GB con imagen Ubuntu 24.04 y boot volume 80 GB, bucket de Object Storage para backups, cloud-init como user-data. `envs/prod/` con `terraform.tfvars` gitignored. Salidas: IP reservada, comando SSH, string `IP:16261` para el juego. Prerrequisito manual: cuenta OCI con **home region Vinhedo**, upgrade a Pay As You Go (las cuentas free no pueden crear shapes E5 pagos) y alerta de presupuesto.
 3. **Backups**: `scripts/backup.sh` (RCON `save` → esperar 5 s → `tar` de `Saves/Multiplayer/servertest` + `Server/` → `rclone copy` a un bucket de object storage del proveedor, retención 14 días por nombre con fecha). Cron diario a las 06:00 hora local y siempre dentro de `stop.sh`. `scripts/restore.sh` documentado y **probado una vez** restaurando en un contenedor local.
 4. **DNS** (si hay dominio): registro A en Cloudflare apuntando a la IP reservada. Si el proveedor no da IP fija, script en boot que actualiza el registro con la API de Cloudflare.
 5. **`docs/runbook.md`**: conectar, ver jugadores, dar admin, reiniciar, agregar mods (flujo completo), actualizar el juego (`scripts/update.sh`: stop limpio, `compose pull`, up; el server también actualiza el juego al arrancar vía steamcmd), restaurar backup, qué hacer si "server has different version" o mismatch de mods (ver research 04 §6).
@@ -146,12 +171,12 @@ Tareas:
 
 Aceptación: `tofu apply` desde cero deja un server accesible en menos de 15 minutos; `tofu destroy` + `tofu apply` + `restore.sh` recupera el mundo; backup diario visible en el bucket.
 
-### Fase 3: on-demand y comodidades (opcional, ahorra ~85% del costo)
+### Fase 3: on-demand y bot de Discord (obligatoria por decisión del usuario; ahorra ~85% del costo)
 
-1. **Encendido/apagado manual**: `scripts/cloud-start.sh` / `cloud-stop.sh` con la CLI del proveedor (`oci compute instance action --action START/SOFTSTOP` o equivalente). `cloud-stop.sh` primero corre `stop.sh` por SSH (save + quit + backup) y después apaga la VM. En OCI y AWS la VM detenida no cobra cómputo.
-2. **Apagado automático por inactividad**: cron en la VM cada 15 min que consulta `players` por RCON; si 0 jugadores durante 45 min y fuera de horario habitual, ejecuta `stop.sh` y `shutdown -h now` (la VM queda "stopped"). Requiere que el proveedor deje la instancia en estado detenido al hacer shutdown desde el guest (OCI y AWS sí).
-3. **Bot de Discord** para que cualquier amigo prenda el server: comandos `/pz start`, `/pz status`, `/pz players`. Correrlo fuera de la VM (Cloudflare Worker, Oracle Always Free 2 OCPU ARM, o Raspberry). Opcional.
-4. **Integración de chat con Discord** (`DiscordEnable=true`, `DiscordToken`, `DiscordChatChannel`) en el ini: el server relaya el chat global.
+1. **Encendido/apagado manual**: `scripts/cloud-start.sh` / `cloud-stop.sh` con la CLI de OCI (`oci compute instance action --action START` / `--action SOFTSTOP`). `cloud-stop.sh` primero corre `stop.sh` por SSH (save + quit + backup) y después apaga la VM. En OCI la instancia Standard detenida no cobra cómputo.
+2. **Apagado automático por inactividad**: cron en la VM cada 5 min que consulta `players` por RCON; si 0 jugadores durante 30 min ejecuta `stop.sh` y `shutdown -h now` (OCI deja la instancia en STOPPED). Umbral configurable en `.env`. Nunca apagar con jugadores conectados.
+3. **Bot de Discord** (ver §4.1.b): Python con `discord.py` + SDK `oci`, en la instancia Always Free ARM de la misma tenancy. Comandos `/pz start|status|stop|restart|mods|backup`, con permisos por rol de Discord. Credenciales de OCI para el bot: usuario IAM dedicado con política mínima (`manage instances` sobre el compartment del juego) o Instance Principal si el bot corre en OCI. Anunciar IP y estado en el canal. Aceptación: un amigo sin acceso a nada más escribe `/pz start` y en menos de 3 minutos puede conectarse.
+4. **Puente nativo de chat** (§4.1.a): `DiscordEnable`, `DiscordToken`, `DiscordChatChannel`, `DiscordLogChannel`, `DiscordCommandChannel` en el `.tpl`. Se puede hacer ya en Fase 1 si el bot de Discord se crea temprano.
 5. **Actualización controlada de mods**: los mods del Workshop se actualizan solos al reiniciar; si un mod rompe la partida, fijar el proceso de rollback (quitar del ini, restaurar backup si hace falta). Considerar reinicio programado diario a una hora sin jugadores para tomar updates.
 
 ## 6. Riesgos y mitigaciones
@@ -164,7 +189,7 @@ Aceptación: `tofu apply` desde cero deja un server accesible en menos de 15 min
 
 ## 7. Cómo seguir
 
-1. Confirmar las decisiones pendientes de §4 (proveedor, always-on vs on-demand, dominio, Discord).
+1. Decisiones de §4 tomadas (OCI Vinhedo, on-demand, sin dominio, Discord).
 2. Ejecutar la Fase 1 en `lucpc` con un modelo barato: "Implementar Fase 1 de PLAN.md".
 3. Con el server funcionando en local, definir la partida: editar `config/servertest_SandboxVars.lua` y la lista de mods **antes** del primer arranque del mundo real.
 4. Fase 2 y 3.
