@@ -1,0 +1,13 @@
+# secretos y estado local
+.env
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+infra/terraform/**/terraform.tfvars
+
+# artefactos generados a partir de templates
+config/servertest.ini
+data/
+backups/
+*.log

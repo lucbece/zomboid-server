@@ -1,0 +1,170 @@
+# Plan: servidor dedicado de Project Zomboid Build 42 en la nube
+
+Fecha del plan: 2026-09-03. Investigación completa en `docs/research/` (leer antes de implementar cada fase).
+
+## 0. Resumen ejecutivo
+
+- **Objetivo**: servidor privado de PZ **Build 42** para 8 a 16 amigos, con mods de Workshop, corriendo en una VM en la nube, con toda la configuración (ini, sandbox, mods) versionada en este repo y deploy reproducible.
+- **Estado de B42 (verificado 2026-09-03)**: **B42 es la rama estable por defecto de Steam desde el 29-jul-2026 (42.20)**. No hace falta `-beta`. El multiplayer B42 existe desde 42.13 (dic-2025). Versión actual: 42.20.x. Para B41 habría que usar `-beta legacy41`.
+- **Arquitectura elegida**: Docker Compose + imagen `danixu86/project-zomboid-dedicated-server` (la única mantenida activamente con soporte explícito para B42 y opción de no pisar el ini) + directorio `config/` bind-mounteado desde git + scripts de RCON/backup + cloud-init + Terraform/OpenTofu para la VM.
+- **Hosting**: todavía sin decidir. Jugadores en Argentina, prioridad ping bajo. Recomendación: región **São Paulo** (~30 ms desde Buenos Aires; US-East ~140 ms; Alemania ~230 ms) con **Oracle Cloud Vinhedo (x86 Flex, pago por uso)** y patrón "encender solo para jugar". Ping mínimo absoluto (~5-15 ms): **AWS Local Zone Buenos Aires**, al doble o triple de costo. Ver §4.
+- **Tamaño**: apuntar a **4 vCPU / 16 GB RAM / 60-80 GB SSD** para las dos variantes (8 y 16 jugadores); el heap de la JVM se ajusta con `MAX_MEMORY` (8 GB para 8 jugadores, 12 GB para 16). Con 8 GB de host solo alcanza para 8 jugadores y ajustado (B42 es más pesado que B41).
+
+## 1. Decisiones ya tomadas (no re-litigar al implementar)
+
+| Tema | Decisión | Por qué |
+|---|---|---|
+| Runtime | Docker Compose sobre Ubuntu 24.04 LTS | Reproducible entre proveedores; la imagen encapsula steamcmd + JRE. Bare metal y LinuxGSM descartados (menos reproducible, sin pin de versión). |
+| Imagen | `danixu86/project-zomboid-dedicated-server`, pinneada por digest | Última push 2026-09-01; issue #39 cerrado hace que `STEAMAPPBRANCH` vacío siga la rama pública (= B42). `SELF_MANAGED_MODS=1` evita que el entrypoint reescriba `Mods=`/`WorkshopItems=`. |
+| Fallback de imagen | Dockerfile propio (`steamcmd/steamcmd:ubuntu-24` + `app_update 380870` + `start-server.sh`) | Solo si en la Fase 1 se comprueba que el entrypoint de Danixu pisa otras claves del ini además de mods. |
+| Fuente de verdad de config | `config/servertest.ini.tpl` + `config/servertest_SandboxVars.lua` + `config/servertest_spawnregions.lua` en git | El usuario edita estos archivos para mods y ajustes de partida. Los secretos (`Password`, `RCONPassword`, `DiscordToken`) se inyectan desde `.env` (gitignored) con `envsubst` en `scripts/render-config.sh`. |
+| Apagado | Siempre `save` + `quit` vía RCON, nunca `docker stop` a secas | El server no maneja SIGTERM limpiamente (confirmado por The Indie Stone). `stop_grace_period` alto como red de seguridad. |
+| Backups | Nativos del server (`BackupsCount`, `BackupsPeriod`) + tar de `Saves/Multiplayer/<nombre>` y `Server/` tras `save`, subidos con `rclone` a object storage | Los saves son archivos + SQLite; copiar en caliente sin `save` previo puede dar archivos rotos. |
+| Nombre del server | `servertest` | Es el default y todos los archivos (`servertest.ini`, `servertest_SandboxVars.lua`) se nombran a partir de él. Cambiarlo obliga a renombrar todo. |
+| IaC | OpenTofu (compatible con Terraform) con un módulo por proveedor + cloud-init común | La VM es intercambiable; lo que persiste es el repo + el backup. |
+
+## 2. Estructura objetivo del repo
+
+```
+zomboid-server/
+├── PLAN.md                     # este documento
+├── CLAUDE.md                   # contexto para agentes que implementen fases
+├── README.md                   # cómo usar (se completa en Fase 1)
+├── docker-compose.yml          # imagen pinneada, volúmenes, puertos, env
+├── .env.example                # variables + secretos (copiar a .env)
+├── Makefile                    # atajos: render, up, down, rcon, backup, restore, restart
+├── config/
+│   ├── servertest.ini.tpl      # ini con ${PLACEHOLDERS} para secretos
+│   ├── servertest_SandboxVars.lua
+│   ├── servertest_spawnregions.lua
+│   └── mods.txt                # (opcional) lista "workshop_id  mod_id  # nombre" → genera Mods/WorkshopItems
+├── scripts/
+│   ├── render-config.sh        # .tpl + .env (+ mods.txt) → config/servertest.ini
+│   ├── rcon.sh                 # wrapper de mcrcon (players, save, servermsg, quit)
+│   ├── restart.sh              # aviso a jugadores, save, quit, compose up
+│   ├── backup.sh               # save → tar → rclone
+│   ├── restore.sh              # bajar server, restaurar tar, subir
+│   └── update.sh               # actualiza imagen/juego respetando shutdown limpio
+├── infra/
+│   ├── cloud-init.yaml         # docker + git clone del repo + systemd unit que hace compose up
+│   ├── systemd/zomboid.service # compose up en boot, ExecStop = scripts/stop.sh (save+quit)
+│   └── terraform/
+│       ├── modules/oci/        # o el proveedor elegido
+│       ├── modules/linode/
+│       └── envs/prod/
+├── docs/
+│   ├── research/               # 4 documentos de investigación con fuentes
+│   ├── runbook.md              # operación diaria (Fase 2)
+│   └── mods.md                 # cómo agregar/quitar mods (Fase 2)
+└── data/                       # gitignored; bind mounts locales para pruebas
+```
+
+## 3. Datos técnicos clave (para no volver a buscarlos)
+
+Fuente detallada: `docs/research/01-b42-server-install.md` y `04-server-config-and-mods.md`.
+
+- **Steam App ID** del server dedicado: `380870` (cliente: `108600`). Rama: pública/estable = B42. Sin password de beta.
+- **Puertos**: `16261/udp` y `16262/udp` (juego, confirmados en pzwiki para B42). `27015/tcp` RCON, **solo abrir a la IP del admin**. `8766-8767/udp` (Steam) aparecen en guías viejas y en el compose de Danixu; no confirmados como necesarios en B42, abrirlos no hace daño.
+- **Rutas dentro del contenedor** (Danixu): datos del server en `/home/steam/Zomboid` (`Server/servertest.ini`, `Server/servertest_SandboxVars.lua`, `Saves/Multiplayer/servertest/`, `Logs/`, `db/`), Workshop en `/home/steam/pz-dedicated/steamapps/workshop`. Ambos deben ser volúmenes persistentes.
+- **Env vars Danixu**: `ADMINUSERNAME`, `ADMINPASSWORD` (obligatoria en el primer arranque; evita el prompt interactivo), `MIN_MEMORY`/`MAX_MEMORY` (heap JVM; setear solo `MAX_MEMORY`), `RCONPASSWORD`, `SELF_MANAGED_MODS=1`, `CACHEDIR`, `SERVERNAME`. Build-arg `STEAMAPPBRANCH` dejar **vacío**.
+- **Heap**: JRE incluida (Java 25, GraalVM). 8 jugadores → `-Xmx8g`; 16 → `-Xmx12g` a `16g`. El proceso no usa más RAM que `-Xmx`; un `-Xmx` chico tira el server aunque sobre RAM.
+- **Mods**: `WorkshopItems=` IDs numéricos separados por `;` (los baja el server con su steamcmd al arrancar). `Mods=` IDs de `mod.info` separados por `;`. En B42 los mods traen carpetas `common/` y `42/` (ahí está `mod.info`). **Incertidumbre a resolver empíricamente en Fase 1**: B42 temprano exigía prefijo `\` por ID (`Mods=\ModA;\ModB`); en 42.20.x parece no hacer falta. Probar sin prefijo primero; si un mod no carga, probar con prefijo. Los clientes descargan los mods solos al conectarse (necesitan tener el Workshop habilitado).
+- **Cambios de config**: `servertest.ini` se relee con el comando admin `reloadoptions`, pero mods y la mayoría de sandbox vars requieren reinicio. Cambiar sandbox vars después de crear el mundo no aplica todo: algunas quedan fijadas al crear la partida (por eso definir el sandbox **antes** del primer arranque real).
+- **RCON**: cliente `mcrcon` (`mcrcon -H <ip> -P 27015 -p <pass> "save"`). Comandos útiles: `players`, `save`, `quit`, `servermsg "texto"`, `adduser`, `setaccesslevel <user> admin`, `reloadoptions`, `kickuser`, `banuser`.
+- **Whitelist**: server privado ⇒ `Open=false` + `Password=` o whitelist con `/adduser`. Para amigos, lo más simple: `Open=true` + `Password=` fuerte + `Public=false`.
+- **Ejemplos de mods B42 verificados (re-chequear al instalar, el ecosistema está en flujo tras 42.20)**: Common Sense `3750253491`/`VB_CommonSense`; Inventory Tetris B42 MP patch `3688186430`/`INVENTORY_TETRIS`; True Music B42 `3397198968`/`truemusic`; Brita's B42 Armor Pack `3777418909`/`BritasArmorPackB42`.
+- **pzwiki bloquea fetch desde sandboxes** (Cloudflare 403). Si un agente necesita releer, usar `https://r.jina.ai/https://pzwiki.net/wiki/<Pagina>`. Páginas: `Dedicated_server`, `Startup_parameters`, `Server_settings`, `Sandbox_options`, `Admin_commands`.
+
+## 4. Hosting: opciones y recomendación
+
+**Restricción confirmada por el usuario (2026-09-03): todos los jugadores están en Argentina y quieren el menor ping razonable.** Eso ordena las opciones por latencia primero y precio después.
+
+Latencia aproximada desde Buenos Aires (fuentes en `docs/research/03-cloud-hosting.md`, números de WonderNetwork + estimaciones):
+
+| Destino | Ping aprox. | Comentario |
+|---|---|---|
+| Buenos Aires (AWS Local Zone `us-east-1-bue-1`, Latitude.sh, Gcore) | 5-15 ms | Lo mejor posible. Oferta acotada y cara. |
+| São Paulo (OCI Vinhedo, AWS sa-east-1, GCP, Azure, Linode, Vultr) | ~30 ms | Excelente para PZ; diferencia con BA imperceptible en juego. |
+| Santiago (OCI `sa-santiago-1`, GCP `southamerica-west1`) | ~25-35 ms | Equivalente a São Paulo, menos oferta. |
+| US East (Ashburn) | ~140 ms | Jugable pero se nota en combate/vehículos. |
+| Alemania (Hetzner) | ~230 ms | Descartado. |
+
+Detalle y fuentes con fecha: `docs/research/03-cloud-hosting.md`. Precios USD/mes al 2026-09-03; **recheckear antes de contratar**. Supuestos: ~20 h/semana de juego (~87 h/mes) para la variante on-demand.
+
+| Opción | Región | 16 GB always-on | 16 GB on-demand | Notas |
+|---|---|---|---|---|
+| **Oracle Cloud x86 Flex (E4/E5)** | Vinhedo (SP) | ~$92 | **~$11-15** | Mismo precio en todas las regiones. Instancia detenida no cobra cómputo. IP pública reservada gratis. **Recomendada.** |
+| **AWS Local Zone Buenos Aires** | Buenos Aires | $226 (t3.xlarge 4 vCPU/16 GB) + $20 EBS gp2 80 GB | ~$27 + $20 EBS | El menor ping posible (~5-15 ms). Sin spot ni reservadas. Solo 16 tipos de instancia; t3.xlarge es la única de 16 GB razonable. Vale la pena solo si 30 ms vs 10 ms importa al grupo. |
+| AWS sa-east-1 | São Paulo | ~$223 (m5.xlarge) | ~$27 | Stop = sin cobro de cómputo (sí disco e IPv4 ~$3.6/mes). Región cara. |
+| Linode/Akamai | São Paulo | $134 (Linode 16 GB) | no aplica* | Precio confirmado y simple. *Cobra la instancia apagada; on-demand requiere destruir/recrear desde snapshot. |
+| Latitude.sh / Gcore | Buenos Aires | a verificar | a verificar | Bare metal (Latitude) y cloud (Gcore) con datacenter en BA. No investigados en detalle; chequear si ofrecen VM x86 de 16 GB y a qué precio antes de descartarlos. |
+| Hetzner | Ashburn / Alemania | CPX41 ~$100+ / CCX23 ~€86 | no aplica* | Subió precios 2-3x en jun-2026; sin región SA; ~140-230 ms. Descartado. |
+| Oracle Always Free ARM | cualquiera | $0 | $0 | Recortado a 2 OCPU/12 GB (jun-2026) y PZ es x86 (requiere emulación box64/FEX, inestable). Descartado. |
+| Hosting administrado (BisectHosting, G-Portal, etc.) | algunos con Brasil | $24 (8 GB) / $48 (16 GB) | no aplica | Baseline honesto: más barato que always-on self-hosted. Sin root ni IaC. Verificar que el plan elegido sea en São Paulo. |
+
+**Recomendación**: Oracle Cloud Vinhedo, shape `VM.Standard.E5.Flex` (o E4) con 4 OCPU / 16 GB, boot volume 80 GB, con el patrón on-demand de la Fase 3. Da ~30 ms, que para PZ es indistinguible de jugar en LAN, a una fracción del costo de la Local Zone de Buenos Aires. Si el grupo quiere sí o sí el mínimo ping y el presupuesto lo permite, la alternativa es AWS Local Zone BA con t3.xlarge on-demand (~$47/mes con disco). Si nadie quiere operar nada y el server va a estar siempre prendido, considerar hosting administrado en São Paulo y usar este repo solo para la config.
+
+**Decisiones pendientes del usuario** (bloquean la Fase 2, no la Fase 1):
+1. Proveedor: OCI Vinhedo (recomendado) vs AWS Local Zone BA vs otro.
+2. Always-on vs on-demand.
+3. ¿Dominio propio para `pz.tudominio.com`? (Cloudflare DNS gratis; si no, se usa la IP reservada).
+4. ¿Discord del grupo? Habilita integración de chat (`DiscordEnable`) y, en Fase 3, un bot para prender/apagar.
+
+## 5. Fases de implementación
+
+Cada fase tiene tareas concretas y criterios de aceptación. Están pensadas para ejecutarse con modelos más baratos; el contexto necesario está en `CLAUDE.md` y `docs/research/`.
+
+### Fase 1: servidor reproducible en local (Docker Compose)
+
+Objetivo: `make up` levanta un server B42 en la PC local (la `lucpc` tiene Docker), con config desde git, mods de prueba y apagado limpio. Sin nube todavía.
+
+Tareas:
+1. **Verificar el entrypoint de Danixu**: leer `entrypoint.sh` en https://github.com/Danixu/project-zomboid-server-docker y documentar en `docs/research/02-docker-and-tooling.md` (sección "Verificación") exactamente qué claves del ini reescribe con `SELF_MANAGED_MODS=1`. Si reescribe algo fuera de `Mods`/`WorkshopItems` que necesitemos controlar desde git, activar el fallback de Dockerfile propio (§1).
+2. **`docker-compose.yml`**: imagen pinneada por digest (`docker pull` y anotar el digest), `SELF_MANAGED_MODS=1`, `MAX_MEMORY` desde `.env`, puertos `16261-16262/udp`, `27015/tcp` bindeado a `127.0.0.1` (en la nube se abre por firewall solo al admin), volúmenes `./data/zomboid:/home/steam/Zomboid` y `./data/workshop:/home/steam/pz-dedicated/steamapps/workshop`, `stop_grace_period: 120s`, `restart: unless-stopped`. Resolver UID/GID del usuario `steam` de la imagen para que los bind mounts sean escribibles.
+3. **`.env.example`**: `ADMINUSERNAME`, `ADMINPASSWORD`, `RCONPASSWORD`, `SERVER_PASSWORD`, `MAX_MEMORY=8g`, `PUBLIC_NAME`, `MAX_PLAYERS=16`, `DISCORD_*` vacíos.
+4. **`config/servertest.ini.tpl`**: arrancar el server una vez sin config para que genere `servertest.ini` por defecto en `data/zomboid/Server/`, copiarlo al repo como `.tpl` y reemplazar secretos por `${VAR}`. Ajustar para server privado: `Public=false`, `Open=true`, `Password=${SERVER_PASSWORD}`, `MaxPlayers=${MAX_PLAYERS}`, `PVP=false` (a decidir), `PauseEmpty=true`, `SaveWorldEveryMinutes=10`, `BackupsCount=5`, `BackupsPeriod=60`, `RCONPort=27015`, `RCONPassword=${RCONPASSWORD}`, `UPnP=false`, `Mods=`, `WorkshopItems=`. Lo mismo con `servertest_SandboxVars.lua` y `servertest_spawnregions.lua` (copiar los generados al repo).
+5. **`scripts/render-config.sh`**: `set -a; source .env; envsubst < config/servertest.ini.tpl > data/zomboid/Server/servertest.ini` y copiar los `.lua`. Debe fallar si falta una variable (usar `envsubst` con lista explícita o chequear `${VAR:?}`). Si se implementa `mods.txt`, generar aquí las líneas `Mods=`/`WorkshopItems=` preservando el orden del archivo (el orden de `Mods=` es el load order).
+6. **`scripts/rcon.sh`**: instalar `mcrcon` (apt en Debian/Ubuntu 24.04 o compilar desde https://github.com/Tiiffi/mcrcon) y envolverlo leyendo `.env`.
+7. **`scripts/stop.sh` y `scripts/restart.sh`**: `servermsg "Reinicio en 60s"`, sleep, `save`, `quit`, esperar a que el contenedor termine, (restart:) `render-config` + `compose up -d`.
+8. **`Makefile`** con `render`, `up`, `down` (= stop.sh), `restart`, `logs`, `rcon CMD=...`, `backup`, `restore FILE=...`.
+9. **Prueba de mods**: agregar 2 mods de la lista de §3 al ini, reiniciar, confirmar en logs que se descargan y cargan. Documentar si hizo falta el prefijo `\` en `docs/mods.md`.
+10. **Prueba end-to-end**: conectarse desde el cliente de Steam (B42) por IP local, jugar, `make down`, `make up`, confirmar que el mundo y el personaje persisten.
+
+Aceptación: `make up` desde clon limpio + `.env` levanta el server en menos de 10 minutos; un cliente entra; `make down` deja el log con `save` y `quit` y sin errores; los mods de prueba cargan.
+
+### Fase 2: nube, cloud-init, backups y runbook
+
+Requiere decisiones 1-3 de §4.
+
+Tareas:
+1. **`infra/cloud-init.yaml`**: Ubuntu 24.04, crear usuario `pz` con Docker, instalar `docker`, `docker compose`, `git`, `mcrcon`, `rclone`, `unattended-upgrades`; `git clone` de este repo a `/opt/zomboid-server`; escribir `.env` desde variables del cloud-init (o desde un secret del proveedor); instalar `infra/systemd/zomboid.service` (`ExecStart=make up`, `ExecStop=scripts/stop.sh`, `TimeoutStopSec=180`) y habilitarlo. Firewall (`ufw` o security list del proveedor): `16261-16262/udp` abierto, `22/tcp` y `27015/tcp` solo a la IP del admin.
+2. **OpenTofu** en `infra/terraform/`: módulo del proveedor elegido (VM 4 vCPU/16 GB, boot volume 80 GB, IP pública reservada, security list, cloud-init como user-data), `envs/prod/` con `terraform.tfvars` gitignored. Salidas: IP pública, comando SSH, string de conexión para el juego.
+3. **Backups**: `scripts/backup.sh` (RCON `save` → esperar 5 s → `tar` de `Saves/Multiplayer/servertest` + `Server/` → `rclone copy` a un bucket de object storage del proveedor, retención 14 días por nombre con fecha). Cron diario a las 06:00 hora local y siempre dentro de `stop.sh`. `scripts/restore.sh` documentado y **probado una vez** restaurando en un contenedor local.
+4. **DNS** (si hay dominio): registro A en Cloudflare apuntando a la IP reservada. Si el proveedor no da IP fija, script en boot que actualiza el registro con la API de Cloudflare.
+5. **`docs/runbook.md`**: conectar, ver jugadores, dar admin, reiniciar, agregar mods (flujo completo), actualizar el juego (`scripts/update.sh`: stop limpio, `compose pull`, up; el server también actualiza el juego al arrancar vía steamcmd), restaurar backup, qué hacer si "server has different version" o mismatch de mods (ver research 04 §6).
+6. Deploy real, sesión de prueba con 3+ amigos, medir RAM/CPU (`docker stats`) y ajustar `MAX_MEMORY` y tamaño de VM.
+
+Aceptación: `tofu apply` desde cero deja un server accesible en menos de 15 minutos; `tofu destroy` + `tofu apply` + `restore.sh` recupera el mundo; backup diario visible en el bucket.
+
+### Fase 3: on-demand y comodidades (opcional, ahorra ~85% del costo)
+
+1. **Encendido/apagado manual**: `scripts/cloud-start.sh` / `cloud-stop.sh` con la CLI del proveedor (`oci compute instance action --action START/SOFTSTOP` o equivalente). `cloud-stop.sh` primero corre `stop.sh` por SSH (save + quit + backup) y después apaga la VM. En OCI y AWS la VM detenida no cobra cómputo.
+2. **Apagado automático por inactividad**: cron en la VM cada 15 min que consulta `players` por RCON; si 0 jugadores durante 45 min y fuera de horario habitual, ejecuta `stop.sh` y `shutdown -h now` (la VM queda "stopped"). Requiere que el proveedor deje la instancia en estado detenido al hacer shutdown desde el guest (OCI y AWS sí).
+3. **Bot de Discord** para que cualquier amigo prenda el server: comandos `/pz start`, `/pz status`, `/pz players`. Correrlo fuera de la VM (Cloudflare Worker, Oracle Always Free 2 OCPU ARM, o Raspberry). Opcional.
+4. **Integración de chat con Discord** (`DiscordEnable=true`, `DiscordToken`, `DiscordChatChannel`) en el ini: el server relaya el chat global.
+5. **Actualización controlada de mods**: los mods del Workshop se actualizan solos al reiniciar; si un mod rompe la partida, fijar el proceso de rollback (quitar del ini, restaurar backup si hace falta). Considerar reinicio programado diario a una hora sin jugadores para tomar updates.
+
+## 6. Riesgos y mitigaciones
+
+- **B42 MP todavía madura** (desync al agacharse, culling de zombies; The Indie Stone dice que el hardening sigue). Mitigación: backups frecuentes, reinicio programado diario, seguir `projectzomboid.com/blog` para patches; los saves se conservan entre versiones 42.20.x.
+- **Ecosistema de mods en flujo**: muchos forks paralelos "B42" del mismo mod. Mitigación: probar cada mod en local antes de subirlo a la partida real; anotar Workshop ID + Mod ID + fecha en `config/mods.txt`.
+- **Costos de nube cambian** (Hetzner 2-3x, Oracle free tier a la mitad, ambos en junio 2026). Mitigación: on-demand, alertas de presupuesto en el proveedor, revisar precios antes de contratar.
+- **Pérdida de saves por apagado sucio**. Mitigación: nunca `docker stop`/`kill` directo; todo pasa por `stop.sh`; backup en cada stop.
+- **Secretos en git**. Mitigación: `.env` gitignored, ini se renderiza desde `.tpl`, `git-secrets` o hook opcional.
+
+## 7. Cómo seguir
+
+1. Confirmar las decisiones pendientes de §4 (proveedor, always-on vs on-demand, dominio, Discord).
+2. Ejecutar la Fase 1 en `lucpc` con un modelo barato: "Implementar Fase 1 de PLAN.md".
+3. Con el server funcionando en local, definir la partida: editar `config/servertest_SandboxVars.lua` y la lista de mods **antes** del primer arranque del mundo real.
+4. Fase 2 y 3.
