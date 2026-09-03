@@ -8,7 +8,7 @@ variable "tenancy_ocid" {
 }
 
 variable "region" {
-  description = "Region de OCI. La decidida en PLAN.md §4 es Brazil East (Sao Paulo)."
+  description = "Region de OCI. Se elige al crear la cuenta de OCI; ver docs/deploy-oracle.md."
   type        = string
   default     = "sa-saopaulo-1"
 }
@@ -105,7 +105,7 @@ variable "shape" {
 }
 
 variable "ocpus" {
-  description = "OCPUs de la instancia flex. 1 OCPU = 2 vCPU. 4 OCPU segun PLAN.md §4."
+  description = "OCPUs de la instancia flex. 1 OCPU = 2 vCPU. setup.sh lo elige segun max_players (2 hasta 8 jugadores, 4 arriba de eso)."
   type        = number
   default     = 4
 }

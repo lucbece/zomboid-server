@@ -1,5 +1,10 @@
 # Plan: servidor dedicado de Project Zomboid Build 42 en la nube
 
+> **Historical document.** This is the original planning document for the project, written in
+> Spanish while the server was being built. It is kept for the record and is not maintained.
+> The decisions that are actually in force live in [`README.md`](../../README.md),
+> [`docs/architecture.md`](../architecture.md) and [`docs/runbook.md`](../runbook.md).
+
 Fecha del plan: 2026-09-03. Investigación completa en `docs/research/` (leer antes de implementar cada fase).
 
 ## 0. Resumen ejecutivo

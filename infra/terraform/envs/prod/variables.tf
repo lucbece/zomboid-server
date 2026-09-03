@@ -10,7 +10,7 @@ variable "oci_config_profile" {
 }
 
 variable "region" {
-  description = "Region de OCI. Brazil East (Sao Paulo) es la decidida en PLAN.md §4."
+  description = "Region de OCI. Brazil East (Sao Paulo) se elige al crear la cuenta de OCI; ver docs/deploy-oracle.md."
   type        = string
   default     = "sa-saopaulo-1"
 }
@@ -21,7 +21,7 @@ variable "admin_cidr" {
 }
 
 variable "survey_port" {
-  description = "Puerto de la encuesta de reglas (tools/encuesta). 0 = cerrada. Ver docs/runbook.md."
+  description = "Puerto de la encuesta de reglas (tools/encuesta). 0 = cerrada. Ver docs/survey.md."
   type        = number
   default     = 0
 }

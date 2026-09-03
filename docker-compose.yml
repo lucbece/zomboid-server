@@ -2,7 +2,7 @@
 #
 # La imagen viene con el juego ya instalado (buildid 24909836, B42 estable) y se pinnea por
 # digest para que el arranque sea reproducible: `docker compose pull` es la unica forma de
-# cambiar de version. Ver docs/research/02-docker-and-tooling.md §7 para la verificacion del
+# cambiar de version. Ver docs/history/research/02-docker-and-tooling.md §7 para la verificacion del
 # entrypoint (que claves del ini reescribe y cuales no).
 services:
   zomboid:
