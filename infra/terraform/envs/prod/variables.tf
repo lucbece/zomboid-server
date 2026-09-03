@@ -20,6 +20,12 @@ variable "admin_cidr" {
   type        = string
 }
 
+variable "survey_port" {
+  description = "Puerto de la encuesta de reglas (tools/encuesta). 0 = cerrada. Ver docs/runbook.md."
+  type        = number
+  default     = 0
+}
+
 variable "ssh_public_key" {
   description = "Clave publica SSH del admin (contenido de ~/.ssh/id_ed25519.pub)."
   type        = string

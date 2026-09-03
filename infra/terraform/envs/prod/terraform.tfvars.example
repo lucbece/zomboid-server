@@ -51,3 +51,9 @@ max_memory = "12g"
 
 # El bucket tiene que ser unico dentro del namespace del tenancy.
 bucket_name = "zomboid-backups"
+
+# --- Encuesta de reglas ---------------------------------------------------------------------
+# Puerto de la encuesta web (tools/encuesta), abierta a todo internet mientras dura la
+# votacion. 0 = cerrada. Ponerlo en 8080, tofu apply, make encuesta-up, y cuando termina la
+# votacion volver a 0 y aplicar de nuevo.
+survey_port = 0

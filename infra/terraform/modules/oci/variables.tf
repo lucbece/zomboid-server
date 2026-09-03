@@ -78,6 +78,22 @@ variable "rcon_port" {
   default     = 27015
 }
 
+variable "survey_port" {
+  description = <<-EOT
+    Puerto TCP de la encuesta de reglas (tools/encuesta). 0 = deshabilitada: no se crea
+    ninguna regla de ingress. Con un valor > 0 se abre a 0.0.0.0/0, porque los amigos entran
+    desde el celular y no se les puede pedir la IP. Es HTTP plano y sin login: no poner nada
+    sensible ahi, y volver a 0 cuando termina la votacion.
+  EOT
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.survey_port == 0 || (var.survey_port >= 1024 && var.survey_port <= 65535)
+    error_message = "survey_port tiene que ser 0 (deshabilitada) o un puerto entre 1024 y 65535."
+  }
+}
+
 # ---------------------------------------------------------------------------------------------
 # Instancia
 # ---------------------------------------------------------------------------------------------

@@ -1,0 +1,35 @@
+# Encuesta web de reglas de la partida. La instala y la habilita el admin a mano con
+# scripts/encuesta.sh up; cloud-init NO la toca (el puerto 8080 esta cerrado por default en
+# el NSG: hay que poner survey_port en terraform.tfvars y hacer tofu apply).
+#
+# Es un http.server de la stdlib de Python: sin venv, sin pip, sin base de datos. Los votos
+# se acumulan en ENCUESTA_DATOS/votos.jsonl, que se baja por scp cuando termina la votacion.
+[Unit]
+Description=Encuesta de reglas de Project Zomboid (http.server de la stdlib)
+Documentation=https://github.com/lucbece/zomboid-server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pz
+Group=pz
+WorkingDirectory=/opt/zomboid-server/tools/encuesta
+Environment=ENCUESTA_PUERTO=8080
+Environment=ENCUESTA_DATOS=/opt/zomboid-server/data/encuesta
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/zomboid-server/tools/encuesta/server.py
+Restart=on-failure
+RestartSec=5
+
+# La encuesta no necesita nada del sistema mas alla de su carpeta de datos.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=no
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

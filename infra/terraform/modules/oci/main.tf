@@ -179,6 +179,26 @@ resource "oci_core_network_security_group_security_rule" "rcon" {
   }
 }
 
+# Encuesta de reglas: solo existe si survey_port > 0. Es una pagina publica sin login, se
+# abre mientras dura la votacion y despues se vuelve survey_port = 0.
+resource "oci_core_network_security_group_security_rule" "survey" {
+  count = var.survey_port > 0 ? 1 : 0
+
+  network_security_group_id = oci_core_network_security_group.this.id
+  direction                 = "INGRESS"
+  protocol                  = "6" # TCP
+  source                    = "0.0.0.0/0"
+  source_type               = "CIDR_BLOCK"
+  description               = "Encuesta de reglas ${var.survey_port}/tcp"
+
+  tcp_options {
+    destination_port_range {
+      min = var.survey_port
+      max = var.survey_port
+    }
+  }
+}
+
 resource "oci_core_network_security_group_security_rule" "icmp_pmtu" {
   network_security_group_id = oci_core_network_security_group.this.id
   direction                 = "INGRESS"
