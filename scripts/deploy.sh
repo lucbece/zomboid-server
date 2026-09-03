@@ -261,14 +261,14 @@ cat <<'PACIENCIA'
 PACIENCIA
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
-  echo "         (simulado) ssh ${VM_USER}@${ip} 'sudo journalctl -u zomboid -f -n 50'"
+  echo "         (simulado) ssh ${VM_USER}@${ip} 'cd /opt/zomboid-server && docker compose logs zomboid'"
   echo "         (simulado) hasta ver '*** SERVER STARTED ****' o cortar a los 30 minutos"
 else
   inicio="${SECONDS}"
   listo=0
   while ((SECONDS - inicio <= ESPERA_JUEGO_SEG)); do
     if ssh "${SSH_OPTS[@]}" "${VM_USER}@${ip}" \
-      "sudo journalctl -u zomboid --no-pager 2>/dev/null | grep -q 'SERVER STARTED'" 2>/dev/null; then
+      "cd /opt/zomboid-server 2>/dev/null && docker compose logs --no-log-prefix zomboid 2>/dev/null | grep -q 'SERVER STARTED'" 2>/dev/null; then
       listo=1
       break
     fi

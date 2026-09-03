@@ -341,7 +341,7 @@ Objetivo: que una persona sin experiencia técnica pueda levantar su propio serv
 
 Tareas:
 1. [x] **`setup.sh` (asistente interactivo, bash)**: chequea e instala prerrequisitos sin sudo (OpenTofu en `~/.local/bin`, `oci` CLI en un venv, `ssh-keygen` si no hay clave); detecta la IP pública del admin; pregunta con defaults sensatos (nombre del server, cantidad de jugadores, email para alertas, presupuesto mensual, región de OCI con lista de las cercanas); **genera passwords** seguras y legibles (tipo tres palabras + números) para admin, RCON y server, o acepta las que ponga el usuario; detecta el `repo_url` desde `git remote get-url origin`, verifica si es público con `git ls-remote` sin credenciales y elige clonado por HTTPS (sin deploy key) o SSH con deploy key; escribe `infra/terraform/envs/prod/terraform.tfvars` y `.env`; guía para crear la API key de OCI y valida `~/.oci/config` con `oci iam region list` o equivalente; es re-ejecutable (muestra los valores actuales como default).
-2. [x] **`make deploy`**: orquesta el primer deploy end-to-end: `tofu init`, si hace falta deploy key: apply con `-target`, la sube con `gh repo deploy-key add` si `gh` está autenticado o imprime instrucciones y espera; `tofu apply`; espera SSH; sigue `journalctl -u zomboid` hasta `SERVER STARTED` (timeout 30 min); imprime un bloque final "Pasale esto a tus amigos" con IP, puerto y server password, y los comandos básicos. Idempotente: si ya está desplegado, solo actualiza.
+2. [x] **`make deploy`**: orquesta el primer deploy end-to-end: `tofu init`, si hace falta deploy key: apply con `-target`, la sube con `gh repo deploy-key add` si `gh` está autenticado o imprime instrucciones y espera; `tofu apply`; espera SSH; sigue los logs de Docker del contenedor hasta `SERVER STARTED` (timeout 30 min); imprime un bloque final "Pasale esto a tus amigos" con IP, puerto y server password, y los comandos básicos. Idempotente: si ya está desplegado, solo actualiza.
 3. [x] **`make doctor`**: preflight de prerrequisitos y diagnóstico (tofu, oci CLI y config válida, gh opcional, clave SSH, tfvars completo, estado de la VM si existe, últimos backups en el bucket). Mensajes en lenguaje simple con la acción a tomar.
 4. [x] **`make destroy-all`** con confirmación fuerte: backup final, `tofu destroy`, recordatorio de que el bucket con backups queda y cómo borrarlo. Para que nadie quede pagando por olvido.
 5. [x] **Cloud-init**: soportar clonado por HTTPS (sin deploy key) cuando `repo_url` empieza con `https://`; la deploy key solo se genera/inyecta si el repo es SSH. Variable `repo_url` con default al upstream público (quien no forkea igual puede usarlo: la config se ajusta con `make sync`).
@@ -371,7 +371,7 @@ Lo que quedó:
 - **`scripts/deploy.sh`** (`make deploy`): 7 pasos — `doctor -q` → `tofu init` → deploy key (solo
   si el repo es SSH; la sube con `gh repo deploy-key add` si `gh` está autenticado, si no imprime
   la clave y espera Enter) → plan + una sola confirmación (o `YES=1`) → espera SSH (10 min) →
-  espera `SERVER STARTED` en `journalctl` mostrando la fase de cloud-init (30 min) → bloque
+  espera `SERVER STARTED` en `docker compose logs` mostrando la fase de cloud-init (30 min) → bloque
   "PASALE ESTO A TUS AMIGOS" + los 5 comandos. Idempotente. `DRY_RUN=1` imprime los pasos sin
   ejecutar nada.
 - **`scripts/doctor.sh`** (`make doctor`): 20+ chequeos con `OK` / `AVISO` / `FALTA` y una línea

@@ -236,4 +236,4 @@ runcmd:
   - systemctl daemon-reload
   - systemctl enable --now zomboid.service
 
-final_message: "zomboid: cloud-init termino en $UPTIME s. El server arranca solo; seguirlo con: journalctl -u zomboid -f"
+final_message: "zomboid: cloud-init termino en $UPTIME s. El server arranca solo; seguirlo con: cd /opt/zomboid-server && make logs (journalctl -u zomboid muestra solo el arranque de la unit)"
