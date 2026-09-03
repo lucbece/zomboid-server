@@ -43,6 +43,10 @@ Las cuentas Free Tier no pueden crear shapes `E5.Flex` pagos: el `tofu apply` fa
 Consola → menú de la cuenta (arriba a la derecha) → **Upgrade to Paid** / *Billing & Cost
 Management* → *Upgrade and Payment*. Tarda unos minutos en propagarse.
 
+Al confirmar, Oracle hace una **autorización de 100 USD** en la tarjeta como verificación (FAQ oficial:
+"your credit card is authorized for $100 USD... immediately reversed"). No es un cargo ni un prepago;
+el banco puede mostrarla pendiente unos días. Tarjetas sin compras internacionales habilitadas la rechazan.
+
 Después del upgrade, confirmar en **Governance & Administration → Limits, Quotas and Usage** que hay
 service limit disponible para `VM.Standard.E5.Flex` en `sa-saopaulo-1` (buscar el límite
 "Cores for Standard.E5.Flex"). Si está en 0, hay que pedir un aumento (es gratis, tarda horas).
