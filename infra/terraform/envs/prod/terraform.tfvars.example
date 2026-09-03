@@ -32,6 +32,8 @@ alert_email = "vos@ejemplo.com"
 budget_usd  = 25
 
 # --- Tamano ---------------------------------------------------------------------------------
+# setup.sh elige esto segun max_players: hasta 8 jugadores 2 OCPU / 12 GB, mas de 8 4 OCPU / 16 GB.
+# Se puede forzar con ZS_OCPUS / ZS_MEMORY_GB al correr ./setup.sh, o editando aca.
 ocpus               = 4
 memory_gb           = 16
 boot_volume_size_gb = 80
@@ -46,7 +48,7 @@ server_password = "CAMBIAME-server"
 public_name     = "Mi server de Zomboid"
 max_players     = 16
 
-# Heap de la JVM: 8g para 8 jugadores, 12g para 16 (con memory_gb = 16).
+# Heap de la JVM: memory_gb menos ~4 GB para el sistema y Docker (8g con 12 GB, 12g con 16 GB).
 max_memory = "12g"
 
 # El bucket tiene que ser unico dentro del namespace del tenancy.

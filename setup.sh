@@ -17,7 +17,8 @@
 # respuesta por defecto y solo cambia lo que cambies.
 #
 # Modo --no-preguntar (lo usan las pruebas y el CI). Variables aceptadas:
-#   ZS_PUBLIC_NAME  ZS_MAX_PLAYERS  ZS_ALERT_EMAIL  ZS_BUDGET_USD  ZS_REGION
+#   ZS_PUBLIC_NAME  ZS_MAX_PLAYERS  ZS_OCPUS  ZS_MEMORY_GB  ZS_ALERT_EMAIL  ZS_BUDGET_USD
+#   ZS_REGION
 #   ZS_TENANCY_OCID  ZS_ADMIN_CIDR  ZS_SSH_PUBLIC_KEY  ZS_REPO_URL  ZS_BUCKET_NAME
 #   ZS_ADMIN_PASSWORD  ZS_RCON_PASSWORD  ZS_SERVER_PASSWORD
 #   ZS_SKIP_OCI=1     no valida ~/.oci/config ni el CLI oci
@@ -371,8 +372,32 @@ max_players="$(preguntar "Cuántos jugadores como máximo" \
   "$(elegir ZS_MAX_PLAYERS max_players 8)")"
 [[ "${max_players}" =~ ^[0-9]{1,3}$ ]] || ui_die "la cantidad de jugadores tiene que ser un número"
 
-# Memoria de la JVM: con 16 GB de RAM, 8g alcanza hasta 8 jugadores y 12g para más.
-if ((max_players <= 8)); then max_memory="8g"; else max_memory="12g"; fi
+# Tamaño de la máquina y heap de la JVM, según cuántos jugadores va a haber. Una máquina más
+# chica cuesta menos por hora, así que no tiene sentido pagar 4 OCPU para 6 amigos.
+#
+#   hasta 8 jugadores  -> 2 OCPU / 12 GB de RAM / heap 8g
+#   más de 8           -> 4 OCPU / 16 GB de RAM / heap 12g
+#
+# El heap siempre deja ~4 GB para el sistema y para Docker. Se puede pisar todo con ZS_OCPUS
+# y ZS_MEMORY_GB (el heap se recalcula: memoria de la VM menos 4 GB).
+if ((max_players <= 8)); then
+  ocpus=2
+  memory_gb=12
+else
+  ocpus=4
+  memory_gb=16
+fi
+
+ocpus="${ZS_OCPUS:-${ocpus}}"
+memory_gb="${ZS_MEMORY_GB:-${memory_gb}}"
+if [[ ! "${ocpus}" =~ ^[0-9]{1,3}$ ]] || ((ocpus < 1)); then
+  ui_die "ZS_OCPUS tiene que ser un número entero de 1 o más"
+fi
+if [[ ! "${memory_gb}" =~ ^[0-9]{1,4}$ ]] || ((memory_gb < 6)); then
+  ui_die "ZS_MEMORY_GB tiene que ser un número entero de 6 o más (el heap de la JVM son memory_gb - 4)"
+fi
+
+max_memory="$((memory_gb - 4))g"
 
 alert_email="$(preguntar "Mail donde recibir los avisos de gasto de Oracle" \
   "$(elegir ZS_ALERT_EMAIL alert_email "")")"
@@ -567,8 +592,8 @@ alert_email = "${alert_email}"
 budget_usd  = ${budget_usd}
 
 # --- Tamaño de la máquina -------------------------------------------------------------------
-ocpus               = 4
-memory_gb           = 16
+ocpus               = ${ocpus}
+memory_gb           = ${memory_gb}
 boot_volume_size_gb = 80
 
 # --- Server de juego ------------------------------------------------------------------------
@@ -648,6 +673,7 @@ cat <<RESUMEN
 
     Nombre del server ...... ${public_name}
     Jugadores máximo ....... ${max_players}
+    Máquina ................ ${ocpus} OCPU / ${memory_gb} GB (heap de la JVM: ${max_memory})
     Región ................. ${region}
     Avisos de gasto ........ ${alert_email} (a partir de ${budget_usd} USD/mes)
     Administración desde ... ${admin_cidr}
