@@ -1,0 +1,76 @@
+name: No puedo conectarme al server
+description: El server está creado pero vos o tus amigos no pueden entrar
+title: "No puedo conectarme: "
+labels: ["ayuda"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de escribir, probá estas dos cosas (resuelven la mayoría de los casos):
+
+        1. `make doctor` — te dice en castellano qué falta.
+        2. `make remote-status` — te dice si el juego está realmente arriba.
+
+        **No pegues nunca la contraseña del server ni el contenido de `terraform.tfvars`.**
+        Si pegás una IP, cambiá los últimos números por `x` (por ejemplo `150.230.x.x`).
+
+  - type: dropdown
+    id: quien
+    attributes:
+      label: ¿A quién le pasa?
+      options:
+        - Solo a mí (el que administra)
+        - Solo a mis amigos, yo entro bien
+        - A todos
+    validations:
+      required: true
+
+  - type: dropdown
+    id: momento
+    attributes:
+      label: ¿Cuándo empezó?
+      options:
+        - Nunca funcionó (es el primer deploy)
+        - Funcionaba y dejó de funcionar
+        - Después de agregar o sacar un mod
+        - Después de un `make deploy` o un `make sync`
+    validations:
+      required: true
+
+  - type: textarea
+    id: mensaje
+    attributes:
+      label: ¿Qué dice exactamente la pantalla del juego?
+      description: Copiá el mensaje tal cual, o describí qué pasa (se queda cargando, cierra, etc.)
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Salida de `make doctor`
+      description: Pegala entera. Se autoformatea, no hace falta que hagas nada.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: status
+    attributes:
+      label: Salida de `make remote-status`
+      render: text
+
+  - type: input
+    id: sistema
+    attributes:
+      label: ¿Desde qué sistema administrás el server?
+      placeholder: Ubuntu 24.04 / macOS 15 / Windows 11 con WSL2
+
+  - type: checkboxes
+    id: revisado
+    attributes:
+      label: Revisé que
+      options:
+        - label: Mis amigos tienen Project Zomboid en la rama estable (Build 42), sin beta
+        - label: Están usando el puerto 16261
+        - label: Les pasé la contraseña del server (no la de admin)

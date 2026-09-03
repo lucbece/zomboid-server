@@ -1,0 +1,26 @@
+# Hooks locales, opcionales pero recomendados si vas a mandar un PR:
+#
+#   pip install pre-commit
+#   pre-commit install
+#
+# Los mismos chequeos corren en el CI (.github/workflows/ci.yml).
+repos:
+  # Evita commitear secretos: passwords, claves privadas, tokens de Oracle o de Discord.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+        args: ["-x"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: detect-private-key
