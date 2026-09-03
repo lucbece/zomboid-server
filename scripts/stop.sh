@@ -28,7 +28,12 @@ fi
 log "desactivando el auto-restart del contenedor"
 docker update --restart=no "${container_id}" >/dev/null
 
-if rcon players >/dev/null 2>&1; then
+if players_out="$(rcon players 2>/dev/null)"; then
+  # Sin jugadores conectados no tiene sentido esperar el aviso.
+  if grep -q 'Players connected (0)' <<<"${players_out}"; then
+    log "no hay jugadores conectados, se omite el aviso"
+    WARN_SECONDS=0
+  fi
   if [[ "${WARN_SECONDS}" -gt 0 ]]; then
     log "avisando a los jugadores (${WARN_SECONDS}s)"
     rcon "servermsg \"El servidor se apaga en ${WARN_SECONDS} segundos. Ponete a salvo.\"" || true
