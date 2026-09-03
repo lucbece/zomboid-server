@@ -70,7 +70,8 @@ cmd_up() {
             '${VM_DIR}/infra/systemd/${UNIT}' '/etc/systemd/system/${UNIT}' &&
           sudo install -d -m 755 -o ${VM_USER} -g ${VM_USER} '${DATOS_VM}' &&
           sudo systemctl daemon-reload &&
-          sudo systemctl enable --now '${UNIT}'"
+          sudo systemctl enable --now '${UNIT}' &&
+          sudo ufw allow '${PUERTO}/tcp' comment 'Encuesta de reglas' >/dev/null"
 
   ui_ok "Encuesta arriba en http://${IP}:${PUERTO}"
   ui_hint "Pasales ese link a los amigos. Cierra sola cuando corras: make encuesta-down"
@@ -80,7 +81,8 @@ cmd_up() {
 
 cmd_down() {
   ui_step "Parando la encuesta"
-  remoto "sudo systemctl disable --now '${UNIT}'"
+  remoto "sudo systemctl disable --now '${UNIT}';
+          sudo ufw delete allow '${PUERTO}/tcp' >/dev/null 2>&1 || true"
   ui_ok "Encuesta apagada. Los votos siguen en ${DATOS_VM}/votos.jsonl"
   ui_hint "Para contarlos: make encuesta-resultados"
 }

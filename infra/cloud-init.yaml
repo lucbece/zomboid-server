@@ -189,6 +189,18 @@ write_files:
       APT::Periodic::AutocleanInterval "7";
 
 runcmd:
+  # --- Firewall preinstalado de Oracle -----------------------------------------------------
+  # La imagen de Ubuntu de OCI trae reglas de iptables (netfilter-persistent) que rechazan todo
+  # salvo SSH y quedan DELANTE de las cadenas de ufw, asi que ufw nunca llega a decidir. Docker
+  # zafa porque publica por FORWARD, pero cualquier servicio del host (la encuesta) queda
+  # bloqueado. Se apaga esa persistencia y se vacian las reglas: ufw pasa a ser el unico
+  # firewall del host (el NSG de OCI sigue filtrando por fuera).
+  - systemctl disable --now netfilter-persistent || true
+  - mkdir -p /root/oracle-iptables-backup && cp /etc/iptables/rules.v4 /etc/iptables/rules.v6 /root/oracle-iptables-backup/ || true
+  - rm -f /etc/iptables/rules.v4 /etc/iptables/rules.v6
+  - iptables -P INPUT ACCEPT && iptables -P FORWARD ACCEPT && iptables -F INPUT && iptables -F FORWARD
+  - ip6tables -P INPUT ACCEPT && ip6tables -P FORWARD ACCEPT && ip6tables -F INPUT && ip6tables -F FORWARD
+
   # --- Docker -----------------------------------------------------------------------------
   - install -m 0755 -d /etc/apt/keyrings
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
