@@ -1,10 +1,14 @@
 # secretos y estado local
 .env
+terraform.tfvars
+*.auto.tfvars
 *.tfstate
-*.tfstate.backup
+*.tfstate.*
 .terraform/
-.terraform.lock.hcl
-infra/terraform/**/terraform.tfvars
+crash.log
+crash.*.log
+
+# .terraform.lock.hcl SI se commitea: es el pin de versiones+hashes de los providers.
 
 # artefactos generados a partir de templates
 config/servertest.ini

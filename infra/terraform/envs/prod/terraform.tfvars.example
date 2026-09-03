@@ -1,0 +1,47 @@
+# Copiar a terraform.tfvars y completar. terraform.tfvars esta gitignoreado: tiene secretos.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+# --- Cuenta ---------------------------------------------------------------------------------
+# La linea 'tenancy=' de ~/.oci/config.
+tenancy_ocid = "ocid1.tenancy.oc1..aaaaaaaaCAMBIAME"
+
+# Brazil East (Sao Paulo). Tiene que coincidir con la home region de la cuenta.
+region = "sa-saopaulo-1"
+
+# --- Acceso ---------------------------------------------------------------------------------
+# Tu IP publica en /32. Sacarla con: curl -s https://ifconfig.me
+# Si tenes IP dinamica va a cambiar: cuando SSH deje de andar, actualizar esto y `tofu apply`.
+admin_cidr = "203.0.113.10/32"
+
+# Contenido de ~/.ssh/id_ed25519.pub (una sola linea).
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICAMBIAME luc@lucpc"
+
+# --- Repo -----------------------------------------------------------------------------------
+# Tiene que ser SSH: la VM clona con la deploy key que genera Tofu.
+repo_url    = "git@github.com:lucbece/zomboid-server.git"
+repo_branch = "main"
+
+# --- Presupuesto ----------------------------------------------------------------------------
+alert_email = "vos@ejemplo.com"
+budget_usd  = 25
+
+# --- Tamano ---------------------------------------------------------------------------------
+ocpus               = 4
+memory_gb           = 16
+boot_volume_size_gb = 80
+
+# --- Server de juego ------------------------------------------------------------------------
+# Estos valores se escriben en /opt/zomboid-server/.env dentro de la VM (mode 0600).
+admin_username  = "admin"
+admin_password  = "CAMBIAME-admin"
+rcon_password   = "CAMBIAME-rcon"
+server_password = "CAMBIAME-server"
+public_name     = "Zomboid de los pibes"
+max_players     = 16
+
+# Heap de la JVM: 8g para 8 jugadores, 12g para 16 (con memory_gb = 16).
+max_memory = "12g"
+
+# El bucket tiene que ser unico dentro del namespace del tenancy.
+bucket_name = "zomboid-backups"

@@ -1,0 +1,229 @@
+#cloud-config
+# ---------------------------------------------------------------------------------------------
+# Provisioning de la VM del servidor de Project Zomboid B42.
+#
+# Este archivo es un TEMPLATE de OpenTofu: lo renderiza `templatefile()` desde
+# infra/terraform/modules/oci/main.tf y el resultado va en metadata.user_data de la instancia.
+# Las variables con la forma dolar-llave las reemplaza Tofu al renderizar. Para dejar una
+# llave literal para el shell hay que duplicar el dolar (la sintaxis de escape de templatefile).
+#
+# Lo que deja listo:
+#   - usuario ${vm_user} con docker + sudo sin password y la ssh key del admin
+#   - docker-ce + plugin compose desde el repo oficial de Docker
+#   - clon de ${repo_url} en ${repo_dir} con una deploy key de solo lectura
+#   - ${repo_dir}/.env con los secretos que vienen de terraform.tfvars
+#   - mcrcon compilado, systemd unit habilitada (arranca el server en el boot)
+#   - rclone contra Object Storage por instance principal (sin claves en disco)
+#   - cron de backup diario a las 0${backup_hour}:00 hora de ${timezone}
+#
+# Validar cambios antes de un apply (ver docs/runbook.md):
+#   tofu console -> templatefile("../../../cloud-init.yaml", {...})
+#   docker run --rm -v "$PWD:/mnt" ubuntu:24.04 \
+#     bash -c 'apt-get update -qq && apt-get install -y -qq cloud-init >/dev/null &&
+#              cloud-init schema --config-file /mnt/rendered.yaml'
+# ---------------------------------------------------------------------------------------------
+
+hostname: zomboid
+timezone: ${timezone}
+
+package_update: true
+package_upgrade: true
+
+# El grupo docker se crea aca y no en el postinst del paquete: los usuarios de cloud-config se
+# crean antes de instalar paquetes, y useradd -G falla si el grupo todavia no existe.
+groups:
+  - docker
+
+users:
+  # 'default' mantiene el usuario ubuntu con la key que OCI inyecta por metadata.
+  - default
+  - name: ${vm_user}
+    gecos: Project Zomboid server
+    shell: /bin/bash
+    groups: [docker, sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - git
+  - make
+  - gettext-base
+  - build-essential
+  - rclone
+  - zstd
+  - jq
+  - unattended-upgrades
+  - ufw
+
+write_files:
+  # --- Deploy key de solo lectura del repo -----------------------------------------------
+  # La genera OpenTofu (tls_private_key ed25519). La publica se muestra en el output
+  # `deploy_public_key` y hay que cargarla en GitHub ANTES del primer boot.
+  - path: /home/${vm_user}/.ssh/deploy_key
+    owner: ${vm_user}:${vm_user}
+    permissions: "0600"
+    defer: true
+    content: |
+      ${indent(6, trimspace(deploy_private_key))}
+
+  - path: /home/${vm_user}/.ssh/config
+    owner: ${vm_user}:${vm_user}
+    permissions: "0600"
+    defer: true
+    content: |
+      Host github.com
+        User git
+        IdentityFile /home/${vm_user}/.ssh/deploy_key
+        IdentitiesOnly yes
+
+  # --- .env del server -------------------------------------------------------------------
+  # Se escribe fuera del repo porque git clone exige que el destino no exista o este vacio;
+  # runcmd lo instala en ${repo_dir}/.env despues del clon.
+  - path: /etc/zomboid/env
+    owner: root:root
+    permissions: "0600"
+    content: |
+      # Generado por cloud-init desde terraform.tfvars. No editar a mano: se pisa en el
+      # proximo `tofu apply` que recree la VM.
+      ADMINUSERNAME=${admin_username}
+      ADMINPASSWORD="${admin_password}"
+
+      RCONPASSWORD="${rcon_password}"
+      RCON_PORT=${rcon_port}
+
+      SERVER_PASSWORD="${server_password}"
+      PUBLIC_NAME="${public_name}"
+      MAX_PLAYERS=${max_players}
+
+      GAME_PORT=${game_port}
+      GAME_UDP_PORT=${game_udp_port}
+
+      MIN_MEMORY=${min_memory}
+      MAX_MEMORY=${max_memory}
+
+      MOD_ID_PREFIX=
+
+      DISCORD_ENABLE=false
+      DISCORD_TOKEN=
+      DISCORD_CHAT_CHANNEL=
+      DISCORD_LOG_CHANNEL=
+      DISCORD_COMMAND_CHANNEL=
+
+      # --- Backups (los lee scripts/backup.sh) ---
+      RCLONE_REMOTE=oci
+      BACKUP_BUCKET=${bucket_name}
+      BACKUP_KEEP_LOCAL_DAYS=3
+
+      # --- Fase 3: apagado por inactividad (todavia sin cron) ---
+      IDLE_MINUTES=30
+
+  # --- rclone contra Object Storage por instance principal --------------------------------
+  # instance_principal_auth = la VM se autentica con su propio certificado de instancia.
+  # No hay ninguna API key ni secreto en el disco; los permisos salen del dynamic group
+  # y la policy que crea OpenTofu.
+  - path: /home/${vm_user}/.config/rclone/rclone.conf
+    owner: ${vm_user}:${vm_user}
+    permissions: "0600"
+    defer: true
+    content: |
+      [oci]
+      type = oracleobjectstorage
+      provider = instance_principal_auth
+      namespace = ${os_namespace}
+      compartment =
+      region = ${region}
+
+  # --- Backup diario ----------------------------------------------------------------------
+  # flock evita que dos backups se pisen si uno tarda mas de un dia (no deberia).
+  # La linea de idle-shutdown queda comentada a proposito: es de la Fase 3 y hasta que el bot
+  # de Discord exista, apagar la VM sola dejaria a los amigos sin forma de prenderla.
+  - path: /etc/cron.d/zomboid
+    owner: root:root
+    permissions: "0644"
+    content: |
+      SHELL=/bin/bash
+      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      0 ${backup_hour} * * * ${vm_user} cd ${repo_dir} && flock -n /var/tmp/zomboid-backup.lock ./scripts/backup.sh >> /var/log/zomboid/backup.log 2>&1
+      #*/5 * * * * ${vm_user} cd ${repo_dir} && flock -n /var/tmp/zomboid-idle.lock ./scripts/idle-shutdown.sh >> /var/log/zomboid/idle.log 2>&1
+
+  - path: /etc/logrotate.d/zomboid
+    owner: root:root
+    permissions: "0644"
+    content: |
+      /var/log/zomboid/*.log {
+        weekly
+        rotate 8
+        compress
+        missingok
+        notifempty
+        copytruncate
+      }
+
+  # --- Docker: repo oficial ---------------------------------------------------------------
+  # La key se baja en runcmd (curl a download.docker.com); aca solo queda el sources.list.
+  - path: /etc/apt/sources.list.d/docker.list
+    owner: root:root
+    permissions: "0644"
+    content: |
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable
+
+  # Actualizaciones de seguridad automaticas, sin reboot automatico (el reboot lo decide el
+  # admin: reiniciar con jugadores conectados pierde progreso).
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root:root
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+
+runcmd:
+  # --- Docker -----------------------------------------------------------------------------
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - apt-get update -q
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now docker
+
+  # --- Firewall del host -------------------------------------------------------------------
+  # Defensa en profundidad, con las mismas reglas que el NSG. OJO: Docker publica sus puertos
+  # saltandose la cadena INPUT de ufw (usa DOCKER-USER), asi que para 16261-16262/udp el
+  # filtrado real lo hace el NSG de OCI. ufw protege los servicios del host (SSH).
+  - ufw --force reset
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow from ${admin_cidr} to any port 22 proto tcp comment 'SSH admin'
+  - ufw allow from ${admin_cidr} to any port ${rcon_port} proto tcp comment 'RCON admin'
+  - ufw allow ${game_port}:${game_udp_port}/udp comment 'Project Zomboid'
+  - ufw --force enable
+
+  # --- Repo --------------------------------------------------------------------------------
+  - install -d -m 0700 -o ${vm_user} -g ${vm_user} /home/${vm_user}/.ssh
+  - su - ${vm_user} -c 'ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null'
+  - chmod 600 /home/${vm_user}/.ssh/known_hosts
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} /opt
+  - su - ${vm_user} -c 'git clone --branch ${repo_branch} ${repo_url} ${repo_dir}'
+
+  # --- .env y directorios de datos ---------------------------------------------------------
+  - install -m 0600 -o ${vm_user} -g ${vm_user} /etc/zomboid/env ${repo_dir}/.env
+  - shred -u /etc/zomboid/env
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} ${repo_dir}/data/zomboid ${repo_dir}/data/workshop ${repo_dir}/backups
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/log/zomboid
+
+  # --- mcrcon ------------------------------------------------------------------------------
+  - su - ${vm_user} -c 'cd ${repo_dir} && make mcrcon'
+
+  # --- systemd -----------------------------------------------------------------------------
+  # La unit vive en el repo (infra/systemd/zomboid.service) para que un `make sync` la actualice.
+  - install -m 0644 ${repo_dir}/infra/systemd/zomboid.service /etc/systemd/system/zomboid.service
+  - systemctl daemon-reload
+  - systemctl enable --now zomboid.service
+
+final_message: "zomboid: cloud-init termino en $UPTIME s. El server arranca solo; seguirlo con: journalctl -u zomboid -f"

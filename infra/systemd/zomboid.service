@@ -1,0 +1,40 @@
+# Servidor de Project Zomboid. La instala cloud-init en /etc/systemd/system/zomboid.service.
+#
+# Es Type=oneshot + RemainAfterExit=yes porque el proceso largo lo maneja el daemon de Docker:
+# `make up` hace `docker compose up -d` y vuelve enseguida. systemd solo tiene que recordar
+# que la unidad quedo "activa" para poder correr el ExecStop en el shutdown.
+#
+# Lo importante es el ExecStop: apagar la VM tiene que disparar save + quit por RCON. El server
+# de PZ no guarda el mundo si lo matan con SIGKILL.
+[Unit]
+Description=Project Zomboid B42 dedicated server (docker compose)
+Documentation=https://github.com/lucbece/zomboid-server
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=pz
+Group=pz
+WorkingDirectory=/opt/zomboid-server
+
+# make up = render-config.sh + docker compose up -d
+ExecStart=/usr/bin/make up
+
+# Apagado limpio: aviso de 30s a los jugadores, save, quit, y espera a que el contenedor
+# termine de escribir el mundo. WARN_SECONDS=30 porque en un `shutdown` de la VM no hay tanto
+# margen; systemd corta a los TimeoutStopSec.
+ExecStop=/opt/zomboid-server/scripts/stop.sh
+Environment=WARN_SECONDS=30
+
+# 30s de aviso + save de un mundo grande + margen. Tiene que ser mayor que el
+# SHUTDOWN_TIMEOUT de stop.sh (120s) mas el WARN_SECONDS.
+TimeoutStopSec=200
+
+# El arranque del contenedor incluye el pull de la imagen la primera vez (10.4 GB).
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target
