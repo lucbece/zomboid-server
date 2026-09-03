@@ -4,7 +4,7 @@
 #
 #   scripts/backup.sh                # backup normal
 #   scripts/backup.sh pre-wipe       # agrega la etiqueta al nombre del archivo
-#   scripts/backup.sh --no-upload    # solo local (util cuando no hay bucket, p.ej. en lucpc)
+#   scripts/backup.sh --no-upload    # solo local (util cuando no hay bucket configurado)
 #
 # Funciona con el server apagado: en ese caso se saltea el save y copia lo que hay en disco.
 set -euo pipefail

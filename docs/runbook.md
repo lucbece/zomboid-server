@@ -3,6 +3,11 @@
 Operación del server en la nube: qué hay que hacer a mano una sola vez, cómo se despliega, cómo se
 opera día a día y qué hacer cuando algo se rompe.
 
+> **Este documento es la referencia avanzada.** Si es la primera vez, la guía paso a paso está en
+> [`README.md`](../README.md): tres comandos (`./setup.sh`, `make deploy`) y todo lo demás
+> explicado sin jerga. Acá está el detalle de qué hace cada cosa por debajo y cómo arreglarla a
+> mano cuando el camino automático no alcanza.
+
 Decisiones de fondo (proveedor, región, on-demand, sin dominio): `PLAN.md` §1 y §4.
 
 - **Proveedor**: Oracle Cloud Infrastructure, región **Brazil East / São Paulo**
@@ -75,7 +80,7 @@ El `tenancy=` de ese archivo es el valor de `tenancy_ocid` en `terraform.tfvars`
 
 ### 1.4 Instalar el CLI `oci` (opcional para la Fase 2, necesario para la 3)
 
-Sin `sudo`, en un venv:
+`./setup.sh` ofrece instalarlo solo. A mano, sin `sudo`, en un venv:
 
 ```bash
 python3 -m venv ~/.venvs/oci
@@ -86,7 +91,7 @@ oci iam region list --output table   # verifica que la API key anda
 
 ### 1.5 Instalar OpenTofu
 
-Ya instalado en `lucpc` en `~/.local/bin/tofu` (v1.12.6, checksum verificado). En otra máquina:
+`./setup.sh` lo instala solo en `~/.local/bin/tofu` (v1.12.6, con verificación de checksum). A mano:
 
 ```bash
 V=1.12.6
@@ -99,26 +104,40 @@ install -m 755 tofu ~/.local/bin/tofu
 tofu version
 ```
 
-### 1.6 Crear el repo privado en GitHub
+### 1.6 Repo que clona la VM (`repo_url`)
 
-cloud-init clona el repo dentro de la VM, así que tiene que existir un remoto.
+cloud-init clona un repo dentro de la VM. Hay tres escenarios y `./setup.sh` elige el correcto
+solo, probando `git ls-remote` sin credenciales (`GIT_CONFIG_GLOBAL=/dev/null` para no usar el
+credential helper del usuario):
+
+| `repo_url` | Qué hace el módulo | Paso manual |
+|---|---|---|
+| `https://github.com/usuario/repo.git` (repo **público**) | clon anónimo; **no** genera `tls_private_key`, no escribe `deploy_key` ni `~/.ssh/config` ni corre `ssh-keyscan` | ninguno |
+| `git@github.com:usuario/repo.git` (repo **privado**) | genera un par ed25519 y lo inyecta como deploy key | cargar la pública en GitHub (§1.7) |
+| default (sin fork) | clona el upstream público `https://github.com/lucbece/zomboid-server.git` | ninguno; la config propia se manda con `make sync` |
+
+Quien quiera versionar su propia config:
 
 ```bash
-gh repo create lucbece/zomboid-server --private --source=. --remote=origin
+gh repo create USUARIO/zomboid-server --public --source=. --remote=origin
 git push -u origin main
 ```
 
-(o crear el repo a mano en github.com y `git remote add origin git@github.com:lucbece/zomboid-server.git`)
+(o hacer un fork desde la web y `git remote set-url origin https://github.com/USUARIO/zomboid-server.git`)
 
-### 1.7 Cargar la deploy key (después del primer `tofu apply`, ver §2)
+La condición vive en `local.use_deploy_key` de `infra/terraform/modules/oci/main.tf`
+(`!startswith(lower(trimspace(var.repo_url)), "https://")`) y el template la recibe como
+`use_deploy_key`.
 
-OpenTofu genera un par ed25519 y expone la pública como output `deploy_public_key`. Hay que
-cargarla en **GitHub → el repo → Settings → Deploy keys → Add deploy key**, pegando la clave y
-**sin marcar "Allow write access"**.
+### 1.7 Cargar la deploy key (solo con repo privado)
+
+OpenTofu genera un par ed25519 y expone la pública como output `deploy_public_key` (vacío si el
+repo es público). Hay que cargarla en **GitHub → el repo → Settings → Deploy keys → Add deploy
+key**, pegando la clave y **sin marcar "Allow write access"**.
 
 **Orden importante**: el primer `tofu apply` crea la VM y cloud-init intenta clonar el repo apenas
-arranca. Si la deploy key no está cargada todavía, el clon falla y hay que rehacer el boot. Ver §2
-para la secuencia correcta.
+arranca. Si la deploy key no está cargada todavía, el clon falla y hay que rehacer el boot.
+`make deploy` (§2) resuelve el orden solo.
 
 
 ### 1.8 Averiguar la IP pública del admin
@@ -134,6 +153,30 @@ por RCON. **Si tenés IP dinámica, va a cambiar**: cuando el SSH deje de andar,
 ---
 
 ## 2. Primer deploy
+
+### El camino corto
+
+```bash
+./setup.sh       # escribe terraform.tfvars y .env (ver §2.1)
+make doctor      # revisión previa: OK / AVISO / FALTA con la acción de cada cosa
+make deploy      # init -> deploy key si hace falta -> apply -> esperar SSH -> esperar el juego
+```
+
+`scripts/deploy.sh` hace los siete pasos en orden y es idempotente: si ya está todo creado, no
+cambia nada y vuelve a imprimir el bloque con IP, puerto y `server_password`. Opciones:
+
+- `make deploy YES=1` — sin la confirmación del plan.
+- `make deploy DRY_RUN=1` — imprime los pasos sin ejecutar nada (útil para revisar el flujo).
+- `ESPERA_SSH_SEG` / `ESPERA_JUEGO_SEG` — timeouts (default 600 s y 1800 s).
+
+`make doctor` (`scripts/doctor.sh`) chequea: bash ≥ 4, `git`/`curl`/`make`/`ssh`/`rsync`, tofu,
+clave SSH, `gh` (opcional), `~/.oci/config` con perfil `[DEFAULT]` y `key_file` existente, una
+llamada real a la API (`oci iam region-subscription list`), `terraform.tfvars` completo y con
+permisos 600, `.env`, alcanzabilidad de `repo_url`, y —si ya hay state— el estado de la instancia
+(`oci compute instance get`) y el último backup en el bucket (`oci os object list`). Con `-q`
+imprime solo los problemas y devuelve ≠ 0 si falta algo bloqueante; así lo usa `deploy.sh`.
+
+### El camino largo (a mano)
 
 ```bash
 cd infra/terraform/envs/prod
@@ -152,18 +195,22 @@ make infra-init     # descarga los providers (oracle/oci ~> 7.29, hashicorp/tls 
 make infra-plan     # revisar: ~20 recursos
 ```
 
-**Secuencia recomendada** para no pelearse con el orden de la deploy key:
+**Con `repo_url` HTTPS (repo público) no hay deploy key**: alcanza con `make infra-apply`.
+
+**Con `repo_url` SSH (repo privado)**, la secuencia para no pelearse con el orden:
 
 ```bash
-# 1. Crear todo menos la VM, y sacar la deploy key.
+# 1. Crear solo la deploy key, y sacar la pública.
 tofu apply -target=module.zomboid.tls_private_key.deploy
 tofu output -raw deploy_public_key
-# Atajo con GitHub CLI (ya autenticado en lucpc), en vez de pegarla a mano en la web:
-tofu output -raw deploy_public_key > /tmp/zomboid-deploy.pub && gh repo deploy-key add /tmp/zomboid-deploy.pub --title zomboid-vm -R lucbece/zomboid-server && rm /tmp/zomboid-deploy.pub
+# Atajo con GitHub CLI (si está autenticado), en vez de pegarla a mano en la web:
+tofu output -raw deploy_public_key > /tmp/zomboid-deploy.pub && gh repo deploy-key add /tmp/zomboid-deploy.pub --title zomboid-vm -R USUARIO/zomboid-server && rm /tmp/zomboid-deploy.pub
 # 2. Pegarla en GitHub -> Settings -> Deploy keys (read-only).
 # 3. Ahora sí, el resto.
 make infra-apply
 ```
+
+Esto es exactamente lo que hace el paso 3 de `make deploy`.
 
 El apply tarda 2-4 minutos. Al terminar:
 
@@ -243,6 +290,9 @@ Todo desde la PC del admin. La IP la resuelve solo leyendo `tofu output`; se pue
 | `make remote-backup` | Fuerza un backup y lo sube al bucket |
 | `make sync` | rsync de `config/`, `scripts/`, `Makefile`, `docker-compose.yml` a la VM |
 | `make sync RESTART=1` | Lo mismo + `remote-restart` |
+| `make doctor` | Revisión de prerrequisitos, estado de la VM y último backup |
+| `make deploy` | Aplica cambios de infraestructura y espera a que el juego vuelva |
+| `make destroy-all` | Backup final + `tofu destroy` (§8.1) |
 
 **`make sync` no sincroniza `.env` ni `data/`**: el `.env` de la VM lo genera cloud-init desde
 `terraform.tfvars` y los datos son de la VM.
@@ -436,6 +486,33 @@ crear personaje nuevo. Están versionados justamente para poder reconstruir la V
 
 ---
 
+## 8.1 Borrar todo (`make destroy-all`)
+
+```bash
+make destroy-all              # pide escribir el public_name para confirmar
+make destroy-all DRY_RUN=1    # muestra los pasos sin tocar nada
+```
+
+`scripts/destroy-all.sh` hace, en orden: leer `public_ip` del state; si la VM responde por SSH,
+`./scripts/backup.sh final` (si falla, pregunta si borrar igual); `tofu destroy -auto-approve`; y
+al final imprime qué quedó vivo y cómo borrarlo.
+
+**Qué NO borra `tofu destroy`**: el bucket de Object Storage si todavía tiene objetos (OCI se
+niega a borrar un bucket no vacío), y por lo tanto tampoco el compartment. Para dejar la cuenta
+completamente limpia:
+
+```bash
+oci os object bulk-delete --bucket-name zomboid-backups --namespace <namespace>
+oci os bucket delete --bucket-name zomboid-backups --namespace <namespace>
+```
+
+y después borrar el compartment `zomboid` desde la consola (*Identity → Compartments*).
+
+Si no hay state local (la infra se creó desde otra máquina), el script lo dice y no hace nada:
+hay que borrar desde esa máquina o a mano en la consola.
+
+---
+
 ## 9. Fase 3: on-demand (código listo, sin cron todavía)
 
 Encender y apagar la VM a mano desde la PC del admin (requiere el CLI `oci` de §1.4):
@@ -525,11 +602,14 @@ sudo tail -100 /var/log/cloud-init-output.log
 
 Causas frecuentes:
 
-- **`Permission denied (publickey)` al clonar el repo**: la deploy key no está cargada en GitHub, o
-  se cargó otra. Cargar el output `deploy_public_key` y después, en la VM:
+- **`Permission denied (publickey)` al clonar el repo**: solo pasa con `repo_url` SSH. La deploy
+  key no está cargada en GitHub, o se cargó otra. Cargar el output `deploy_public_key` y después,
+  en la VM:
   ```bash
   sudo cloud-init clean --logs && sudo reboot
   ```
+- **`could not read Username for 'https://github.com'`**: `repo_url` es HTTPS pero el repo es
+  privado. Hacerlo público, o volver a correr `./setup.sh` para pasar a SSH + deploy key.
 - **`make mcrcon` falla**: faltó `build-essential`; reintentar a mano en la VM.
 - **El pull de la imagen tarda**: son 10.4 GB. `docker compose logs` no muestra nada hasta que
   termina. Paciencia (`TimeoutStartSec=1800`).
@@ -537,6 +617,13 @@ Causas frecuentes:
 ### No entra por SSH
 
 Casi siempre es `admin_cidr`: cambió la IP pública del admin.
+
+```bash
+./setup.sh        # detecta la IP nueva y reescribe admin_cidr (Enter a todo lo demás)
+make deploy       # solo cambia la regla del NSG, no toca la VM ni la partida
+```
+
+A mano:
 
 ```bash
 curl -s https://ifconfig.me
@@ -583,19 +670,33 @@ tofu -chdir=infra/terraform/envs/prod validate
 tofu fmt -check -recursive infra/terraform
 ```
 
-Validar `infra/cloud-init.yaml` (es un template de OpenTofu, hay que renderizarlo primero). Se
-renderiza con una config mínima que solo tenga un `output` con `templatefile(...)` y valores de
-ejemplo, y después:
+Validar `infra/cloud-init.yaml` (es un template de OpenTofu, hay que renderizarlo primero). Eso lo
+hace `scripts/render-cloud-init.sh`, que arma una config descartable con un solo `output` que
+llama a `templatefile(...)` con valores de ejemplo. **Hay que probar los dos modos de clonado**,
+porque el template tiene condicionales `%{ if use_deploy_key ~}`:
 
 ```bash
-docker run --rm -v "$PWD:/mnt" ubuntu:24.04 bash -c \
+scripts/render-cloud-init.sh https /tmp/ci-https.yaml
+scripts/render-cloud-init.sh ssh   /tmp/ci-ssh.yaml
+
+docker run --rm -v /tmp:/mnt ubuntu:24.04 bash -c \
   'apt-get update -qq && apt-get install -y -qq cloud-init >/dev/null &&
-   cloud-init schema --config-file /mnt/rendered.yaml'
-# -> Valid schema /mnt/rendered.yaml
+   cloud-init schema --config-file /mnt/ci-https.yaml &&
+   cloud-init schema --config-file /mnt/ci-ssh.yaml'
+# -> Valid schema /mnt/ci-https.yaml
+# -> Valid schema /mnt/ci-ssh.yaml
 ```
+
+Es lo mismo que corre el job `cloud-init` del CI (`.github/workflows/ci.yml`).
 
 Los scripts:
 
 ```bash
-docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable scripts/*.sh scripts/lib/*.sh
+docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -x setup.sh scripts/*.sh scripts/lib/*.sh
+```
+
+Y los secretos, sobre todo el historial completo:
+
+```bash
+docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /repo --no-banner
 ```

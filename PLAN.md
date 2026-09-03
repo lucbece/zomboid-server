@@ -335,21 +335,76 @@ Lo que quedó, con la validación que pasó cada cosa:
 7. **Tarea 9**: entrar con un amigo desde Argentina, medir ping y `docker stats`, ajustar
    `MAX_MEMORY` si hace falta, y después `scripts/wipe.sh` para arrancar la partida definitiva.
 
-### Fase 2.5: plantilla pública para terceros (decisión del usuario, 2026-09-03)
+### Fase 2.5: plantilla pública para terceros — **HECHA 2026-09-03** (falta pasar el repo a público)
 
 Objetivo: que una persona sin experiencia técnica pueda levantar su propio server clonando este repo. El repo pasa a ser **público** una vez hecha esta fase y validado nuestro primer deploy con ella. Principio: **el camino feliz son 3 pasos** (crear cuenta OCI, `./setup.sh`, `make deploy`), y todo lo demás es opcional.
 
 Tareas:
-1. **`setup.sh` (asistente interactivo, bash)**: chequea e instala prerrequisitos sin sudo (OpenTofu en `~/.local/bin`, `oci` CLI en un venv, `ssh-keygen` si no hay clave); detecta la IP pública del admin; pregunta con defaults sensatos (nombre del server, cantidad de jugadores, email para alertas, presupuesto mensual, región de OCI con lista de las cercanas); **genera passwords** seguras y legibles (tipo tres palabras + números) para admin, RCON y server, o acepta las que ponga el usuario; detecta el `repo_url` desde `git remote get-url origin`, verifica si es público con `git ls-remote` sin credenciales y elige clonado por HTTPS (sin deploy key) o SSH con deploy key; escribe `infra/terraform/envs/prod/terraform.tfvars` y `.env`; guía para crear la API key de OCI y valida `~/.oci/config` con `oci iam region list` o equivalente; es re-ejecutable (muestra los valores actuales como default).
-2. **`make deploy`**: orquesta el primer deploy end-to-end: `tofu init`, si hace falta deploy key: apply con `-target`, la sube con `gh repo deploy-key add` si `gh` está autenticado o imprime instrucciones y espera; `tofu apply`; espera SSH; sigue `journalctl -u zomboid` hasta `SERVER STARTED` (timeout 30 min); imprime un bloque final "Pasale esto a tus amigos" con IP, puerto y server password, y los comandos básicos. Idempotente: si ya está desplegado, solo actualiza.
-3. **`make doctor`**: preflight de prerrequisitos y diagnóstico (tofu, oci CLI y config válida, gh opcional, clave SSH, tfvars completo, estado de la VM si existe, últimos backups en el bucket). Mensajes en lenguaje simple con la acción a tomar.
-4. **`make destroy-all`** con confirmación fuerte: backup final, `tofu destroy`, recordatorio de que el bucket con backups queda y cómo borrarlo. Para que nadie quede pagando por olvido.
-5. **Cloud-init**: soportar clonado por HTTPS (sin deploy key) cuando `repo_url` empieza con `https://`; la deploy key solo se genera/inyecta si el repo es SSH. Variable `repo_url` con default al upstream público (quien no forkea igual puede usarlo: la config se ajusta con `make sync`).
-6. **Documentación para principiantes**: `README.md` reescrito como guía paso a paso en español (qué es esto, cuánto cuesta con números, requisitos: Linux/macOS o Windows con WSL, crear la cuenta OCI paso por paso con lo que se ve en pantalla, `./setup.sh`, `make deploy`, cómo entran los amigos, cómo agregar mods editando `config/mods.txt`, cómo cambiar reglas, cómo apagar todo). `README.en.md` versión corta en inglés. El runbook actual pasa a ser la referencia avanzada. Una sección "Problemas frecuentes" con los 8-10 errores más probables y su solución en lenguaje simple.
-7. **Genericizar**: sacar nombres propios (`Zomboid de los pibes`, `lucbece`, IPs de LAN) de ejemplos y defaults; `LICENSE` MIT; `CONTRIBUTING.md` corto; `.github/workflows/ci.yml` con shellcheck, `tofu fmt -check` + `validate`, validación de esquema de cloud-init y **gitleaks**; `.pre-commit-config.yaml` con gitleaks y shellcheck; plantilla de issue para "no puedo conectarme".
-8. **Opcional si sobra tiempo**: `.devcontainer/devcontainer.json` con tofu + oci CLI para usar GitHub Codespaces desde cualquier SO, con advertencia clara de guardar `terraform.tfstate` (o `make state-backup` que lo sube cifrado al bucket).
+1. [x] **`setup.sh` (asistente interactivo, bash)**: chequea e instala prerrequisitos sin sudo (OpenTofu en `~/.local/bin`, `oci` CLI en un venv, `ssh-keygen` si no hay clave); detecta la IP pública del admin; pregunta con defaults sensatos (nombre del server, cantidad de jugadores, email para alertas, presupuesto mensual, región de OCI con lista de las cercanas); **genera passwords** seguras y legibles (tipo tres palabras + números) para admin, RCON y server, o acepta las que ponga el usuario; detecta el `repo_url` desde `git remote get-url origin`, verifica si es público con `git ls-remote` sin credenciales y elige clonado por HTTPS (sin deploy key) o SSH con deploy key; escribe `infra/terraform/envs/prod/terraform.tfvars` y `.env`; guía para crear la API key de OCI y valida `~/.oci/config` con `oci iam region list` o equivalente; es re-ejecutable (muestra los valores actuales como default).
+2. [x] **`make deploy`**: orquesta el primer deploy end-to-end: `tofu init`, si hace falta deploy key: apply con `-target`, la sube con `gh repo deploy-key add` si `gh` está autenticado o imprime instrucciones y espera; `tofu apply`; espera SSH; sigue `journalctl -u zomboid` hasta `SERVER STARTED` (timeout 30 min); imprime un bloque final "Pasale esto a tus amigos" con IP, puerto y server password, y los comandos básicos. Idempotente: si ya está desplegado, solo actualiza.
+3. [x] **`make doctor`**: preflight de prerrequisitos y diagnóstico (tofu, oci CLI y config válida, gh opcional, clave SSH, tfvars completo, estado de la VM si existe, últimos backups en el bucket). Mensajes en lenguaje simple con la acción a tomar.
+4. [x] **`make destroy-all`** con confirmación fuerte: backup final, `tofu destroy`, recordatorio de que el bucket con backups queda y cómo borrarlo. Para que nadie quede pagando por olvido.
+5. [x] **Cloud-init**: soportar clonado por HTTPS (sin deploy key) cuando `repo_url` empieza con `https://`; la deploy key solo se genera/inyecta si el repo es SSH. Variable `repo_url` con default al upstream público (quien no forkea igual puede usarlo: la config se ajusta con `make sync`).
+6. [x] **Documentación para principiantes**: `README.md` reescrito como guía paso a paso en español (qué es esto, cuánto cuesta con números, requisitos: Linux/macOS o Windows con WSL, crear la cuenta OCI paso por paso con lo que se ve en pantalla, `./setup.sh`, `make deploy`, cómo entran los amigos, cómo agregar mods editando `config/mods.txt`, cómo cambiar reglas, cómo apagar todo). `README.en.md` versión corta en inglés. El runbook actual pasa a ser la referencia avanzada. Una sección "Problemas frecuentes" con los 8-10 errores más probables y su solución en lenguaje simple.
+7. [x] **Genericizar**: sacar nombres propios (`Zomboid de los pibes`, `lucbece`, IPs de LAN) de ejemplos y defaults; `LICENSE` MIT; `CONTRIBUTING.md` corto; `.github/workflows/ci.yml` con shellcheck, `tofu fmt -check` + `validate`, validación de esquema de cloud-init y **gitleaks**; `.pre-commit-config.yaml` con gitleaks y shellcheck; plantilla de issue para "no puedo conectarme".
+8. [ ] **Opcional si sobra tiempo**: `.devcontainer/devcontainer.json` con tofu + oci CLI para usar GitHub Codespaces desde cualquier SO, con advertencia clara de guardar `terraform.tfstate` (o `make state-backup` que lo sube cifrado al bucket).
 
 Aceptación: en una carpeta limpia, `git clone` + `./setup.sh` + `make deploy` levanta el server sin tocar ningún archivo a mano; `make doctor` explica en una línea cada cosa que falta; CI verde; `gitleaks detect` sin hallazgos en todo el historial.
+
+#### Resultado de la Fase 2.5 (2026-09-03, en `lucpc`)
+
+**Estado: tareas 1 a 7 hechas.** La 8 (devcontainer / Codespaces) queda pendiente: es opcional y
+arrastra el problema de dónde vive el `terraform.tfstate`, que merece su propia decisión.
+
+Lo que quedó:
+
+- **`setup.sh`** (raíz, ~500 líneas): asistente interactivo y re-ejecutable. Instala OpenTofu
+  (checksum verificado) y el CLI `oci` (venv en `~/.venvs/oci`) sin sudo; guía el alta de la API
+  key con el texto de lo que se ve en pantalla; detecta IP pública (`ifconfig.me` con fallback a
+  `api.ipify.org`), clave SSH (y la crea si no hay) y `repo_url`; decide HTTPS vs deploy key
+  probando `git ls-remote` con `GIT_CONFIG_GLOBAL=/dev/null` (para no usar el credential helper
+  del usuario y que la prueba sea honesta); genera passwords `tres-palabras-1234` desde
+  `scripts/lib/palabras.sh` (310 palabras ASCII, `/dev/urandom` con fallback a `$RANDOM`);
+  escribe `terraform.tfvars` y `.env` con `umask 077`. Modo `--no-preguntar` con variables `ZS_*`
+  para pruebas y CI. Los defaults salen de los archivos existentes, así que la segunda corrida
+  solo cambia lo que se cambie.
+- **`scripts/deploy.sh`** (`make deploy`): 7 pasos — `doctor -q` → `tofu init` → deploy key (solo
+  si el repo es SSH; la sube con `gh repo deploy-key add` si `gh` está autenticado, si no imprime
+  la clave y espera Enter) → plan + una sola confirmación (o `YES=1`) → espera SSH (10 min) →
+  espera `SERVER STARTED` en `journalctl` mostrando la fase de cloud-init (30 min) → bloque
+  "PASALE ESTO A TUS AMIGOS" + los 5 comandos. Idempotente. `DRY_RUN=1` imprime los pasos sin
+  ejecutar nada.
+- **`scripts/doctor.sh`** (`make doctor`): 20+ chequeos con `OK` / `AVISO` / `FALTA` y una línea
+  de acción cada uno; `-q` para preflight (solo problemas, exit ≠ 0 si falta algo bloqueante).
+- **`scripts/destroy-all.sh`** (`make destroy-all`): confirmación escribiendo el `public_name`,
+  backup final por SSH si la VM responde, `tofu destroy`, y explicación de que el bucket y el
+  compartment sobreviven si hay objetos + los comandos para borrarlos.
+- **Cloud-init y OpenTofu**: `repo_url` acepta HTTPS o SSH. `local.use_deploy_key =
+  !startswith(lower(trimspace(var.repo_url)), "https://")`; `tls_private_key.deploy` tiene
+  `count`; el template usa `%{ if use_deploy_key ~}` para omitir `deploy_key`, `~/.ssh/config` y
+  el `ssh-keyscan`. Default de `repo_url` = el upstream público. Nuevo output `use_deploy_key`.
+- **`scripts/render-cloud-init.sh`**: renderiza el template en los dos modos (con una clave
+  ed25519 de descarte generada al vuelo, para no dejar una clave privada escrita en el repo).
+- **Docs**: `README.md` reescrito de cero como guía para principiantes; `README.en.md` corto;
+  `docs/runbook.md` actualizado (HTTPS vs deploy key, `make deploy`/`doctor`/`destroy-all`, §8.1
+  nueva, §12 con los dos modos); `CLAUDE.md` con los scripts nuevos y la regla de repo público.
+- **Repo**: `LICENSE` (MIT), `CONTRIBUTING.md`, `.github/workflows/ci.yml` (shellcheck, tofu
+  fmt/init/validate, cloud-init schema en los dos modos, gitleaks con `fetch-depth: 0`),
+  `.pre-commit-config.yaml` y `.github/ISSUE_TEMPLATE/no-puedo-conectarme.yml`.
+
+Validaciones que pasaron el 2026-09-03: `shellcheck -x` sobre `setup.sh` + los 16 scripts;
+`tofu fmt -check -recursive` y `tofu validate`; `tofu plan -var-file` con el tfvars generado
+(falla recién en el provider por falta de `~/.oci/config`, o sea que todas las `validation` de
+variables pasan) en los dos modos, con `use_deploy_key = false` / `true` según corresponde;
+`cloud-init schema` → *Valid schema* en los dos renders; `gitleaks detect` sobre los 15 commits
+del historial → *no leaks found*; `setup.sh --no-preguntar` en un clon limpio.
+
+#### Pendiente para el usuario (Fase 2.5)
+
+1. **Pasar el repo a público** (o hacer el primer deploy con `repo_url` SSH y deploy key).
+2. Validar el camino feliz completo con una cuenta de OCI real: `./setup.sh` → `make deploy`.
+3. Opcional: tarea 8, `.devcontainer/` para Codespaces, decidiendo antes dónde vive el
+   `terraform.tfstate` (hoy es local y está gitignoreado).
 
 ### Fase 3: on-demand y bot de Discord (obligatoria por decisión del usuario; ahorra ~85% del costo)
 
@@ -371,5 +426,6 @@ Aceptación: en una carpeta limpia, `git clone` + `./setup.sh` + `make deploy` l
 
 1. Decisiones de §4 tomadas (OCI São Paulo `sa-saopaulo-1`, on-demand, sin dominio, Discord).
 2. ~~Ejecutar la Fase 1 en `lucpc`~~ **hecha el 2026-09-03** (ver "Resultado de la Fase 1").
-3. Con el server funcionando en local, definir la partida: editar `config/servertest_SandboxVars.lua` y la lista de mods **antes** del primer arranque del mundo real.
-4. Fase 2 y 3.
+3. ~~Fase 2.5: plantilla pública~~ **hecha el 2026-09-03**; falta pasar el repo a público y hacer el primer deploy con el camino nuevo (`./setup.sh` + `make deploy`).
+4. Con el server funcionando, definir la partida: editar `config/servertest_SandboxVars.lua` y la lista de mods **antes** del primer arranque del mundo real.
+5. Terminar la Fase 2 (tarea 9: deploy real y medición) y la Fase 3.

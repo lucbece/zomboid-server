@@ -262,7 +262,7 @@ hay que saber que la fuente de verdad de `Map=` deja de ser el `.tpl` en ese esc
 
 - La imagen hereda el usuario `steam` de `cm2network/steamcmd`: **`uid=1000(steam) gid=1000(steam)`**
   (verificado con `docker run --rm --entrypoint id <imagen> steam`). Coincide con el usuario `luc`
-  de `lucpc` (1000:1000), así que los bind mounts son escribibles desde ambos lados sin trucos.
+  del usuario del host (1000:1000), así que los bind mounts son escribibles desde ambos lados sin trucos.
 - El entrypoint además arregla los permisos por su cuenta antes de arrancar (`entry.sh:300-305`):
   ```bash
   chown -R "${USER}:${USER}" "${STEAMAPPDIR}/steamapps/workshop" "${HOMEDIR}/Zomboid"
