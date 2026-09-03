@@ -40,11 +40,16 @@ output "region" {
 
 output "deploy_public_key" {
   description = <<-EOT
-    Clave publica de la deploy key. Cargarla en GitHub en
-    Settings -> Deploy keys -> Add deploy key, SIN marcar "Allow write access".
-    Sin este paso la VM no puede clonar el repo y cloud-init falla.
+    Clave publica de la deploy key. Vacia si el repo se clona por HTTPS (repo publico).
+    Si no esta vacia, cargarla en GitHub en Settings -> Deploy keys -> Add deploy key,
+    SIN marcar "Allow write access". Sin ese paso la VM no puede clonar el repo.
   EOT
-  value       = trimspace(tls_private_key.deploy.public_key_openssh)
+  value       = local.use_deploy_key ? trimspace(tls_private_key.deploy[0].public_key_openssh) : ""
+}
+
+output "use_deploy_key" {
+  description = "true si el repo se clona por SSH y hace falta cargar la deploy key en GitHub."
+  value       = local.use_deploy_key
 }
 
 output "image_id" {

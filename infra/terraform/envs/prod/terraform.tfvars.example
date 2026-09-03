@@ -1,25 +1,30 @@
-# Copiar a terraform.tfvars y completar. terraform.tfvars esta gitignoreado: tiene secretos.
+# Este archivo lo genera `./setup.sh` por vos. Solo hace falta tocarlo a mano si preferis
+# escribirlo vos mismo:
 #
 #   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars esta gitignoreado porque tiene passwords: nunca commitearlo.
 
 # --- Cuenta ---------------------------------------------------------------------------------
 # La linea 'tenancy=' de ~/.oci/config.
 tenancy_ocid = "ocid1.tenancy.oc1..aaaaaaaaCAMBIAME"
 
-# Brazil East (Sao Paulo). Tiene que coincidir con la home region de la cuenta.
+# Tiene que coincidir con la home region que elegiste al crear la cuenta de Oracle Cloud.
+# Cercanas a Sudamerica: sa-saopaulo-1, sa-vinhedo-1, sa-santiago-1.
 region = "sa-saopaulo-1"
 
 # --- Acceso ---------------------------------------------------------------------------------
 # Tu IP publica en /32. Sacarla con: curl -s https://ifconfig.me
-# Si tenes IP dinamica va a cambiar: cuando SSH deje de andar, actualizar esto y `tofu apply`.
+# Si tenes IP dinamica va a cambiar: cuando SSH deje de andar, actualizar esto y `make deploy`.
 admin_cidr = "203.0.113.10/32"
 
 # Contenido de ~/.ssh/id_ed25519.pub (una sola linea).
-ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICAMBIAME luc@lucpc"
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICAMBIAME usuario@pc"
 
 # --- Repo -----------------------------------------------------------------------------------
-# Tiene que ser SSH: la VM clona con la deploy key que genera Tofu.
-repo_url    = "git@github.com:lucbece/zomboid-server.git"
+# https://...  -> repo publico: la VM lo clona sin credenciales, no hace falta deploy key.
+# git@host:... -> repo privado: Tofu genera una deploy key y hay que cargarla en GitHub.
+repo_url    = "https://github.com/lucbece/zomboid-server.git"
 repo_branch = "main"
 
 # --- Presupuesto ----------------------------------------------------------------------------
@@ -33,11 +38,12 @@ boot_volume_size_gb = 80
 
 # --- Server de juego ------------------------------------------------------------------------
 # Estos valores se escriben en /opt/zomboid-server/.env dentro de la VM (mode 0600).
+# Las passwords: 8-64 caracteres, sin espacios, comillas, backslash ni signo pesos.
 admin_username  = "admin"
 admin_password  = "CAMBIAME-admin"
 rcon_password   = "CAMBIAME-rcon"
 server_password = "CAMBIAME-server"
-public_name     = "Zomboid de los pibes"
+public_name     = "Mi server de Zomboid"
 max_players     = 16
 
 # Heap de la JVM: 8g para 8 jugadores, 12g para 16 (con memory_gb = 16).

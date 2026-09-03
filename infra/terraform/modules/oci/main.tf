@@ -14,6 +14,11 @@ locals {
   # El juego usa dos puertos UDP contiguos; se abren como rango.
   game_port_min = min(var.game_port, var.game_udp_port)
   game_port_max = max(var.game_port, var.game_udp_port)
+
+  # Un repo publico se clona por HTTPS sin credenciales: no hace falta deploy key y no queda
+  # ninguna clave privada en la VM. Un repo privado se clona por SSH (git@... o ssh://...) y
+  # ahi si hace falta la deploy key que genera este modulo.
+  use_deploy_key = !startswith(lower(trimspace(var.repo_url)), "https://")
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -200,9 +205,13 @@ resource "oci_core_network_security_group_security_rule" "egress_all" {
 # ---------------------------------------------------------------------------------------------
 # Deploy key: par ed25519 generado por Tofu. La privada va a la VM por cloud-init (0600),
 # la publica se expone como output para cargarla en GitHub como deploy key de solo lectura.
+#
+# Solo se genera si el repo se clona por SSH (repo privado). Con un repo_url https:// el
+# recurso no existe y no hay ninguna clave privada en la VM.
 # ---------------------------------------------------------------------------------------------
 
 resource "tls_private_key" "deploy" {
+  count     = local.use_deploy_key ? 1 : 0
   algorithm = "ED25519"
 }
 
@@ -297,7 +306,8 @@ resource "oci_core_instance" "this" {
     user_data = base64encode(templatefile("${path.module}/../../../cloud-init.yaml", {
       vm_user            = var.vm_user
       ssh_public_key     = trimspace(var.ssh_public_key)
-      deploy_private_key = tls_private_key.deploy.private_key_openssh
+      use_deploy_key     = local.use_deploy_key
+      deploy_private_key = local.use_deploy_key ? tls_private_key.deploy[0].private_key_openssh : ""
       repo_url           = var.repo_url
       repo_branch        = var.repo_branch
       repo_dir           = var.repo_dir

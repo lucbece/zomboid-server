@@ -34,6 +34,11 @@ output "bucket_namespace" {
 }
 
 output "deploy_public_key" {
-  description = "Deploy key publica: cargarla en GitHub (read-only) antes del primer boot."
+  description = "Deploy key publica: cargarla en GitHub (read-only) antes del primer boot. Vacia si el repo es publico."
   value       = module.zomboid.deploy_public_key
+}
+
+output "use_deploy_key" {
+  description = "true si repo_url es SSH y hace falta cargar la deploy key en GitHub."
+  value       = module.zomboid.use_deploy_key
 }

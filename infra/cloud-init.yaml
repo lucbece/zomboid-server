@@ -10,7 +10,8 @@
 # Lo que deja listo:
 #   - usuario ${vm_user} con docker + sudo sin password y la ssh key del admin
 #   - docker-ce + plugin compose desde el repo oficial de Docker
-#   - clon de ${repo_url} en ${repo_dir} con una deploy key de solo lectura
+#   - clon de ${repo_url} en ${repo_dir} (por HTTPS si el repo es publico, o por SSH con una
+#     deploy key de solo lectura si use_deploy_key = true)
 #   - ${repo_dir}/.env con los secretos que vienen de terraform.tfvars
 #   - mcrcon compilado, systemd unit habilitada (arranca el server en el boot)
 #   - rclone contra Object Storage por instance principal (sin claves en disco)
@@ -61,7 +62,10 @@ packages:
   - ufw
 
 write_files:
+%{ if use_deploy_key ~}
   # --- Deploy key de solo lectura del repo -----------------------------------------------
+  # Solo existe cuando el repo se clona por SSH (repo privado). Si repo_url es https:// el
+  # clon es anonimo y no se escribe ninguna clave en la VM.
   # La genera OpenTofu (tls_private_key ed25519). La publica se muestra en el output
   # `deploy_public_key` y hay que cargarla en GitHub ANTES del primer boot.
   - path: /home/${vm_user}/.ssh/deploy_key
@@ -81,6 +85,7 @@ write_files:
         IdentityFile /home/${vm_user}/.ssh/deploy_key
         IdentitiesOnly yes
 
+%{ endif ~}
   # --- .env del server -------------------------------------------------------------------
   # Se escribe fuera del repo porque git clone exige que el destino no exista o este vacio;
   # runcmd lo instala en ${repo_dir}/.env despues del clon.
@@ -205,9 +210,12 @@ runcmd:
   - ufw --force enable
 
   # --- Repo --------------------------------------------------------------------------------
+%{ if use_deploy_key ~}
+  # Clon por SSH: hace falta el known_hosts de github.com para que git no pregunte nada.
   - install -d -m 0700 -o ${vm_user} -g ${vm_user} /home/${vm_user}/.ssh
   - su - ${vm_user} -c 'ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null'
   - chmod 600 /home/${vm_user}/.ssh/known_hosts
+%{ endif ~}
   # Se crea el destino vacio con el owner correcto (git clone acepta un directorio vacio) en vez
   # de cambiar el owner de /opt entero.
   - install -d -m 0755 -o ${vm_user} -g ${vm_user} ${repo_dir}

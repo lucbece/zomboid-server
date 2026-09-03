@@ -147,11 +147,18 @@ variable "repo_dir" {
 
 variable "repo_url" {
   description = <<-EOT
-    URL del repo a clonar en la VM. Tiene que ser SSH (git@github.com:usuario/repo.git) para
-    que sirva la deploy key generada por este modulo.
+    URL del repo a clonar en la VM. Acepta dos formas:
+      - https://github.com/usuario/repo.git  -> repo publico, clon anonimo, sin deploy key.
+      - git@github.com:usuario/repo.git      -> repo privado, clon por SSH; el modulo genera
+        una deploy key ed25519 y hay que cargar el output `deploy_public_key` en GitHub.
   EOT
   type        = string
-  default     = "git@github.com:lucbece/zomboid-server.git"
+  default     = "https://github.com/lucbece/zomboid-server.git"
+
+  validation {
+    condition     = can(regex("^(https://|git@|ssh://)", trimspace(var.repo_url)))
+    error_message = "repo_url tiene que empezar con https:// o ser SSH (git@host:usuario/repo.git)."
+  }
 }
 
 variable "repo_branch" {
@@ -224,7 +231,7 @@ variable "server_password" {
 variable "public_name" {
   description = "Nombre visible del server. Va entre comillas en el .env, asi que no puede llevarlas."
   type        = string
-  default     = "Zomboid de los pibes"
+  default     = "Mi server de Zomboid"
 
   validation {
     condition     = can(regex("^[^\"\\\\$]{1,64}$", var.public_name))

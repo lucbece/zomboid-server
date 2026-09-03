@@ -31,9 +31,12 @@ variable "alert_email" {
 }
 
 variable "repo_url" {
-  description = "Repo a clonar en la VM, por SSH (usa la deploy key generada por Tofu)."
+  description = <<-EOT
+    Repo a clonar en la VM. https://... = repo publico (clon anonimo, sin deploy key);
+    git@host:usuario/repo.git = repo privado (clon por SSH con la deploy key que genera Tofu).
+  EOT
   type        = string
-  default     = "git@github.com:lucbece/zomboid-server.git"
+  default     = "https://github.com/lucbece/zomboid-server.git"
 }
 
 variable "repo_branch" {
@@ -107,7 +110,7 @@ variable "server_password" {
 variable "public_name" {
   description = "Nombre visible del server."
   type        = string
-  default     = "Zomboid de los pibes"
+  default     = "Mi server de Zomboid"
 }
 
 variable "max_players" {
