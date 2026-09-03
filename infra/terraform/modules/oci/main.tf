@@ -236,6 +236,9 @@ resource "oci_objectstorage_object_lifecycle_policy" "backups" {
   namespace = data.oci_objectstorage_namespace.this.namespace
   bucket    = oci_objectstorage_bucket.backups.name
 
+  # La policy IAM que autoriza al servicio tiene que existir antes (y propagarse).
+  depends_on = [oci_identity_policy.backups]
+
   rules {
     name        = "borrar-backups-viejos"
     action      = "DELETE"
@@ -267,6 +270,9 @@ resource "oci_identity_policy" "backups" {
   statements = [
     "Allow dynamic-group ${oci_identity_dynamic_group.vm.name} to read buckets in compartment ${oci_identity_compartment.this.name}",
     "Allow dynamic-group ${oci_identity_dynamic_group.vm.name} to manage objects in compartment ${oci_identity_compartment.this.name} where target.bucket.name = '${oci_objectstorage_bucket.backups.name}'",
+    # Sin esto la lifecycle policy del bucket falla con 400-InsufficientServicePermissions:
+    # el servicio de Object Storage de la region necesita permiso para borrar objetos viejos.
+    "Allow service objectstorage-${var.region} to manage object-family in compartment ${oci_identity_compartment.this.name}",
   ]
 }
 
