@@ -104,7 +104,7 @@ Detalle y fuentes con fecha: `docs/research/03-cloud-hosting.md`. Precios USD/me
 | Oracle Always Free ARM | cualquiera | $0 | $0 | Recortado a 2 OCPU/12 GB (jun-2026) y PZ es x86 (requiere emulación box64/FEX, inestable). Descartado. |
 | Hosting administrado (BisectHosting, G-Portal, etc.) | algunos con Brasil | $24 (8 GB) / $48 (16 GB) | no aplica | Baseline honesto: más barato que always-on self-hosted. Sin root ni IaC. Verificar que el plan elegido sea en São Paulo. |
 
-**Recomendación**: Oracle Cloud Vinhedo, shape `VM.Standard.E5.Flex` (o E4) con 4 OCPU / 16 GB, boot volume 80 GB, con el patrón on-demand de la Fase 3. Da ~30 ms, que para PZ es indistinguible de jugar en LAN, a una fracción del costo de la Local Zone de Buenos Aires. Si el grupo quiere sí o sí el mínimo ping y el presupuesto lo permite, la alternativa es AWS Local Zone BA con t3.xlarge on-demand (~$47/mes con disco). Si nadie quiere operar nada y el server va a estar siempre prendido, considerar hosting administrado en São Paulo y usar este repo solo para la config.
+**Recomendación**: Oracle Cloud en Brasil (São Paulo `sa-saopaulo-1`; el análisis de precio se hizo sobre Vinhedo, que cuesta lo mismo), shape `VM.Standard.E5.Flex` (o E4) con 4 OCPU / 16 GB, boot volume 80 GB, con el patrón on-demand de la Fase 3. Da ~30 ms, que para PZ es indistinguible de jugar en LAN, a una fracción del costo de la Local Zone de Buenos Aires. Si el grupo quiere sí o sí el mínimo ping y el presupuesto lo permite, la alternativa es AWS Local Zone BA con t3.xlarge on-demand (~$47/mes con disco). Si nadie quiere operar nada y el server va a estar siempre prendido, considerar hosting administrado en São Paulo y usar este repo solo para la config.
 
 **Decisiones tomadas por el usuario (2026-09-03)**:
 1. **Proveedor: Oracle Cloud, región Brazil East (São Paulo, `sa-saopaulo-1`)**. Cuenta creada 2026-09-03 con esa home region porque Vinhedo no permitió el registro; misma latencia y mismo precio, shape `VM.Standard.E5.Flex` 4 OCPU / 16 GB, boot volume 80 GB. AWS descartado por precio.
@@ -236,22 +236,104 @@ La PC local tiene recursos limitados y el usuario no quiere instalar el cliente 
 - El repo necesita un remoto para que cloud-init lo clone en la VM: **repo privado en GitHub `lucbece/zomboid-server`** con deploy key de solo lectura generada por OpenTofu (pendiente de confirmación del usuario; alternativa sin GitHub: `make sync` que hace rsync del repo por SSH).
 - La alerta de presupuesto de OCI se crea desde OpenTofu (`oci_budget_budget` + `oci_budget_alert_rule`), no a mano.
 
-### Fase 2: nube, cloud-init, backups y runbook
+### Fase 2: nube, cloud-init, backups y runbook — **CÓDIGO LISTO 2026-09-03, `apply` pendiente**
 
-Proveedor decidido: OCI Vinhedo (§4).
+Proveedor decidido: OCI Brazil East / São Paulo, `sa-saopaulo-1` (§4; el plan original decía Vinhedo, se cambió el 2026-09-03 al crear la cuenta).
 
 Tareas:
-1. **`infra/cloud-init.yaml`**: Ubuntu 24.04, crear usuario `pz` con Docker, instalar `docker`, `docker compose`, `git`, `mcrcon`, `rclone`, `unattended-upgrades`; `git clone` de este repo a `/opt/zomboid-server`; escribir `.env` desde variables del cloud-init (o desde un secret del proveedor); instalar `infra/systemd/zomboid.service` (`ExecStart=make up`, `ExecStop=scripts/stop.sh`, `TimeoutStopSec=180`) y habilitarlo. Firewall (`ufw` o security list del proveedor): `16261-16262/udp` abierto, `22/tcp` y `27015/tcp` solo a la IP del admin.
-2. **OpenTofu** en `infra/terraform/` con el provider `oracle/oci`: compartment, VCN + subnet pública + internet gateway, security list (`16261-16262/udp` a todos, `22/tcp` y `27015/tcp` solo a la IP del admin), **IP pública reservada**, instancia `VM.Standard.E5.Flex` 4 OCPU / 16 GB con imagen Ubuntu 24.04 y boot volume 80 GB, bucket de Object Storage para backups, cloud-init como user-data. `envs/prod/` con `terraform.tfvars` gitignored. Salidas: IP reservada, comando SSH, string `IP:16261` para el juego. Prerrequisito manual: cuenta OCI con **home region São Paulo (`sa-saopaulo-1`)** (hecho 2026-09-03), upgrade a Pay As You Go (las cuentas free no pueden crear shapes E5 pagos) y alerta de presupuesto.
-3. **Backups**: `scripts/backup.sh` (RCON `save` → esperar 5 s → `tar` de `Saves/Multiplayer/servertest` + `Server/` → `rclone copy` a un bucket de object storage del proveedor, retención 14 días por nombre con fecha). Cron diario a las 06:00 hora local y siempre dentro de `stop.sh`. `scripts/restore.sh` documentado y **probado una vez** restaurando en un contenedor local.
-4. **DNS** (si hay dominio): registro A en Cloudflare apuntando a la IP reservada. Si el proveedor no da IP fija, script en boot que actualiza el registro con la API de Cloudflare.
-5. **`docs/runbook.md`**: conectar, ver jugadores, dar admin, reiniciar, agregar mods (flujo completo), actualizar el juego (`scripts/update.sh`: stop limpio, `compose pull`, up; el server también actualiza el juego al arrancar vía steamcmd), restaurar backup, qué hacer si "server has different version" o mismatch de mods (ver research 04 §6).
-6. **`scripts/wipe.sh`**: stop limpio → backup final etiquetado `pre-wipe` → borrar `data/zomboid/Saves/Multiplayer/servertest`, `data/zomboid/db/` y los backups nativos → confirmar interactivamente antes de borrar. Documentar en el runbook el flujo "partida de prueba → wipe → partida definitiva".
-7. **Presupuesto**: `oci_budget_budget` mensual (variable, default 25 USD) con `oci_budget_alert_rule` al 80% (FORECAST) y 100% (ACTUAL) al mail del admin.
-8. **Operación remota desde la PC del admin**: targets `make remote-status`, `remote-logs`, `remote-restart`, `remote-down`, `remote-rcon CMD=...` que hacen `ssh` a la VM y corren el Makefile allí; `make sync` (rsync de `config/` + `scripts/` + `Makefile` a la VM) para iterar config sin commitear.
-9. Deploy real con partida limpia y sin mods; un amigo se conecta desde Argentina; medir ping, RAM/CPU (`docker stats`) y ajustar `MAX_MEMORY` y tamaño de VM.
+1. [x] **`infra/cloud-init.yaml`**: Ubuntu 24.04, crear usuario `pz` con Docker, instalar `docker`, `docker compose`, `git`, `mcrcon`, `rclone`, `unattended-upgrades`; `git clone` de este repo a `/opt/zomboid-server`; escribir `.env` desde variables del cloud-init (o desde un secret del proveedor); instalar `infra/systemd/zomboid.service` (`ExecStart=make up`, `ExecStop=scripts/stop.sh`, `TimeoutStopSec=180`) y habilitarlo. Firewall (`ufw` o security list del proveedor): `16261-16262/udp` abierto, `22/tcp` y `27015/tcp` solo a la IP del admin.
+2. [x] **OpenTofu** en `infra/terraform/` con el provider `oracle/oci`: compartment, VCN + subnet pública + internet gateway, security list (`16261-16262/udp` a todos, `22/tcp` y `27015/tcp` solo a la IP del admin), **IP pública reservada**, instancia `VM.Standard.E5.Flex` 4 OCPU / 16 GB con imagen Ubuntu 24.04 y boot volume 80 GB, bucket de Object Storage para backups, cloud-init como user-data. `envs/prod/` con `terraform.tfvars` gitignored. Salidas: IP reservada, comando SSH, string `IP:16261` para el juego. Prerrequisito manual: cuenta OCI con **home region São Paulo (`sa-saopaulo-1`)** (hecho 2026-09-03), upgrade a Pay As You Go (las cuentas free no pueden crear shapes E5 pagos) y alerta de presupuesto.
+3. [x] **Backups**: `scripts/backup.sh` (RCON `save` → esperar 5 s → `tar` de `Saves/Multiplayer/servertest` + `Server/` → `rclone copy` a un bucket de object storage del proveedor, retención 14 días por nombre con fecha). Cron diario a las 06:00 hora local y siempre dentro de `stop.sh`. `scripts/restore.sh` documentado y **probado una vez** restaurando en un contenedor local.
+4. [-] **DNS** (si hay dominio): registro A en Cloudflare apuntando a la IP reservada. Si el proveedor no da IP fija, script en boot que actualiza el registro con la API de Cloudflare.
+5. [x] **`docs/runbook.md`**: conectar, ver jugadores, dar admin, reiniciar, agregar mods (flujo completo), actualizar el juego (`scripts/update.sh`: stop limpio, `compose pull`, up; el server también actualiza el juego al arrancar vía steamcmd), restaurar backup, qué hacer si "server has different version" o mismatch de mods (ver research 04 §6).
+6. [x] **`scripts/wipe.sh`**: stop limpio → backup final etiquetado `pre-wipe` → borrar `data/zomboid/Saves/Multiplayer/servertest`, `data/zomboid/db/` y los backups nativos → confirmar interactivamente antes de borrar. Documentar en el runbook el flujo "partida de prueba → wipe → partida definitiva".
+7. [x] **Presupuesto**: `oci_budget_budget` mensual (variable, default 25 USD) con `oci_budget_alert_rule` al 80% (FORECAST) y 100% (ACTUAL) al mail del admin.
+8. [x] **Operación remota desde la PC del admin**: targets `make remote-status`, `remote-logs`, `remote-restart`, `remote-down`, `remote-rcon CMD=...` que hacen `ssh` a la VM y corren el Makefile allí; `make sync` (rsync de `config/` + `scripts/` + `Makefile` a la VM) para iterar config sin commitear.
+9. [ ] Deploy real con partida limpia y sin mods; un amigo se conecta desde Argentina; medir ping, RAM/CPU (`docker stats`) y ajustar `MAX_MEMORY` y tamaño de VM.
 
 Aceptación: `tofu apply` desde cero deja un server accesible en menos de 15 minutos; un amigo entra desde Argentina con ping < 60 ms; `tofu destroy` + `tofu apply` + `restore.sh` recupera el mundo; backup diario visible en el bucket; alerta de presupuesto visible en la consola de OCI.
+
+#### Resultado de la Fase 2 (2026-09-03, en `lucpc`)
+
+**Estado: todo el código escrito y validado sin credenciales. Falta el `tofu apply`** (la cuenta de
+OCI recién se creó; ver "Pendiente para el usuario"). La aceptación de la fase se puede evaluar
+recién después del deploy real (tarea 9).
+
+Lo que quedó, con la validación que pasó cada cosa:
+
+- **`infra/terraform/`** (`oracle/oci ~> 7.29` → 7.32.0, `hashicorp/tls ~> 4.1` → 4.4.0, pinneados
+  en `.terraform.lock.hcl` que **sí** se commitea): `modules/oci/` + `envs/prod/`.
+  `tofu init` + `tofu validate` → *Success! The configuration is valid.*; `tofu fmt -check
+  -recursive` limpio. **No se corrió `plan` ni `apply`**: requieren `~/.oci/config`.
+  - Compartment `zomboid`, VCN `10.0.0.0/16`, subnet pública `10.0.1.0/24`, internet gateway,
+    route table.
+  - **NSG** (no security list) con las reglas del plan. La security list default de la VCN se
+    vacía con `oci_core_default_security_list`: como NSG y security list son **aditivos**, dejarla
+    con su regla de 22/tcp abierta al mundo habría anulado el `admin_cidr`.
+  - Instancia `VM.Standard.E5.Flex` con `assign_public_ip = false` en la VNIC y un
+    `oci_core_public_ip` **RESERVED** atado a la private IP: así la IP sobrevive los stop/start de
+    la Fase 3. Imagen por data source `oci_core_images` (Canonical Ubuntu 24.04, ordenado por
+    `TIMECREATED DESC`), con `ignore_changes` sobre `source_id` para que la imagen nueva que
+    Canonical publica cada mes no recree la VM sola.
+  - Bucket `zomboid-backups` privado, versioning off, lifecycle rule DELETE a los 30 días.
+  - `oci_identity_dynamic_group` (`ALL {instance.id = ...}`) + `oci_identity_policy` para que la VM
+    escriba el bucket por **instance principal**: no hay ninguna credencial de OCI en la VM.
+  - `oci_budget_budget` mensual (`budget_usd`, default 25) sobre el tenancy + alert rules FORECAST
+    80% y ACTUAL 100%. Se puede desactivar con `enable_budget = false` si la cuenta no tiene
+    permisos sobre el compartment raíz todavía.
+  - Outputs: `public_ip`, `ssh_command`, `game_address` (`IP:16261`), `instance_ocid`,
+    `bucket_name`, `bucket_namespace`, `deploy_public_key`.
+- **`infra/cloud-init.yaml`**: template de `templatefile()`. Renderizado con valores de ejemplo y
+  validado con `cloud-init schema --config-file` (cloud-init 26.1 en un contenedor `ubuntu:24.04`,
+  no hay paquete en `lucpc` y no hay sudo) → *Valid schema*.
+- **`infra/systemd/zomboid.service`**: `Type=oneshot` + `RemainAfterExit=yes`, `User=pz`,
+  `ExecStart=/usr/bin/make up`, `ExecStop=scripts/stop.sh` con `WARN_SECONDS=30`,
+  `TimeoutStopSec=200`. El shutdown de la VM dispara el `ExecStop` (save + quit).
+- **Scripts nuevos**: `backup.sh`, `restore.sh`, `wipe.sh`, `update.sh`, `idle-shutdown.sh`,
+  `cloud-start.sh`, `cloud-stop.sh` y `lib/oci-instance.sh`. Los 12 archivos de `scripts/` pasan
+  `shellcheck` limpio (contenedor `koalaman/shellcheck:stable`).
+- **`Makefile`**: `backup`, `restore FILE=`, `wipe`, `update`, `infra-{init,plan,apply,destroy}`,
+  `remote-{status,logs,up,down,restart,rcon,backup}` y `sync`.
+- **`docs/runbook.md`**: alta de la cuenta paso a paso, primer deploy, cómo entra un amigo,
+  operación diaria, mods, update, backup/restore, wipe, Fase 3, costos y troubleshooting.
+
+#### Desvíos respecto de lo planeado
+
+1. **Región**: `sa-saopaulo-1` en vez de `sa-vinhedo-1` (§4, decisión del 2026-09-03).
+2. **NSG en vez de security list** (el plan decía "security list"): los NSG se atan a la VNIC y no
+   a la subnet, que es lo que corresponde para una sola VM. Además hubo que vaciar la security
+   list default por lo aditivo de las reglas.
+3. **Retención de backups: 30 días en el bucket** (el plan decía 14) porque así lo pidió la tarea, y
+   3 días para las copias locales de la VM. La retención remota la hace la lifecycle rule de Object
+   Storage, no el script.
+4. **El `.env` de la VM se escribe primero en `/etc/zomboid/env`** y `runcmd` lo instala en
+   `/opt/zomboid-server/.env` después del `git clone`: `git clone` se niega a clonar sobre un
+   directorio que ya tiene archivos. El staging se borra con `shred`.
+5. **`restore.sh` no se pudo probar end-to-end**: la prueba requiere levantar el server y el server
+   local está apagado por decisión del usuario. Se probaron los caminos de error y la
+   confirmación; la extracción y el `make up` quedan sin verificar.
+6. **`idle-shutdown.sh` existe pero su línea de cron está comentada** en `/etc/cron.d/zomboid`:
+   hasta que exista el bot de Discord de la Fase 3, apagar la VM sola dejaría a los amigos sin
+   forma de prenderla.
+7. **Tarea 4 (DNS) no aplica**: el usuario decidió no usar dominio (§4, decisión 3).
+8. **`compartment` vacío en `rclone.conf`**: el backend `oracleobjectstorage` con
+   `instance_principal_auth` resuelve el compartment desde el certificado de la instancia.
+9. **`.terraform.lock.hcl` se sacó del `.gitignore`**: es el pin de versiones y hashes de los
+   providers, tiene que estar versionado.
+
+#### Pendiente para el usuario (Fase 2)
+
+1. **Upgrade de la cuenta de OCI a Pay As You Go** y verificar el service limit de
+   `VM.Standard.E5.Flex` en `sa-saopaulo-1` (runbook §1.2).
+2. **Crear la API key y `~/.oci/config`** (runbook §1.3).
+3. **Crear el repo privado `lucbece/zomboid-server` en GitHub y pushear `main`** (runbook §1.6).
+4. **`cp terraform.tfvars.example terraform.tfvars`** y completar `tenancy_ocid`, `admin_cidr`
+   (`curl -s https://ifconfig.me` + `/32`), `ssh_public_key`, `alert_email` y las tres passwords.
+5. **`tofu apply -target=module.zomboid.tls_private_key.deploy`**, copiar el output
+   `deploy_public_key` y cargarlo en GitHub como **deploy key de solo lectura** (runbook §1.7 y §2).
+6. **`make infra-apply`** y esperar a que cloud-init termine (8-15 min por el pull de la imagen).
+7. **Tarea 9**: entrar con un amigo desde Argentina, medir ping y `docker stats`, ajustar
+   `MAX_MEMORY` si hace falta, y después `scripts/wipe.sh` para arrancar la partida definitiva.
 
 ### Fase 3: on-demand y bot de Discord (obligatoria por decisión del usuario; ahorra ~85% del costo)
 
@@ -271,7 +353,7 @@ Aceptación: `tofu apply` desde cero deja un server accesible en menos de 15 min
 
 ## 7. Cómo seguir
 
-1. Decisiones de §4 tomadas (OCI Vinhedo, on-demand, sin dominio, Discord).
+1. Decisiones de §4 tomadas (OCI São Paulo `sa-saopaulo-1`, on-demand, sin dominio, Discord).
 2. ~~Ejecutar la Fase 1 en `lucpc`~~ **hecha el 2026-09-03** (ver "Resultado de la Fase 1").
 3. Con el server funcionando en local, definir la partida: editar `config/servertest_SandboxVars.lua` y la lista de mods **antes** del primer arranque del mundo real.
 4. Fase 2 y 3.

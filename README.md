@@ -4,8 +4,12 @@ Servidor dedicado de **Project Zomboid Build 42** (42.20.4) para jugar con amigo
 con mods, corriendo en Docker. Toda la configuración de la partida vive en `config/` y está
 versionada en git.
 
-Estado: **Fase 1 hecha** — el server corre reproducible en local (`lucpc`). Fases 2 (nube) y 3
-(on-demand + bot de Discord) pendientes. Ver `PLAN.md`.
+Estado: **Fase 1 hecha** (server reproducible en local) y **Fase 2 con el código completo**
+(OpenTofu + cloud-init + backups + runbook): falta el `tofu apply`, que espera a que exista la
+cuenta de Oracle Cloud. Fase 3 (on-demand + bot de Discord) pendiente. Ver `PLAN.md`.
+
+- Operación en la nube paso a paso: **`docs/runbook.md`**.
+- Decisiones, fases y criterios de aceptación: `PLAN.md`.
 
 ---
 
@@ -122,6 +126,15 @@ scripts/
   stop.sh                   # apagado limpio (save + quit)
   restart.sh                # stop + render + up
   build-mcrcon.sh           # compila ./bin/mcrcon
+  backup.sh                 # save + tar.zst + rclone al bucket + retencion local
+  restore.sh                # baja/lee un backup, apaga, restaura y levanta
+  wipe.sh                   # borra la partida (backup 'pre-wipe' primero)
+  update.sh                 # apagado limpio + compose pull + up
+  idle-shutdown.sh          # Fase 3: 0 jugadores N min -> stop + backup + shutdown
+  cloud-start.sh / cloud-stop.sh  # Fase 3: prender/apagar la VM con el CLI de oci
+  lib/oci-instance.sh       # helpers: OCID e IP desde los outputs de tofu
+infra/                      # OpenTofu + cloud-init + systemd (ver "Nube")
+backups/                    # gitignored: tar.zst locales
 data/                       # gitignored: bind mounts del contenedor
   zomboid/                  #   /home/steam/Zomboid  (Server/, Saves/, Logs/, db/, backups/)
   workshop/                 #   mods bajados del Workshop
@@ -133,24 +146,85 @@ docs/
 
 ## Qué nunca se commitea
 
-`.env`, `data/`, `bin/`, `config/servertest.ini` (el renderizado; sí se commitea el `.tpl`).
+`.env`, `data/`, `bin/`, `backups/`, `config/servertest.ini` (el renderizado; sí se commitea el
+`.tpl`), `terraform.tfvars`, `*.tfstate*` y `.terraform/`. El `.terraform.lock.hcl` **sí** se
+commitea: es el pin de versiones y hashes de los providers.
 
 ## Backups
 
-Por ahora solo los nativos del server: `BackupsCount=5`, `BackupsPeriod=60`, `BackupsOnStart=true`,
-en `data/zomboid/backups/`. Los backups a object storage con `rclone` son de la Fase 2.
+Tres capas:
 
-Para un backup manual rápido:
+- **Nativos del server**: `BackupsCount=5`, `BackupsPeriod=60`, `BackupsOnStart=true`, en
+  `data/zomboid/backups/`.
+- **`make backup`** (`scripts/backup.sh`): `save` por RCON → `tar.zst` de
+  `Saves/Multiplayer/servertest`, `Server/` y `db/` en `backups/` → `rclone copy` al bucket de
+  Object Storage → borra los locales de más de 3 días. Funciona con el server apagado. Acepta una
+  etiqueta: `make backup LABEL=pre-wipe`.
+- **Cron diario** en la VM a las 06:00 (Buenos Aires), con retención de 30 días en el bucket por
+  lifecycle rule.
 
 ```bash
-make rcon CMD=save
-sleep 5
-tar czf ~/zomboid-$(date +%F-%H%M).tar.gz -C data/zomboid Saves/Multiplayer/servertest Server
+make backup                                          # local + bucket (si hay .env con BACKUP_BUCKET)
+make restore FILE=backups/zomboid-20260903-0600.tar.zst
+make wipe                                            # borra la partida, con backup 'pre-wipe' antes
+make update                                          # aplica un digest nuevo de docker-compose.yml
+```
+
+`restore.sh` también acepta un remoto de rclone:
+`./scripts/restore.sh oci:zomboid-backups/zomboid-20260903-0600.tar.zst`.
+
+---
+
+## Nube (Fase 2)
+
+Toda la infraestructura está descrita en `infra/`, con OpenTofu. **No hay nada creado todavía**: el
+código está validado (`tofu validate`, `tofu fmt`, `cloud-init schema`) pero el `apply` espera a que
+exista la cuenta de Oracle Cloud.
+
+```
+infra/
+  cloud-init.yaml              # template: usuario pz, docker, clon del repo, .env, rclone, cron
+  systemd/zomboid.service      # oneshot: ExecStart=make up, ExecStop=scripts/stop.sh (save+quit)
+  terraform/
+    modules/oci/               # compartment, VCN, NSG, VM E5.Flex, IP reservada, bucket, budget
+    envs/prod/                 # el único entorno; terraform.tfvars gitignored
+```
+
+Qué crea: compartment `zomboid`, VCN `10.0.0.0/16` con subnet pública + internet gateway, NSG
+(16261-16262/udp abierto, 22/tcp y 27015/tcp solo al `admin_cidr`), instancia
+`VM.Standard.E5.Flex` 4 OCPU / 16 GB con Ubuntu 24.04 y boot volume de 80 GB, **IP pública
+reservada** (sobrevive stop/start), bucket `zomboid-backups` con lifecycle de 30 días, dynamic group
++ policy para que la VM escriba el bucket por *instance principal* (sin claves en disco), y un
+budget mensual con alertas al 80% (forecast) y 100% (actual).
+
+```bash
+make infra-init         # cd infra/terraform/envs/prod && tofu init
+make infra-plan
+make infra-apply
+make infra-destroy
+```
+
+**Prerrequisitos manuales de la cuenta** (signup con home region Brazil East / São Paulo
+`sa-saopaulo-1`, upgrade a Pay As You Go, API key + `~/.oci/config`, repo privado en GitHub y carga
+de la deploy key): `docs/runbook.md` §1.
+
+### Operar la VM desde la PC del admin
+
+La IP sale sola de `tofu output` (o se pasa con `VM_IP=1.2.3.4`):
+
+```bash
+make remote-status
+make remote-logs
+make remote-rcon CMD=players
+make remote-restart
+make remote-backup
+make sync RESTART=1     # rsync de config/ + scripts/ + Makefile + compose, y reinicio
 ```
 
 ## Documentación
 
 - `PLAN.md`: plan por fases, decisiones tomadas y criterios de aceptación.
+- `docs/runbook.md`: operación en la nube (alta de la cuenta, deploy, backups, wipe, troubleshooting).
 - `docs/mods.md`: mods.
 - `docs/research/`: investigación con fuentes (instalación B42, Docker + verificación del
   entrypoint, hosting, config y mods).
