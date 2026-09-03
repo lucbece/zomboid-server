@@ -75,7 +75,7 @@ DoLuaChecksum=true
 DenyLoginOnOverloadedServer=true
 
 # Shows the server on the in-game browser. (Note: Steam-enabled servers are always visible in the Steam server browser)
-Public=false
+Public=true
 
 # Name of the server displayed in the in-game browser and, if applicable, the Steam browser
 PublicName=${PUBLIC_NAME}
