@@ -224,7 +224,7 @@ runcmd:
   # --- .env y directorios de datos ---------------------------------------------------------
   - install -m 0600 -o ${vm_user} -g ${vm_user} /etc/zomboid/env ${repo_dir}/.env
   - shred -u /etc/zomboid/env
-  - install -d -m 0755 -o ${vm_user} -g ${vm_user} ${repo_dir}/data/zomboid ${repo_dir}/data/workshop ${repo_dir}/backups
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} ${repo_dir}/data ${repo_dir}/data/zomboid ${repo_dir}/data/workshop ${repo_dir}/backups
   - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/log/zomboid
 
   # --- mcrcon ------------------------------------------------------------------------------

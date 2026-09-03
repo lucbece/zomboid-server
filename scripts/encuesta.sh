@@ -68,7 +68,7 @@ cmd_up() {
   ui_step "Instalando y arrancando la encuesta"
   remoto "sudo install -m 644 -o root -g root \
             '${VM_DIR}/infra/systemd/${UNIT}' '/etc/systemd/system/${UNIT}' &&
-          mkdir -p '${DATOS_VM}' &&
+          sudo install -d -m 755 -o ${VM_USER} -g ${VM_USER} '${DATOS_VM}' &&
           sudo systemctl daemon-reload &&
           sudo systemctl enable --now '${UNIT}'"
 
