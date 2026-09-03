@@ -121,13 +121,6 @@ arranca. Si la deploy key no está cargada todavía, el clon falla y hay que reh
 para la secuencia correcta.
 
 
-### Un amigo no puede conectarse (timeout al unirse)
-
-1. Verificar que la VM está RUNNING y el server arriba: `make remote-status`.
-2. Verificar que el amigo usa la IP reservada y el puerto `16261`, y la server password correcta.
-3. Confirmar que está en Build 42 estable (sin beta) y con la misma versión que el server (`make remote-rcon CMD=players` muestra la versión en el log; ver "server has different version").
-4. Si todo lo anterior está bien, abrir también **UDP 8766-8767**: guías viejas y el compose de referencia de la imagen los listan como puertos de Steam; pzwiki para B42 solo lista 16261-16262 (incertidumbre documentada en `docs/research/01-b42-server-install.md`). Para abrirlos: agregar la regla al NSG en `infra/terraform/modules/oci/main.tf` (rango 8766-8767/udp), publicar `8766-8767/udp` en `docker-compose.yml`, `make infra-apply` y `make sync RESTART=1`.
-
 ### 1.8 Averiguar la IP pública del admin
 
 ```bash
@@ -560,6 +553,8 @@ Si sigue sin andar, revisar en consola que la instancia esté **RUNNING** (puede
 3. Verificar el NSG en consola: tiene que haber una regla ingress UDP 16261-16262 desde `0.0.0.0/0`.
 4. Desde la VM: `sudo ufw status` (16261:16262/udp allow) y `docker compose ps` (los puertos
    publicados).
+
+- Si lo anterior está bien, abrir también **UDP 8766-8767**: guías viejas y el compose de referencia de la imagen los listan como puertos de Steam; pzwiki para B42 solo lista 16261-16262 (incertidumbre documentada en `docs/research/01-b42-server-install.md`). Para abrirlos: agregar la regla al NSG en `infra/terraform/modules/oci/main.tf` (rango 8766-8767/udp), publicar `8766-8767/udp` en `docker-compose.yml`, `make infra-apply` y `make sync RESTART=1`.
 
 ### El backup no sube al bucket
 
