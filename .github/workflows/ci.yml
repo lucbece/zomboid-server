@@ -22,6 +22,32 @@ jobs:
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable \
             -x setup.sh scripts/*.sh scripts/lib/*.sh
 
+  python:
+    name: python (tools/encuesta)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Solo stdlib: alcanza con verificar que compila y que preguntas.json es coherente
+      # (cada pregunta con exactamente una opcion marcada como default del juego).
+      - name: py_compile
+        run: python3 -m py_compile tools/encuesta/server.py tools/encuesta/tally.py
+      - name: preguntas.json
+        run: |
+          python3 - <<'EOF'
+          import json
+          d = json.load(open("tools/encuesta/preguntas.json"))
+          ids = [p["id"] for p in d["preguntas"]]
+          assert len(ids) == len(set(ids)), "hay ids repetidos"
+          secciones = {s["id"] for s in d["secciones"]}
+          for p in d["preguntas"]:
+              assert p["seccion"] in secciones, p["id"]
+              defaults = [o for o in p["opciones"] if o.get("default")]
+              assert len(defaults) == 1, f"{p['id']}: {len(defaults)} defaults"
+              for o in p["opciones"]:
+                  assert isinstance(o["valor"], str), f"{p['id']}: valor no es string"
+          print(f"OK: {len(ids)} preguntas, una opcion default cada una")
+          EOF
+
   tofu:
     name: opentofu fmt + validate
     runs-on: ubuntu-latest

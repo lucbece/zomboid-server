@@ -1,0 +1,475 @@
+{
+  "server": "PandaParkour",
+  "titulo": "Encuesta de reglas de la partida",
+  "bajada": "Votá con qué configuración querés jugar. Toma dos minutos y se puede cambiar hasta que arranquemos.",
+  "nota_valores": "El campo 'valor' es SIEMPRE un string: es el texto literal que se escribe en config/servertest_SandboxVars.lua o config/servertest.ini.tpl. Asi no se pierde el formato (1.0 no se convierte en 1) al pasar por JSON.",
+  "secciones": [
+    { "id": "zombies", "nombre": "Zombies", "bajada": "Cuantos son, como son y que tan rapido te matan." },
+    { "id": "mundo", "nombre": "Tiempo y mundo", "bajada": "El reloj de la partida y cuanto dura la civilizacion." },
+    { "id": "loot", "nombre": "Loot", "bajada": "Cuantas cosas se encuentran saqueando." },
+    { "id": "vehiculos", "nombre": "Vehículos", "bajada": "Autos: cuantos hay y en que estado." },
+    { "id": "personaje", "nombre": "Personaje y multijugador", "bajada": "Como se juega entre nosotros." }
+  ],
+  "preguntas": [
+    {
+      "id": "zombies_cantidad",
+      "seccion": "zombies",
+      "titulo": "Cantidad de zombies",
+      "explicacion": "Cuántos zombies hay en el mapa. Es lo que más cambia la dificultad de todo.",
+      "target": "sandbox",
+      "clave": "Zombies",
+      "opciones": [
+        { "etiqueta": "Locura", "valor": "1", "default": false, "nota": "Hordas por todos lados. Muy difícil." },
+        { "etiqueta": "Muy alta", "valor": "2", "default": false },
+        { "etiqueta": "Alta", "valor": "3", "default": false },
+        { "etiqueta": "Normal", "valor": "4", "default": true },
+        { "etiqueta": "Baja", "valor": "5", "default": false },
+        { "etiqueta": "Ninguno", "valor": "6", "default": false, "nota": "Modo constructor: no hay zombies." }
+      ]
+    },
+    {
+      "id": "zombies_respawn",
+      "seccion": "zombies",
+      "titulo": "Reaparición de zombies",
+      "explicacion": "Si vuelven a aparecer zombies en las zonas que ya limpiaste.",
+      "target": "sandbox",
+      "clave": "ZombieRespawn",
+      "opciones": [
+        { "etiqueta": "Alta", "valor": "1", "default": false },
+        { "etiqueta": "Normal", "valor": "2", "default": false },
+        { "etiqueta": "Baja", "valor": "3", "default": false },
+        { "etiqueta": "Ninguna", "valor": "4", "default": true, "nota": "Lo que limpiás queda limpio para siempre." }
+      ]
+    },
+    {
+      "id": "zombies_velocidad",
+      "seccion": "zombies",
+      "titulo": "Velocidad",
+      "explicacion": "Si los zombies corren o caminan. Es la decisión que más se discute.",
+      "target": "sandbox",
+      "clave": "ZombieLore.Speed",
+      "opciones": [
+        { "etiqueta": "Corredores", "valor": "1", "default": false, "nota": "Corren tanto como vos. Brutal." },
+        { "etiqueta": "Caminantes rápidos", "valor": "2", "default": false },
+        { "etiqueta": "Caminantes", "valor": "3", "default": false, "nota": "Los clásicos, lentos." },
+        { "etiqueta": "Mezcla aleatoria", "valor": "4", "default": true, "nota": "Algunos rápidos, otros lentos." }
+      ]
+    },
+    {
+      "id": "zombies_fuerza",
+      "seccion": "zombies",
+      "titulo": "Fuerza",
+      "explicacion": "Cuánto daño te hace cada mordida o zarpazo.",
+      "target": "sandbox",
+      "clave": "ZombieLore.Strength",
+      "opciones": [
+        { "etiqueta": "Sobrehumana", "valor": "1", "default": false },
+        { "etiqueta": "Normal", "valor": "2", "default": true },
+        { "etiqueta": "Débil", "valor": "3", "default": false },
+        { "etiqueta": "Aleatoria", "valor": "4", "default": false }
+      ]
+    },
+    {
+      "id": "zombies_resistencia",
+      "seccion": "zombies",
+      "titulo": "Resistencia",
+      "explicacion": "Cuánto cuesta matarlos: cuántos golpes aguantan.",
+      "target": "sandbox",
+      "clave": "ZombieLore.Toughness",
+      "opciones": [
+        { "etiqueta": "Duros", "valor": "1", "default": false },
+        { "etiqueta": "Normal", "valor": "2", "default": false },
+        { "etiqueta": "Frágiles", "valor": "3", "default": false },
+        { "etiqueta": "Aleatoria", "valor": "4", "default": true }
+      ]
+    },
+    {
+      "id": "zombies_transmision",
+      "seccion": "zombies",
+      "titulo": "Cómo se transmite el virus",
+      "explicacion": "Qué tipo de herida te puede infectar.",
+      "target": "sandbox",
+      "clave": "ZombieLore.Transmission",
+      "opciones": [
+        { "etiqueta": "Sangre y saliva", "valor": "1", "default": true, "nota": "Mordidas y arañazos pueden infectar." },
+        { "etiqueta": "Solo saliva", "valor": "2", "default": false, "nota": "Solo las mordidas infectan." },
+        { "etiqueta": "Todos ya infectados", "valor": "3", "default": false, "nota": "Si te morís por cualquier causa, te levantás." },
+        { "etiqueta": "No se transmite", "valor": "4", "default": false, "nota": "No hay infección: solo el daño físico." }
+      ]
+    },
+    {
+      "id": "zombies_mortalidad",
+      "seccion": "zombies",
+      "titulo": "Cuánto tarda en matarte la infección",
+      "explicacion": "Si te infectás, cuánto tiempo te queda de vida.",
+      "target": "sandbox",
+      "clave": "ZombieLore.Mortality",
+      "opciones": [
+        { "etiqueta": "Instantáneo", "valor": "1", "default": false },
+        { "etiqueta": "0-30 segundos", "valor": "2", "default": false },
+        { "etiqueta": "0-1 minuto", "valor": "3", "default": false },
+        { "etiqueta": "0-12 horas", "valor": "4", "default": false },
+        { "etiqueta": "2-3 días", "valor": "5", "default": true, "nota": "Te da tiempo de despedirte y repartir el equipo." },
+        { "etiqueta": "1-2 semanas", "valor": "6", "default": false },
+        { "etiqueta": "Nunca", "valor": "7", "default": false, "nota": "La infección no te mata." }
+      ]
+    },
+    {
+      "id": "zombies_inteligencia",
+      "seccion": "zombies",
+      "titulo": "Inteligencia",
+      "explicacion": "Si saben rodear obstáculos y abrir puertas o si van de frente.",
+      "target": "sandbox",
+      "clave": "ZombieLore.Cognition",
+      "opciones": [
+        { "etiqueta": "Navegan y abren puertas", "valor": "1", "default": false },
+        { "etiqueta": "Navegan", "valor": "2", "default": false },
+        { "etiqueta": "Navegación básica", "valor": "3", "default": true },
+        { "etiqueta": "Aleatoria", "valor": "4", "default": false }
+      ]
+    },
+    {
+      "id": "zombies_memoria",
+      "seccion": "zombies",
+      "titulo": "Memoria",
+      "explicacion": "Cuánto tiempo te siguen persiguiendo después de perderte de vista.",
+      "target": "sandbox",
+      "clave": "ZombieLore.Memory",
+      "opciones": [
+        { "etiqueta": "Larga", "valor": "1", "default": false },
+        { "etiqueta": "Normal", "valor": "2", "default": true },
+        { "etiqueta": "Corta", "valor": "3", "default": false },
+        { "etiqueta": "Ninguna", "valor": "4", "default": false },
+        { "etiqueta": "Aleatoria", "valor": "5", "default": false }
+      ]
+    },
+    {
+      "id": "zombies_multihit",
+      "seccion": "zombies",
+      "titulo": "Golpear a varios zombies por golpe",
+      "explicacion": "Si un hachazo puede tocar a más de un zombie a la vez. Ayuda mucho contra las hordas.",
+      "target": "sandbox",
+      "clave": "MultiHitZombies",
+      "opciones": [
+        { "etiqueta": "No", "valor": "false", "default": true, "nota": "Un golpe, un zombie." },
+        { "etiqueta": "Sí", "valor": "true", "default": false }
+      ]
+    },
+    {
+      "id": "mundo_dia",
+      "seccion": "mundo",
+      "titulo": "Duración del día de juego (tiempo real)",
+      "explicacion": "Cuánto dura un día del juego en minutos u horas de la vida real.",
+      "target": "sandbox",
+      "clave": "DayLength",
+      "opciones": [
+        { "etiqueta": "30 minutos", "valor": "2", "default": false, "nota": "Las estaciones pasan volando." },
+        { "etiqueta": "1 hora", "valor": "3", "default": false },
+        { "etiqueta": "1 hora y media", "valor": "4", "default": true },
+        { "etiqueta": "2 horas", "valor": "5", "default": false },
+        { "etiqueta": "3 horas", "valor": "6", "default": false },
+        { "etiqueta": "4 horas", "valor": "7", "default": false },
+        { "etiqueta": "6 horas", "valor": "9", "default": false },
+        { "etiqueta": "12 horas", "valor": "15", "default": false, "nota": "Casi tiempo real: los días duran muchísimo." }
+      ]
+    },
+    {
+      "id": "mundo_mes",
+      "seccion": "mundo",
+      "titulo": "Mes en que empieza",
+      "explicacion": "Define el clima de arranque. Julio es verano en Kentucky; el invierno pega mucho más duro.",
+      "target": "sandbox",
+      "clave": "StartMonth",
+      "opciones": [
+        { "etiqueta": "Enero", "valor": "1", "default": false, "nota": "Invierno: frío, poca comida." },
+        { "etiqueta": "Febrero", "valor": "2", "default": false },
+        { "etiqueta": "Marzo", "valor": "3", "default": false },
+        { "etiqueta": "Abril", "valor": "4", "default": false },
+        { "etiqueta": "Mayo", "valor": "5", "default": false },
+        { "etiqueta": "Junio", "valor": "6", "default": false },
+        { "etiqueta": "Julio", "valor": "7", "default": true, "nota": "Verano: el arranque clásico." },
+        { "etiqueta": "Agosto", "valor": "8", "default": false },
+        { "etiqueta": "Septiembre", "valor": "9", "default": false },
+        { "etiqueta": "Octubre", "valor": "10", "default": false },
+        { "etiqueta": "Noviembre", "valor": "11", "default": false },
+        { "etiqueta": "Diciembre", "valor": "12", "default": false }
+      ]
+    },
+    {
+      "id": "mundo_agua",
+      "seccion": "mundo",
+      "titulo": "Cuándo se corta el agua",
+      "explicacion": "Cuánto tardan las canillas en dejar de dar agua para siempre.",
+      "target": "sandbox",
+      "clave": "WaterShut",
+      "opciones": [
+        { "etiqueta": "Al instante", "valor": "1", "default": false },
+        { "etiqueta": "0-30 días", "valor": "2", "default": true },
+        { "etiqueta": "0-2 meses", "valor": "3", "default": false },
+        { "etiqueta": "0-6 meses", "valor": "4", "default": false },
+        { "etiqueta": "0-1 año", "valor": "5", "default": false },
+        { "etiqueta": "2-6 meses", "valor": "7", "default": false },
+        { "etiqueta": "6-12 meses", "valor": "8", "default": false },
+        { "etiqueta": "Nunca", "valor": "9", "default": false, "nota": "El agua no se corta nunca." }
+      ]
+    },
+    {
+      "id": "mundo_luz",
+      "seccion": "mundo",
+      "titulo": "Cuándo se corta la luz",
+      "explicacion": "Cuánto dura la electricidad antes de que haya que usar generadores.",
+      "target": "sandbox",
+      "clave": "ElecShut",
+      "opciones": [
+        { "etiqueta": "Al instante", "valor": "1", "default": false },
+        { "etiqueta": "14-30 días", "valor": "2", "default": true },
+        { "etiqueta": "14 días-2 meses", "valor": "3", "default": false },
+        { "etiqueta": "14 días-6 meses", "valor": "4", "default": false },
+        { "etiqueta": "14 días-1 año", "valor": "5", "default": false },
+        { "etiqueta": "2-6 meses", "valor": "7", "default": false },
+        { "etiqueta": "6-12 meses", "valor": "8", "default": false },
+        { "etiqueta": "Nunca", "valor": "9", "default": false, "nota": "La heladera anda para siempre." }
+      ]
+    },
+    {
+      "id": "mundo_helicoptero",
+      "seccion": "mundo",
+      "titulo": "Helicóptero (atrae hordas)",
+      "explicacion": "Un helicóptero pasa, te sigue y arrastra a todos los zombies de la zona hasta donde estés.",
+      "target": "sandbox",
+      "clave": "Helicopter",
+      "opciones": [
+        { "etiqueta": "Nunca", "valor": "1", "default": false },
+        { "etiqueta": "Una vez", "valor": "2", "default": true },
+        { "etiqueta": "A veces", "valor": "3", "default": false },
+        { "etiqueta": "Seguido", "valor": "4", "default": false, "nota": "Caos garantizado." }
+      ]
+    },
+    {
+      "id": "mundo_nutricion",
+      "seccion": "mundo",
+      "titulo": "Nutrición (peso, calorías)",
+      "explicacion": "Si el personaje engorda o adelgaza según lo que come y afecta su estado físico.",
+      "target": "sandbox",
+      "clave": "Nutrition",
+      "opciones": [
+        { "etiqueta": "Activada", "valor": "true", "default": true },
+        { "etiqueta": "Desactivada", "valor": "false", "default": false, "nota": "Comer solo saca el hambre, nada más." }
+      ]
+    },
+    {
+      "id": "loot_general",
+      "seccion": "loot",
+      "titulo": "Cantidad de loot en general",
+      "explicacion": "Multiplica de una vez todo lo que se encuentra: comida, armas, herramientas, ropa. Cuanto más bajo, más hay que salir a buscar.",
+      "target": "sandbox",
+      "clave": "LootNew*",
+      "nota_clave": "Especial: aplica el mismo factor a TODAS las claves que terminan en LootNew del SandboxVars.",
+      "opciones": [
+        { "etiqueta": "Como viene el juego", "valor": "default", "default": true, "nota": "Mezcla afinada: mayormente raro. No se toca nada." },
+        { "etiqueta": "Extremadamente escaso", "valor": "0.2", "default": false, "nota": "Casi no hay nada. Supervivencia dura." },
+        { "etiqueta": "Raro", "valor": "0.6", "default": false },
+        { "etiqueta": "Normal", "valor": "1.0", "default": false },
+        { "etiqueta": "Común", "valor": "2.0", "default": false },
+        { "etiqueta": "Abundante", "valor": "3.0", "default": false, "nota": "Se encuentra de todo en todos lados." }
+      ]
+    },
+    {
+      "id": "loot_respawn",
+      "seccion": "loot",
+      "titulo": "Reaparición de loot en contenedores ya saqueados",
+      "explicacion": "Si con el tiempo vuelven a aparecer cosas en los muebles que ya vaciaste.",
+      "target": "sandbox",
+      "clave": "HoursForLootRespawn",
+      "opciones": [
+        { "etiqueta": "Nunca", "valor": "0", "default": true, "nota": "Lo que saqueaste no vuelve." },
+        { "etiqueta": "Cada 24 horas de juego", "valor": "24", "default": false },
+        { "etiqueta": "Cada 3 días de juego", "valor": "72", "default": false },
+        { "etiqueta": "Cada semana de juego", "valor": "168", "default": false },
+        { "etiqueta": "Cada mes de juego", "valor": "720", "default": false }
+      ]
+    },
+    {
+      "id": "loot_respawn_visitado",
+      "seccion": "loot",
+      "titulo": "Si hay reaparición, no reaparece en zonas visitadas hace menos de",
+      "explicacion": "Evita que el loot vuelva a aparecer al lado de tu base. Solo importa si arriba elegiste algo distinto de Nunca.",
+      "target": "sandbox",
+      "clave": "SeenHoursPreventLootRespawn",
+      "opciones": [
+        { "etiqueta": "Sin restricción", "valor": "0", "default": true },
+        { "etiqueta": "24 horas", "valor": "24", "default": false },
+        { "etiqueta": "72 horas", "valor": "72", "default": false },
+        { "etiqueta": "1 semana", "valor": "168", "default": false }
+      ]
+    },
+    {
+      "id": "autos_cantidad",
+      "seccion": "vehiculos",
+      "titulo": "Cantidad de autos",
+      "explicacion": "Cuántos vehículos aparecen tirados por el mapa.",
+      "target": "sandbox",
+      "clave": "CarSpawnRate",
+      "opciones": [
+        { "etiqueta": "Ninguno", "valor": "1", "default": false },
+        { "etiqueta": "Muy pocos", "valor": "2", "default": false },
+        { "etiqueta": "Pocos", "valor": "3", "default": true },
+        { "etiqueta": "Normal", "valor": "4", "default": false },
+        { "etiqueta": "Muchos", "valor": "5", "default": false }
+      ]
+    },
+    {
+      "id": "autos_estado",
+      "seccion": "vehiculos",
+      "titulo": "Estado general de los autos",
+      "explicacion": "Qué tan rotos están cuando los encontrás (motor, ruedas, batería).",
+      "target": "sandbox",
+      "clave": "CarGeneralCondition",
+      "opciones": [
+        { "etiqueta": "Muy malo", "valor": "1", "default": false },
+        { "etiqueta": "Malo", "valor": "2", "default": false },
+        { "etiqueta": "Normal", "valor": "3", "default": true },
+        { "etiqueta": "Bueno", "valor": "4", "default": false },
+        { "etiqueta": "Muy bueno", "valor": "5", "default": false }
+      ]
+    },
+    {
+      "id": "autos_nafta_chance",
+      "seccion": "vehiculos",
+      "titulo": "Probabilidad de que tengan nafta",
+      "explicacion": "Qué tan seguido el tanque no está completamente seco.",
+      "target": "sandbox",
+      "clave": "ChanceHasGas",
+      "opciones": [
+        { "etiqueta": "Baja", "valor": "1", "default": false },
+        { "etiqueta": "Normal", "valor": "2", "default": true },
+        { "etiqueta": "Alta", "valor": "3", "default": false }
+      ]
+    },
+    {
+      "id": "autos_nafta_cantidad",
+      "seccion": "vehiculos",
+      "titulo": "Cuánta nafta tienen",
+      "explicacion": "Cuando tienen nafta, cuánta hay en el tanque.",
+      "target": "sandbox",
+      "clave": "InitialGas",
+      "opciones": [
+        { "etiqueta": "Muy poca", "valor": "1", "default": false },
+        { "etiqueta": "Poca", "valor": "2", "default": true },
+        { "etiqueta": "Normal", "valor": "3", "default": false },
+        { "etiqueta": "Mucha", "valor": "4", "default": false },
+        { "etiqueta": "Muchísima", "valor": "5", "default": false },
+        { "etiqueta": "Tanque lleno", "valor": "6", "default": false }
+      ]
+    },
+    {
+      "id": "autos_cerrados",
+      "seccion": "vehiculos",
+      "titulo": "Autos cerrados con llave",
+      "explicacion": "Cuántos están cerrados y hay que romper el vidrio o buscar la llave.",
+      "target": "sandbox",
+      "clave": "LockedCar",
+      "opciones": [
+        { "etiqueta": "Nunca", "valor": "1", "default": false },
+        { "etiqueta": "Casi nunca", "valor": "2", "default": false },
+        { "etiqueta": "Raro", "valor": "3", "default": false },
+        { "etiqueta": "A veces", "valor": "4", "default": true },
+        { "etiqueta": "Seguido", "valor": "5", "default": false },
+        { "etiqueta": "Casi siempre", "valor": "6", "default": false }
+      ]
+    },
+    {
+      "id": "autos_sobrevivientes",
+      "seccion": "vehiculos",
+      "titulo": "Autos de sobrevivientes recientes (bien cuidados)",
+      "explicacion": "Autos que aparecen casi enteros y con cosas útiles adentro.",
+      "target": "sandbox",
+      "clave": "RecentlySurvivorVehicles",
+      "opciones": [
+        { "etiqueta": "Ninguno", "valor": "1", "default": false },
+        { "etiqueta": "Pocos", "valor": "2", "default": true },
+        { "etiqueta": "Normal", "valor": "3", "default": false },
+        { "etiqueta": "Muchos", "valor": "4", "default": false }
+      ]
+    },
+    {
+      "id": "xp_global",
+      "seccion": "personaje",
+      "titulo": "Multiplicador de experiencia",
+      "explicacion": "Qué tan rápido subís las habilidades (carpintería, puntería, fuerza).",
+      "target": "sandbox",
+      "clave": "MultiplierConfig.Global",
+      "opciones": [
+        { "etiqueta": "x1", "valor": "1.0", "default": true, "nota": "Lento y realista." },
+        { "etiqueta": "x1.5", "valor": "1.5", "default": false },
+        { "etiqueta": "x2", "valor": "2.0", "default": false },
+        { "etiqueta": "x3", "valor": "3.0", "default": false },
+        { "etiqueta": "x5", "valor": "5.0", "default": false, "nota": "Te volvés experto en un par de días." }
+      ]
+    },
+    {
+      "id": "puntos_extra",
+      "seccion": "personaje",
+      "titulo": "Puntos extra al crear personaje",
+      "explicacion": "Puntos de regalo para elegir más rasgos positivos al armar el personaje.",
+      "target": "sandbox",
+      "clave": "CharacterFreePoints",
+      "opciones": [
+        { "etiqueta": "0", "valor": "0", "default": true },
+        { "etiqueta": "5", "valor": "5", "default": false },
+        { "etiqueta": "10", "valor": "10", "default": false },
+        { "etiqueta": "20", "valor": "20", "default": false, "nota": "Personajes muy fuertes desde el día uno." }
+      ]
+    },
+    {
+      "id": "pvp",
+      "seccion": "personaje",
+      "titulo": "Combate entre jugadores",
+      "explicacion": "Si nos podemos hacer daño entre nosotros.",
+      "target": "ini",
+      "clave": "PVP",
+      "opciones": [
+        { "etiqueta": "Desactivado (cooperativo)", "valor": "false", "default": true, "nota": "Es lo que tiene el server hoy. El juego viene con PVP activado, pero acá lo apagamos." },
+        { "etiqueta": "Activado", "valor": "true", "default": false, "nota": "Se puede matar a un amigo. Suele terminar mal." }
+      ]
+    },
+    {
+      "id": "dormir",
+      "seccion": "personaje",
+      "titulo": "Dormir",
+      "explicacion": "En multijugador dormir adelanta el reloj de todos, por eso normalmente se apaga.",
+      "target": "ini",
+      "clave": "SleepAllowed+SleepNeeded",
+      "nota_clave": "Especial: escribe dos claves del ini separadas por coma, en el orden SleepAllowed,SleepNeeded.",
+      "opciones": [
+        { "etiqueta": "No se duerme", "valor": "false,false", "default": true },
+        { "etiqueta": "Se puede dormir pero no hace falta", "valor": "true,false", "default": false },
+        { "etiqueta": "Hay que dormir", "valor": "true,true", "default": false, "nota": "El cansancio te obliga a dormir." }
+      ]
+    },
+    {
+      "id": "safehouse",
+      "seccion": "personaje",
+      "titulo": "Refugios reclamables (safehouses)",
+      "explicacion": "Si se puede reclamar una casa como propia para que otros no entren ni te roben.",
+      "target": "ini",
+      "clave": "PlayerSafehouse",
+      "opciones": [
+        { "etiqueta": "No", "valor": "false", "default": true },
+        { "etiqueta": "Sí", "valor": "true", "default": false }
+      ]
+    },
+    {
+      "id": "facciones",
+      "seccion": "personaje",
+      "titulo": "Facciones (grupos con chat propio)",
+      "explicacion": "Armar grupos con nombre, etiqueta y un canal de chat privado.",
+      "target": "ini",
+      "clave": "Faction",
+      "opciones": [
+        { "etiqueta": "Sí", "valor": "true", "default": true },
+        { "etiqueta": "No", "valor": "false", "default": false }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex, nofollow">
+<title>PandaParkour · Encuesta de reglas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=Archivo:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* =================================================================================
+   Paleta: una noche de ruta en Kentucky, 1993. Charcoal azulado + luz de sodio.
+   ================================================================================= */
+:root {
+  --noche:   #12161a;  /* fondo */
+  --asfalto: #1c2228;  /* superficies */
+  --linea:   #38424b;  /* bordes, reglas */
+  --niebla:  #ccd3d8;  /* texto */
+  --sodio:   #f2a93b;  /* acento: seleccion, foco, boton */
+  --ruta:    #5fa87f;  /* verde de cartel de ruta: etiquetas y confirmacion */
+  --alarma:  #cf5842;  /* errores */
+
+  --tenue:   #8b979f;  /* texto secundario (niebla al 62%) */
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --texto:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --max:     46rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--noche);
+  color: var(--niebla);
+  font-family: var(--texto);
+  font-size: 16px;
+  line-height: 1.55;
+  overflow-x: hidden;
+  padding-bottom: 4rem;
+}
+
+/* Textura VHS: lineas de barrido fijas, muy tenues. Estaticas, no molestan al leer. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,.028) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.envoltorio {
+  width: 100%;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 1.15rem;
+}
+
+a { color: var(--sodio); }
+
+/* ---------------------------------------------------------------- cabecera ---- */
+
+header {
+  border-bottom: 1px solid var(--linea);
+  background:
+    linear-gradient(180deg, rgba(242,169,59,.07), transparent 70%),
+    var(--noche);
+  padding: 2.4rem 0 1.5rem;
+}
+
+.chapa {
+  display: inline-block;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: .8rem;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--noche);
+  background: var(--sodio);
+  padding: .15rem .5rem .05rem;
+  margin-bottom: .9rem;
+}
+
+h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(3.2rem, 17vw, 5.5rem);
+  line-height: .84;
+  letter-spacing: -.005em;
+  text-transform: uppercase;
+  margin: 0 0 .5rem;
+  color: #fff;
+}
+
+.hito {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--sodio);
+  margin: 0 0 1rem;
+}
+
+.bajada { margin: 0; max-width: 34rem; color: var(--tenue); }
+.bajada strong { color: var(--niebla); font-weight: 600; }
+
+/* ------------------------------------------------------------- progreso ------- */
+
+.progreso {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(18,22,26,.94);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--linea);
+}
+.progreso .envoltorio {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  padding-top: .55rem;
+  padding-bottom: .55rem;
+}
+.progreso .riel {
+  flex: 1;
+  height: 4px;
+  background: var(--linea);
+  overflow: hidden;
+}
+.progreso .avance {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--sodio);
+  transition: width .18s linear;
+}
+.progreso .cuenta {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  color: var(--tenue);
+}
+.progreso .cuenta b { color: var(--sodio); font-weight: 800; }
+
+/* --------------------------------------------------------------- nombre ------- */
+
+.bloque-identidad {
+  margin: 2rem 0 .5rem;
+  padding: 1.1rem 1.15rem 1.25rem;
+  background: var(--asfalto);
+  border-left: 3px solid var(--sodio);
+}
+label.etiqueta {
+  display: block;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: .15rem;
+}
+.ayuda { color: var(--tenue); font-size: .92rem; margin: 0 0 .7rem; }
+
+input[type="text"], textarea {
+  width: 100%;
+  font-family: var(--texto);
+  font-size: 1rem;
+  color: var(--niebla);
+  background: var(--noche);
+  border: 1px solid var(--linea);
+  border-radius: 0;
+  padding: .7rem .8rem;
+  min-height: 2.9rem;
+}
+textarea { min-height: 6rem; resize: vertical; }
+input[type="text"]:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--sodio);
+  outline-offset: 1px;
+  border-color: var(--sodio);
+}
+input[type="text"][aria-invalid="true"] { border-color: var(--alarma); }
+
+/* -------------------------------------------------------------- secciones ----- */
+
+.seccion { margin-top: 2.6rem; }
+
+.seccion > .titulo {
+  display: flex;
+  align-items: baseline;
+  gap: .7rem;
+  border-bottom: 2px solid var(--linea);
+  padding-bottom: .35rem;
+  margin-bottom: .35rem;
+}
+.seccion .nro {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 2.1rem;
+  line-height: 1;
+  color: var(--sodio);
+  opacity: .85;
+}
+.seccion h2 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 2.1rem;
+  line-height: 1;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  margin: 0;
+  color: #fff;
+}
+.seccion .sub { color: var(--tenue); font-size: .92rem; margin: 0 0 1.3rem; }
+
+/* --------------------------------------------------------------- pregunta ----- */
+
+fieldset.pregunta {
+  border: 0;
+  border-top: 1px solid var(--linea);
+  margin: 0;
+  padding: 1.5rem 0 .3rem;
+}
+fieldset.pregunta:first-of-type { border-top: 0; padding-top: .6rem; }
+
+legend { padding: 0; width: 100%; }
+.pregunta .titulo-p {
+  font-weight: 600;
+  font-size: 1.12rem;
+  line-height: 1.3;
+  color: #fff;
+  margin: 0 0 .2rem;
+}
+.pregunta .expl {
+  color: var(--tenue);
+  font-size: .95rem;
+  margin: 0 0 .85rem;
+}
+.pregunta.tocada .titulo-p::after {
+  content: "";
+  display: inline-block;
+  width: .42rem;
+  height: .42rem;
+  margin-left: .45rem;
+  vertical-align: .12em;
+  background: var(--ruta);
+}
+
+.opciones { display: grid; gap: 2px; }
+
+.opcion {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: .7rem;
+  min-height: 3rem;
+  padding: .7rem .85rem;
+  background: var(--asfalto);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.opcion:hover { background: #232a31; }
+.opcion input {
+  position: absolute;
+  opacity: 0;
+  width: 1px; height: 1px;
+  margin: 0;
+}
+.marca {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: .17rem;
+  border: 2px solid var(--linea);
+  border-radius: 50%;
+  background: var(--noche);
+}
+.opcion input:checked ~ .marca {
+  border-color: var(--sodio);
+  box-shadow: inset 0 0 0 3px var(--noche), inset 0 0 0 1rem var(--sodio);
+}
+.opcion input:checked ~ .cuerpo .nombre-op { color: #fff; font-weight: 600; }
+.opcion:has(input:checked) {
+  background: #262d34;
+  border-left-color: var(--sodio);
+}
+.opcion input:focus-visible ~ .marca {
+  outline: 2px solid var(--sodio);
+  outline-offset: 2px;
+}
+.opcion:has(input:focus-visible) { background: #262d34; }
+
+.cuerpo { min-width: 0; }
+.nombre-op { display: block; line-height: 1.35; }
+.nota-op { display: block; color: var(--tenue); font-size: .87rem; line-height: 1.4; margin-top: .1rem; }
+
+.tag {
+  display: inline-block;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: .72rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ruta);
+  border: 1px solid var(--ruta);
+  padding: 0 .35rem;
+  margin-left: .4rem;
+  vertical-align: .1em;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ envio ----- */
+
+.bloque-envio { margin-top: 2.8rem; border-top: 2px solid var(--linea); padding-top: 1.6rem; }
+
+button.enviar {
+  width: 100%;
+  min-height: 3.4rem;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.6rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--noche);
+  background: var(--sodio);
+  border: 0;
+  border-radius: 0;
+  padding: .55rem 1rem;
+  cursor: pointer;
+  transition: filter .12s ease;
+}
+button.enviar:hover { filter: brightness(1.08); }
+button.enviar:focus-visible { outline: 3px solid var(--niebla); outline-offset: 2px; }
+button.enviar[disabled] { opacity: .55; cursor: progress; }
+
+button.secundario {
+  font-family: var(--texto);
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--sodio);
+  background: transparent;
+  border: 1px solid var(--sodio);
+  padding: .55rem 1rem;
+  min-height: 2.8rem;
+  cursor: pointer;
+}
+button.secundario:focus-visible { outline: 2px solid var(--niebla); outline-offset: 2px; }
+
+.pie { color: var(--tenue); font-size: .9rem; margin-top: .9rem; }
+
+.aviso {
+  margin-top: 1rem;
+  padding: .8rem .95rem;
+  background: rgba(207,88,66,.12);
+  border-left: 3px solid var(--alarma);
+  color: var(--niebla);
+  font-size: .95rem;
+}
+.aviso[hidden] { display: none; }
+.aviso button { margin-top: .7rem; }
+
+/* ------------------------------------------------------------- confirmacion --- */
+
+.gracias { padding: 3rem 0; }
+.gracias .chapa { background: var(--ruta); color: var(--noche); }
+.gracias h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(2.6rem, 12vw, 4rem);
+  line-height: .9;
+  text-transform: uppercase;
+  margin: 0 0 .6rem;
+  color: #fff;
+}
+.gracias p { color: var(--tenue); max-width: 32rem; }
+
+.cargando { padding: 3rem 0; color: var(--tenue); font-family: var(--display); font-size: 1.4rem; letter-spacing: .12em; text-transform: uppercase; }
+
+/* ------------------------------------------------------------------ ancho ----- */
+
+@media (min-width: 40rem) {
+  .opciones { gap: 3px; }
+  .opcion { padding: .75rem 1rem; }
+  header { padding-top: 3.4rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="envoltorio">
+    <span class="chapa">Knox County · KY · 1993</span>
+    <h1>PandaParkour</h1>
+    <p class="hito">Encuesta de reglas</p>
+    <p class="bajada">Antes de arrancar la partida definitiva votamos con qué reglas jugamos.
+      <strong>Todo viene marcado con lo que trae el juego por default</strong>: cambiá solo lo que
+      te importa y mandá. Gana lo más votado; si hay empate queda el default.</p>
+  </div>
+</header>
+
+<div class="progreso" role="status" aria-live="polite" aria-atomic="true">
+  <div class="envoltorio">
+    <span class="riel"><span class="avance" id="avance"></span></span>
+    <span class="cuenta" id="cuenta">Cargando…</span>
+  </div>
+</div>
+
+<main class="envoltorio">
+  <p class="cargando" id="cargando">Cargando preguntas…</p>
+
+  <div class="aviso" id="error-carga" hidden></div>
+
+  <form id="formulario" hidden novalidate>
+    <div class="bloque-identidad">
+      <label class="etiqueta" for="identificador">Tu nombre o mail</label>
+      <p class="ayuda">Es solo para identificar tu voto: si volvés a enviar con el mismo nombre
+        o mail, reemplaza el anterior. No es un login.</p>
+      <input type="text" id="identificador" name="identificador" minlength="2" maxlength="80"
+             autocomplete="nickname" enterkeyhint="next"
+             placeholder="Como te decimos en el juego, o tu mail" required>
+    </div>
+
+    <div id="secciones"></div>
+
+    <div class="bloque-envio">
+      <label class="etiqueta" for="comentario">¿Algo más?</label>
+      <p class="ayuda">Opcional. Mods que querés, alguna regla que falte, lo que sea.</p>
+      <textarea id="comentario" name="comentario" maxlength="500"
+                placeholder="Opcional"></textarea>
+
+      <div class="aviso" id="error-envio" hidden></div>
+
+      <p class="pie" id="estado-borrador">Se guarda un borrador en este celular mientras respondés.</p>
+      <button type="submit" class="enviar" id="btn-enviar">Enviar mis votos</button>
+    </div>
+  </form>
+
+  <section class="gracias" id="gracias" hidden>
+    <span class="chapa">Voto registrado</span>
+    <h2 id="gracias-titulo">Listo</h2>
+    <p id="gracias-texto"></p>
+    <button type="button" class="secundario" id="btn-editar">Cambiar mis respuestas</button>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var CLAVE_BORRADOR = "encuesta-pandaparkour-v1";
+  var preguntas = [];
+  var tocadas = Object.create(null);
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function texto(tag, clase, contenido) {
+    var el = document.createElement(tag);
+    if (clase) { el.className = clase; }
+    if (contenido !== undefined) { el.textContent = contenido; }
+    return el;
+  }
+
+  // ---------------------------------------------------------------- borrador ---
+
+  function leerBorrador() {
+    try {
+      var crudo = window.localStorage.getItem(CLAVE_BORRADOR);
+      return crudo ? JSON.parse(crudo) : null;
+    } catch (e) { return null; }
+  }
+
+  function guardarBorrador() {
+    try {
+      window.localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
+        identificador: $("identificador").value,
+        comentario: $("comentario").value,
+        respuestas: respuestasActuales(),
+        tocadas: Object.keys(tocadas)
+      }));
+    } catch (e) { /* modo privado o storage lleno: el formulario sigue andando */ }
+  }
+
+  function borrarBorrador() {
+    try { window.localStorage.removeItem(CLAVE_BORRADOR); } catch (e) { /* idem */ }
+  }
+
+  // ----------------------------------------------------------------- armado ----
+
+  function armarOpcion(pregunta, opcion, indice) {
+    var id = "op-" + pregunta.id + "-" + indice;
+
+    var label = texto("label", "opcion");
+    label.setAttribute("for", id);
+
+    var input = document.createElement("input");
+    input.type = "radio";
+    input.name = pregunta.id;
+    input.id = id;
+    input.value = opcion.valor;
+    if (opcion["default"]) { input.checked = true; input.dataset.esDefault = "1"; }
+
+    var cuerpo = texto("div", "cuerpo");
+    var nombre = texto("span", "nombre-op", opcion.etiqueta);
+    if (opcion["default"]) {
+      var tag = texto("span", "tag", "default del juego");
+      nombre.appendChild(document.createTextNode(" "));
+      nombre.appendChild(tag);
+    }
+    cuerpo.appendChild(nombre);
+    if (opcion.nota) { cuerpo.appendChild(texto("span", "nota-op", opcion.nota)); }
+
+    label.appendChild(input);
+    label.appendChild(texto("span", "marca"));
+    label.appendChild(cuerpo);
+    return label;
+  }
+
+  function armarPregunta(pregunta) {
+    var fs = texto("fieldset", "pregunta");
+    fs.dataset.pid = pregunta.id;
+
+    var leyenda = document.createElement("legend");
+    leyenda.appendChild(texto("p", "titulo-p", pregunta.titulo));
+    leyenda.appendChild(texto("p", "expl", pregunta.explicacion));
+    fs.appendChild(leyenda);
+
+    var caja = texto("div", "opciones");
+    pregunta.opciones.forEach(function (opcion, i) {
+      caja.appendChild(armarOpcion(pregunta, opcion, i));
+    });
+    fs.appendChild(caja);
+    return fs;
+  }
+
+  function armar(datos) {
+    preguntas = datos.preguntas;
+    var contenedor = $("secciones");
+
+    datos.secciones.forEach(function (seccion, i) {
+      var mias = preguntas.filter(function (p) { return p.seccion === seccion.id; });
+      if (!mias.length) { return; }
+
+      var bloque = texto("section", "seccion");
+      var titulo = texto("div", "titulo");
+      titulo.appendChild(texto("span", "nro", ("0" + (i + 1)).slice(-2)));
+      titulo.appendChild(texto("h2", null, seccion.nombre));
+      bloque.appendChild(titulo);
+      if (seccion.bajada) { bloque.appendChild(texto("p", "sub", seccion.bajada)); }
+      mias.forEach(function (p) { bloque.appendChild(armarPregunta(p)); });
+      contenedor.appendChild(bloque);
+    });
+  }
+
+  // ------------------------------------------------------------- respuestas ----
+
+  function respuestasActuales() {
+    var out = {};
+    preguntas.forEach(function (p) {
+      var marcado = document.querySelector('input[name="' + p.id + '"]:checked');
+      if (marcado) { out[p.id] = marcado.value; }
+    });
+    return out;
+  }
+
+  function actualizarProgreso() {
+    var total = preguntas.length;
+    var n = Object.keys(tocadas).length;
+    $("avance").style.width = total ? (n * 100 / total) + "%" : "0";
+    $("cuenta").innerHTML = "";
+    var b = document.createElement("b");
+    b.textContent = String(n);
+    $("cuenta").appendChild(b);
+    $("cuenta").appendChild(document.createTextNode("/" + total + " revisadas"));
+  }
+
+  function marcarTocada(pid) {
+    tocadas[pid] = true;
+    var fs = document.querySelector('fieldset[data-pid="' + pid + '"]');
+    if (fs) { fs.classList.add("tocada"); }
+  }
+
+  function aplicarBorrador(borrador) {
+    if (!borrador) { return; }
+    if (typeof borrador.identificador === "string") {
+      $("identificador").value = borrador.identificador;
+    }
+    if (typeof borrador.comentario === "string") { $("comentario").value = borrador.comentario; }
+    if (borrador.respuestas) {
+      Object.keys(borrador.respuestas).forEach(function (pid) {
+        var valor = borrador.respuestas[pid];
+        var radios = document.getElementsByName(pid);
+        for (var i = 0; i < radios.length; i++) {
+          if (radios[i].value === valor) { radios[i].checked = true; }
+        }
+      });
+    }
+    if (Array.isArray(borrador.tocadas)) { borrador.tocadas.forEach(marcarTocada); }
+  }
+
+  // ------------------------------------------------------------------ envio ----
+
+  function mostrarError(caja, mensaje, reintentar) {
+    caja.innerHTML = "";
+    caja.appendChild(texto("p", null, mensaje));
+    if (reintentar) {
+      var btn = texto("button", "secundario", "Reintentar");
+      btn.type = "button";
+      btn.addEventListener("click", reintentar);
+      caja.appendChild(btn);
+    }
+    caja.hidden = false;
+  }
+
+  function enviar(evento) {
+    if (evento) { evento.preventDefault(); }
+
+    var cajaError = $("error-envio");
+    cajaError.hidden = true;
+
+    var campo = $("identificador");
+    var ident = campo.value.trim().replace(/\s+/g, " ");
+    if (ident.length < 2 || ident.length > 80) {
+      campo.setAttribute("aria-invalid", "true");
+      mostrarError(cajaError,
+        "Poné tu nombre o tu mail antes de enviar (entre 2 y 80 caracteres).", null);
+      campo.focus();
+      campo.scrollIntoView({ block: "center" });
+      return;
+    }
+    campo.removeAttribute("aria-invalid");
+
+    var boton = $("btn-enviar");
+    boton.disabled = true;
+    boton.textContent = "Enviando…";
+
+    var cuerpo = {
+      identificador: ident,
+      respuestas: respuestasActuales(),
+      comentario: $("comentario").value.trim()
+    };
+
+    fetch("/votar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cuerpo)
+    }).then(function (r) {
+      return r.json().catch(function () { return { ok: false, error: "El servidor respondió cualquier cosa (HTTP " + r.status + ")." }; })
+        .then(function (datos) {
+          if (!r.ok || !datos.ok) {
+            throw new Error(datos.error || ("Error HTTP " + r.status));
+          }
+          return datos;
+        });
+    }).then(function (datos) {
+      borrarBorrador();
+      $("formulario").hidden = true;
+      $("gracias-titulo").textContent = "Gracias";
+      $("gracias-texto").textContent =
+        "Voto registrado como " + datos.identificador + ". Quedaron guardadas tus " +
+        datos.respuestas + " respuestas. Si cambiás de opinión, volvé a enviar con el mismo " +
+        "nombre.";
+      $("gracias").hidden = false;
+      window.scrollTo(0, 0);
+      $("gracias-titulo").setAttribute("tabindex", "-1");
+      $("gracias-titulo").focus();
+    })["catch"](function (err) {
+      mostrarError(cajaError,
+        "No se pudo enviar: " + err.message + " Tus respuestas quedaron guardadas acá.",
+        enviar);
+    })["finally"](function () {
+      boton.disabled = false;
+      boton.textContent = "Enviar mis votos";
+    });
+  }
+
+  // ------------------------------------------------------------------ arranque --
+
+  function iniciar(datos) {
+    armar(datos);
+    $("cargando").hidden = true;
+    $("formulario").hidden = false;
+
+    aplicarBorrador(leerBorrador());
+    actualizarProgreso();
+
+    $("formulario").addEventListener("change", function (e) {
+      if (e.target && e.target.type === "radio") {
+        marcarTocada(e.target.name);
+        actualizarProgreso();
+      }
+      guardarBorrador();
+    });
+    $("formulario").addEventListener("input", function (e) {
+      if (e.target && (e.target.id === "identificador" || e.target.id === "comentario")) {
+        guardarBorrador();
+      }
+    });
+    $("formulario").addEventListener("submit", enviar);
+    $("btn-editar").addEventListener("click", function () {
+      $("gracias").hidden = true;
+      $("formulario").hidden = false;
+      window.scrollTo(0, 0);
+      $("identificador").focus();
+    });
+  }
+
+  fetch("preguntas.json", { cache: "no-store" })
+    .then(function (r) {
+      if (!r.ok) { throw new Error("HTTP " + r.status); }
+      return r.json();
+    })
+    .then(iniciar)
+    ["catch"](function (err) {
+      $("cargando").hidden = true;
+      $("cuenta").textContent = "sin conexión";
+      mostrarError($("error-carga"),
+        "No se pudieron cargar las preguntas (" + err.message + "). " +
+        "Refrescá la página; si sigue igual avisale al admin.",
+        function () { window.location.reload(); });
+    });
+})();
+</script>
+</body>
+</html>
