@@ -139,23 +139,93 @@ Funciones, en orden de valor:
 
 Cada fase tiene tareas concretas y criterios de aceptación. Están pensadas para ejecutarse con modelos más baratos; el contexto necesario está en `CLAUDE.md` y `docs/research/`.
 
-### Fase 1: servidor reproducible en local (Docker Compose)
+### Fase 1: servidor reproducible en local (Docker Compose) — **HECHA 2026-09-03**
 
 Objetivo: `make up` levanta un server B42 en la PC local (la `lucpc` tiene Docker), con config desde git, mods de prueba y apagado limpio. Sin nube todavía.
 
-Tareas:
-1. **Verificar el entrypoint de Danixu**: leer `entrypoint.sh` en https://github.com/Danixu/project-zomboid-server-docker y documentar en `docs/research/02-docker-and-tooling.md` (sección "Verificación") exactamente qué claves del ini reescribe con `SELF_MANAGED_MODS=1`. Si reescribe algo fuera de `Mods`/`WorkshopItems` que necesitemos controlar desde git, activar el fallback de Dockerfile propio (§1).
-2. **`docker-compose.yml`**: imagen pinneada por digest (`docker pull` y anotar el digest), `SELF_MANAGED_MODS=1`, `MAX_MEMORY` desde `.env`, puertos `16261-16262/udp`, `27015/tcp` bindeado a `127.0.0.1` (en la nube se abre por firewall solo al admin), volúmenes `./data/zomboid:/home/steam/Zomboid` y `./data/workshop:/home/steam/pz-dedicated/steamapps/workshop`, `stop_grace_period: 120s`, `restart: unless-stopped`. Resolver UID/GID del usuario `steam` de la imagen para que los bind mounts sean escribibles.
-3. **`.env.example`**: `ADMINUSERNAME`, `ADMINPASSWORD`, `RCONPASSWORD`, `SERVER_PASSWORD`, `MAX_MEMORY=8g`, `PUBLIC_NAME`, `MAX_PLAYERS=16`, `DISCORD_*` vacíos.
-4. **`config/servertest.ini.tpl`**: arrancar el server una vez sin config para que genere `servertest.ini` por defecto en `data/zomboid/Server/`, copiarlo al repo como `.tpl` y reemplazar secretos por `${VAR}`. Ajustar para server privado: `Public=false`, `Open=true`, `Password=${SERVER_PASSWORD}`, `MaxPlayers=${MAX_PLAYERS}`, `PVP=false` (a decidir), `PauseEmpty=true`, `SaveWorldEveryMinutes=10`, `BackupsCount=5`, `BackupsPeriod=60`, `RCONPort=27015`, `RCONPassword=${RCONPASSWORD}`, `UPnP=false`, `Mods=`, `WorkshopItems=`. Lo mismo con `servertest_SandboxVars.lua` y `servertest_spawnregions.lua` (copiar los generados al repo).
-5. **`scripts/render-config.sh`**: `set -a; source .env; envsubst < config/servertest.ini.tpl > data/zomboid/Server/servertest.ini` y copiar los `.lua`. Debe fallar si falta una variable (usar `envsubst` con lista explícita o chequear `${VAR:?}`). Si se implementa `mods.txt`, generar aquí las líneas `Mods=`/`WorkshopItems=` preservando el orden del archivo (el orden de `Mods=` es el load order).
-6. **`scripts/rcon.sh`**: instalar `mcrcon` (apt en Debian/Ubuntu 24.04 o compilar desde https://github.com/Tiiffi/mcrcon) y envolverlo leyendo `.env`.
-7. **`scripts/stop.sh` y `scripts/restart.sh`**: `servermsg "Reinicio en 60s"`, sleep, `save`, `quit`, esperar a que el contenedor termine, (restart:) `render-config` + `compose up -d`.
-8. **`Makefile`** con `render`, `up`, `down` (= stop.sh), `restart`, `logs`, `rcon CMD=...`, `backup`, `restore FILE=...`.
-9. **Prueba de mods**: agregar 2 mods de la lista de §3 al ini, reiniciar, confirmar en logs que se descargan y cargan. Documentar si hizo falta el prefijo `\` en `docs/mods.md`.
-10. **Prueba end-to-end**: conectarse desde el cliente de Steam (B42) por IP local, jugar, `make down`, `make up`, confirmar que el mundo y el personaje persisten.
+Tareas (todas hechas el 2026-09-03; ver el bloque "Resultado de la Fase 1" al final de la fase):
+1. [x] **Verificar el entrypoint de Danixu**: leer `entrypoint.sh` en https://github.com/Danixu/project-zomboid-server-docker y documentar en `docs/research/02-docker-and-tooling.md` (sección "Verificación") exactamente qué claves del ini reescribe con `SELF_MANAGED_MODS=1`. Si reescribe algo fuera de `Mods`/`WorkshopItems` que necesitemos controlar desde git, activar el fallback de Dockerfile propio (§1).
+2. [x] **`docker-compose.yml`**: imagen pinneada por digest (`docker pull` y anotar el digest), `SELF_MANAGED_MODS=1`, `MAX_MEMORY` desde `.env`, puertos `16261-16262/udp`, `27015/tcp` bindeado a `127.0.0.1` (en la nube se abre por firewall solo al admin), volúmenes `./data/zomboid:/home/steam/Zomboid` y `./data/workshop:/home/steam/pz-dedicated/steamapps/workshop`, `stop_grace_period: 120s`, `restart: unless-stopped`. Resolver UID/GID del usuario `steam` de la imagen para que los bind mounts sean escribibles.
+3. [x] **`.env.example`**: `ADMINUSERNAME`, `ADMINPASSWORD`, `RCONPASSWORD`, `SERVER_PASSWORD`, `MAX_MEMORY=8g`, `PUBLIC_NAME`, `MAX_PLAYERS=16`, `DISCORD_*` vacíos.
+4. [x] **`config/servertest.ini.tpl`**: arrancar el server una vez sin config para que genere `servertest.ini` por defecto en `data/zomboid/Server/`, copiarlo al repo como `.tpl` y reemplazar secretos por `${VAR}`. Ajustar para server privado: `Public=false`, `Open=true`, `Password=${SERVER_PASSWORD}`, `MaxPlayers=${MAX_PLAYERS}`, `PVP=false` (a decidir), `PauseEmpty=true`, `SaveWorldEveryMinutes=10`, `BackupsCount=5`, `BackupsPeriod=60`, `RCONPort=27015`, `RCONPassword=${RCONPASSWORD}`, `UPnP=false`, `Mods=`, `WorkshopItems=`. Lo mismo con `servertest_SandboxVars.lua` y `servertest_spawnregions.lua` (copiar los generados al repo).
+5. [x] **`scripts/render-config.sh`**: `set -a; source .env; envsubst < config/servertest.ini.tpl > data/zomboid/Server/servertest.ini` y copiar los `.lua`. Debe fallar si falta una variable (usar `envsubst` con lista explícita o chequear `${VAR:?}`). Si se implementa `mods.txt`, generar aquí las líneas `Mods=`/`WorkshopItems=` preservando el orden del archivo (el orden de `Mods=` es el load order).
+6. [x] **`scripts/rcon.sh`**: instalar `mcrcon` (apt en Debian/Ubuntu 24.04 o compilar desde https://github.com/Tiiffi/mcrcon) y envolverlo leyendo `.env`.
+7. [x] **`scripts/stop.sh` y `scripts/restart.sh`**: `servermsg "Reinicio en 60s"`, sleep, `save`, `quit`, esperar a que el contenedor termine, (restart:) `render-config` + `compose up -d`.
+8. [x] **`Makefile`** con `render`, `up`, `down` (= stop.sh), `restart`, `logs`, `rcon CMD=...`, `backup`, `restore FILE=...`.
+9. [x] **Prueba de mods**: agregar 2 mods de la lista de §3 al ini, reiniciar, confirmar en logs que se descargan y cargan. Documentar si hizo falta el prefijo `\` en `docs/mods.md`.
+10. [~] **Prueba end-to-end**: conectarse desde el cliente de Steam (B42) por IP local, jugar, `make down`, `make up`, confirmar que el mundo y el personaje persisten. — la parte automatizable está hecha y verificada (`up` → `rcon players` → `down` con `save`+`quit` → `up` reusando el mundo); **falta que el usuario entre con el cliente de Steam** y confirme que el personaje persiste (instrucciones en el README).
 
 Aceptación: `make up` desde clon limpio + `.env` levanta el server en menos de 10 minutos; un cliente entra; `make down` deja el log con `save` y `quit` y sin errores; los mods de prueba cargan.
+
+#### Resultado de la Fase 1 (2026-09-03, en `lucpc`)
+
+**Aceptación: cumplida**, salvo la parte que solo puede hacer el usuario (conectarse con el cliente
+de Steam, tarea 10).
+
+- **Imagen**: se sigue con Danixu, **no** se activó el fallback de Dockerfile propio. Pinneada por
+  digest en `docker-compose.yml`:
+  `danixu86/project-zomboid-dedicated-server@sha256:a98b0f219f63ad9f08b0658cf77c2c165705ab8d74775fd3db6e50fd6f4961e1`
+  (10.4 GB, trae el juego instalado, buildid `24909836`). Razón completa en
+  `docs/research/02-docker-and-tooling.md` §7.6: con `SELF_MANAGED_MODS=1` y dejando sin definir
+  `PASSWORD`/`PUBLIC`/`DISPLAYNAME`, el entrypoint solo escribe `RCONPassword` y `UDPPort`, y con los
+  mismos valores que ya renderizamos.
+- **Versión del juego que reportó el server**: `version=42.20.4 b0bbce05d5 demo=false`.
+- **UID/GID del usuario `steam` de la imagen**: `1000:1000` (coincide con `luc` en `lucpc`). Además
+  el entrypoint corre como root y hace `chown -R steam:steam` sobre los dos bind mounts, así que el
+  problema de permisos documentado no se dio.
+- **Arranque**: 26 s desde `docker compose up` hasta `*** SERVER STARTED ****` con el mundo ya
+  generado; 2-4 min el primer arranque (worldgen + descarga del mod). Muy por debajo de los 10 min.
+- **Mods**: `WorkshopItems=3750253491` / `Mods=VB_CommonSense` baja y carga
+  (`Workshop: download 352656/352656 ID=3750253491`, `LOG : Mod > loading VB_CommonSense`).
+  **Resultado empírico del prefijo `\`: es indiferente en 42.20.4** — `Mods=VB_CommonSense` y
+  `Mods=\VB_CommonSense` producen exactamente el mismo `loading VB_CommonSense`. El repo usa la
+  forma sin prefijo. Documentado en `docs/mods.md`.
+- **Apagado limpio**: `make down` deja `World saved` + `Quit` y el contenedor sale en ~10 s.
+- **Persistencia**: tras `make down` + `make up` el server reusa el mundo
+  (`checking server WorldVersion in map_t.bin`, `Loading world...`) sin recrear
+  `Saves/Multiplayer/servertest`.
+- **RAM observada** con `MAX_MEMORY=8g` y 0 jugadores: 8.6 GiB de RSS del contenedor.
+
+#### Desvíos respecto de lo planeado
+
+1. **`stop.sh` tiene que desactivar el auto-restart antes del `quit`.** Con
+   `restart: unless-stopped` (que el plan pide explícitamente), Docker vuelve a levantar el server
+   apenas la JVM sale por el `quit` de RCON, así que el contenedor nunca termina y `stop.sh` caía
+   siempre al timeout de 120 s. La solución es `docker update --restart=no <container>` antes de
+   mandar el `quit`; el siguiente `docker compose up` restaura la política desde el yaml.
+2. **Quirk del RCON de PZ 42.20.4**: el server contesta un paquete "tarde", así que `mcrcon` en modo
+   no interactivo con un solo comando no imprime nada. `scripts/rcon.sh` agrega un `players` de
+   descarte al final para vaciar la cola. Sin eso, `stop.sh` creía que el RCON estaba caído.
+3. **`-modfolders` ya no existe en 42.20.4** (`unknown option "-modfolders"` en el log). Se sacó
+   `MODFOLDERS` del compose; el default del engine (`workshop,steam,mods`) es el que queremos.
+4. **`.env` lo leen dos parsers distintos** (el `source` de bash de los scripts y el parser de
+   `docker compose`), y no coinciden en el escapado. Los valores con espacios van entre comillas
+   (`PUBLIC_NAME="..."`), y un backslash literal solo funciona en los dos como `MOD_ID_PREFIX="\\"`.
+5. **Se implementó `config/mods.txt`** (era opcional en el plan) como fuente de verdad de los mods,
+   con `MOD_ID_PREFIX` en `.env` para poder cambiar el modo de prefijo sin tocar la lista.
+6. **`Makefile` sin `backup` ni `restore`**: esas dos tareas son de la Fase 2 (necesitan `rclone` y
+   el bucket). Se agregaron en cambio `status`, `dirs` y `mcrcon`.
+7. **`servertest_spawnpoints.lua` también se copió al repo** (el plan solo mencionaba
+   `_spawnregions.lua`); el server lo genera igual y conviene tenerlo versionado.
+8. **`ServerPlayerID` y `ResetID` quedaron con los valores generados** dentro del `.tpl` a
+   propósito: si cambian, los clientes son forzados a crear personaje nuevo. Versionarlos es lo que
+   permite reconstruir la VM sin perder los personajes.
+9. **`docker compose` no estaba instalado en `lucpc`** (solo el CLI de Docker). Se instaló el plugin
+   en `~/.docker/cli-plugins/docker-compose` (v5.5.1), sin root. Anotado en el README.
+10. **`shellcheck` y `mcrcon` no están empaquetados / no hay sudo sin password**: `shellcheck` se
+    corrió con el contenedor `koalaman/shellcheck:stable` (los 5 scripts pasan limpio) y `mcrcon`
+    0.7.2 se compiló desde fuente a `./bin/mcrcon` (gitignored, `make mcrcon` lo rehace).
+
+#### Pendiente para el usuario
+
+- **Tarea 10, la parte manual**: conectarse desde el cliente de Steam (B42 estable) a
+  `127.0.0.1:16261` o a la IP LAN de `lucpc`, crear personaje, jugar un rato, y confirmar que
+  después de `make down` + `make up` el personaje sigue ahí. Instrucciones paso a paso en el README.
+- **Definir la partida antes de empezar en serio**: editar `config/servertest_SandboxVars.lua` y la
+  lista de `config/mods.txt`, y recién ahí borrar `data/` y arrancar el mundo definitivo. Varias
+  sandbox vars quedan fijadas al crear la partida.
+- **Decidir `PVP`**: el `.tpl` quedó en `PVP=false` (co-op puro) como pedía el plan; si se quiere
+  PvP opcional, `PVP=true` + `SafetySystem=true`.
 
 ### Fase 2: nube, cloud-init, backups y runbook
 
@@ -190,6 +260,6 @@ Aceptación: `tofu apply` desde cero deja un server accesible en menos de 15 min
 ## 7. Cómo seguir
 
 1. Decisiones de §4 tomadas (OCI Vinhedo, on-demand, sin dominio, Discord).
-2. Ejecutar la Fase 1 en `lucpc` con un modelo barato: "Implementar Fase 1 de PLAN.md".
+2. ~~Ejecutar la Fase 1 en `lucpc`~~ **hecha el 2026-09-03** (ver "Resultado de la Fase 1").
 3. Con el server funcionando en local, definir la partida: editar `config/servertest_SandboxVars.lua` y la lista de mods **antes** del primer arranque del mundo real.
 4. Fase 2 y 3.

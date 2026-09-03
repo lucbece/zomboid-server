@@ -178,6 +178,145 @@ Why this combination:
 3. LinuxGSM's `branch=` mechanism for B42 is architecturally sound (generic SteamCMD passthrough) but I found **no direct 2026 community confirmation** it's been exercised against Build 42 specifically for `pzserver` — treat as "should work, unverified" if you go that route instead.
 4. No Terraform/Ansible example found is B42-validated; you're the first to combine "IaC + B42 + git-managed config" as far as this research surfaced — plan to test the full pipeline against a throwaway save before trusting it with your real world.
 
+---
+
+## 7. Verificación del entrypoint de Danixu (2026-09-03)
+
+Resuelve el punto 1 de "Flags/uncertainty" de §6 y la tarea 1 de la Fase 1 de `PLAN.md`.
+Fuente: clon de `https://github.com/Danixu/project-zomboid-server-docker` (branch `main`) leído línea
+por línea el 2026-09-03: `Dockerfile`, `scripts/entry.sh`, `scripts/search_folder.sh`,
+`docker-compose.yml`, `.env.template`.
+
+Imagen verificada (la misma que usa este repo):
+
+```
+danixu86/project-zomboid-dedicated-server@sha256:a98b0f219f63ad9f08b0658cf77c2c165705ab8d74775fd3db6e50fd6f4961e1
+```
+
+### 7.1 Qué hace el entrypoint con `servertest.ini`
+
+El entrypoint es `scripts/entry.sh` y **corre como root** (la base es `cm2network/steamcmd:root`);
+solo el servidor en sí se lanza con `runuser -u steam`.
+
+Antes de arrancar el server hace, en este orden:
+
+1. **Pre-crea el ini vacío si no existe** (`entry.sh:171-175`):
+   ```bash
+   SERVERINI="${HOMEDIR}/Zomboid/Server/${SERVERNAME}.ini"
+   if [ ! -f "${SERVERINI}" ]; then mkdir -p "${HOMEDIR}/Zomboid/Server/"; touch "${SERVERINI}"; fi
+   ```
+   No borra ni regenera un ini existente. Si el archivo ya está (nuestro caso: lo escribe
+   `scripts/render-config.sh` antes del `up`), lo respeta y el server completa las claves que falten
+   con sus defaults.
+
+2. **Reescribe claves puntuales con `set_ini_option()`** (`entry.sh:178-214`), que hace
+   `sed -i "s|^${key}=.*|${key}=${value}|"` si la clave existe, o la agrega al final si no.
+   **Cada reescritura está condicionada a que la env var correspondiente esté definida y no vacía.**
+
+   | Clave del ini | Env var que la dispara | Se toca si… |
+   |---|---|---|
+   | `Password` | `PASSWORD` | `PASSWORD` no vacía |
+   | `RCONPassword` | `RCONPASSWORD` | `RCONPASSWORD` no vacía |
+   | `Public` | `PUBLIC` | `PUBLIC` ∈ {1,true,0,false} |
+   | `PublicName` | `DISPLAYNAME` | `DISPLAYNAME` no vacía |
+   | `UDPPort` | `UDPPORT` | `UDPPORT` no vacía |
+   | `Mods` | `MOD_IDS` | **solo si `SELF_MANAGED_MODS` NO está en 1/true** |
+   | `WorkshopItems` | `WORKSHOP_IDS` | **solo si `SELF_MANAGED_MODS` NO está en 1/true** |
+   | `Map` | (ninguna) | solo si algún mod del Workshop ya descargado aporta mapas (ver 7.2) |
+
+   **No hay ninguna otra clave del ini que el entrypoint escriba.** Todo el resto
+   (`MaxPlayers`, `Open`, `PVP`, `PauseEmpty`, `SaveWorldEveryMinutes`, `BackupsCount`,
+   `BackupsPeriod`, `RCONPort`, `UPnP`, `Discord*`, anticheat, safehouses, etc.) queda 100 %
+   bajo control del archivo que bind-montamos.
+
+3. **`SELF_MANAGED_MODS=1`** (`entry.sh:216-234`) hace exactamente lo que promete: imprime
+   `*** INFO: SELF_MANAGED_MODS is set; leaving Mods and WorkshopItems untouched ***` y **salta
+   por completo** el bloque que setea `Mods` y `WorkshopItems`. Detalle importante: **sin** esa
+   variable, `MOD_IDS`/`WORKSHOP_IDS` vacías **no** significan "no tocar" sino
+   `set_ini_option "Mods" ""` — es decir, *borra* las listas del ini en cada arranque. Por eso
+   `SELF_MANAGED_MODS=1` es obligatorio para un repo con la config en git.
+
+4. **`SERVERPRESET`** (`entry.sh:114-132`): si está definida, copia
+   `media/lua/shared/Sandbox/<preset>.lua` a `Server/<name>_SandboxVars.lua` **solo si el archivo
+   no existe** (o si `SERVERPRESETREPLACE=true`). Dejándola vacía —como hacemos— nunca toca nuestro
+   `servertest_SandboxVars.lua`.
+
+### 7.2 Único caso en que toca `Map=` y `_spawnregions.lua`
+
+`entry.sh:239-287`: si existe `${STEAMAPPDIR}/steamapps/workshop/content/108600`, corre
+`search_folder.sh`, que escribe `~/maps.txt` **solo si algún mod ya descargado trae carpetas
+`media/maps/<Mapa>`**. Si ese listado sale no vacío:
+
+- `set_ini_option "Map" "<mapas>;Muldraugh, KY"` — pisa nuestra clave `Map`.
+- Agrega líneas `{ name = ..., file = ... }` a `Server/<name>_spawnregions.lua` para los mapas que
+  tengan `spawnpoints.lua`, solo si aún no están (`grep -q`).
+
+**Con una lista de mods sin mapas (el caso de la Fase 1: `VB_CommonSense`) `maps.txt` no se genera
+y ni `Map=` ni `_spawnregions.lua` se tocan.** Queda anotado como el único riesgo real de
+"el contenedor me pisó la config": el día que se agregue un **map mod**, `Map=` del ini renderizado
+va a ser reescrito por el entrypoint (agregando los mapas del mod y `Muldraugh, KY` al final) y el
+`_spawnregions.lua` va a recibir entradas extra. Es un comportamiento *aditivo* y deseable, pero
+hay que saber que la fuente de verdad de `Map=` deja de ser el `.tpl` en ese escenario.
+
+### 7.3 UID/GID y permisos de los bind mounts
+
+- La imagen hereda el usuario `steam` de `cm2network/steamcmd`: **`uid=1000(steam) gid=1000(steam)`**
+  (verificado con `docker run --rm --entrypoint id <imagen> steam`). Coincide con el usuario `luc`
+  de `lucpc` (1000:1000), así que los bind mounts son escribibles desde ambos lados sin trucos.
+- El entrypoint además arregla los permisos por su cuenta antes de arrancar (`entry.sh:300-305`):
+  ```bash
+  chown -R "${USER}:${USER}" "${STEAMAPPDIR}/steamapps/workshop" "${HOMEDIR}/Zomboid"
+  chmod 755 "${HOMEDIR}/Zomboid"
+  ```
+  Como corre como root, esto neutraliza el clásico problema de "Docker creó el directorio como root".
+  Igual creamos `data/zomboid` y `data/workshop` con `install -d -o 1000 -g 1000` antes del primer
+  `up`, porque `chown -R` sobre un host con otro UID cambiaría el dueño de los archivos del host.
+
+### 7.4 Rutas reales de volúmenes
+
+Confirmadas contra `Dockerfile` (`STEAMAPPDIR=${HOMEDIR}/pz-dedicated`, `HOMEDIR=/home/steam`) y
+contra el `docker-compose.yml` upstream:
+
+| Contenido | Ruta en el contenedor | Bind mount de este repo |
+|---|---|---|
+| Datos del server (`Server/`, `Saves/`, `Logs/`, `db/`, `backups/`) | `/home/steam/Zomboid` | `./data/zomboid` |
+| Mods del Workshop | `/home/steam/pz-dedicated/steamapps/workshop` (contenido en `.../content/108600`) | `./data/workshop` |
+| Juego (no persistir) | `/home/steam/pz-dedicated` | — (viene en la imagen) |
+
+`CACHEDIR` cambiaría la primera ruta vía `-cachedir=`, pero **`set_ini_option` y el chown usan
+`${HOMEDIR}/Zomboid` hardcodeado**, así que setear `CACHEDIR` desincroniza el entrypoint del server.
+Se deja vacía.
+
+### 7.5 Apagado limpio
+
+`entry.sh:325-386`: el entrypoint crea un FIFO `/tmp/pz-console` como stdin del server y atrapa
+`TERM`/`INT` para escribir `quit` y esperar a que la JVM termine de guardar. Es decir, **un
+`docker compose stop` sí guarda el mundo** en esta imagen. Aun así seguimos usando
+`scripts/stop.sh` (RCON `servermsg` + `save` + `quit`) porque avisa a los jugadores y hace el `save`
+explícito antes; `docker compose stop` queda solo como red de seguridad tras 120 s.
+
+### 7.6 Decisión
+
+**Se sigue con la imagen de Danixu; no se activa el fallback de Dockerfile propio de `PLAN.md` §1.**
+
+Razón: con `SELF_MANAGED_MODS=1` y dejando **sin definir** `PASSWORD`, `PUBLIC` y `DISPLAYNAME`, el
+entrypoint no escribe ninguna clave del ini salvo `RCONPassword` y `UDPPort`, y ésas las setea con
+exactamente los mismos valores que ya venimos a poner desde `.env`/`.tpl` (`RCONPASSWORD` y
+`UDPPORT`), así que el resultado es idéntico al renderizado. El control de la config desde git es
+total. Como bonus, la imagen trae el juego ya instalado (buildid `24909836`), con lo que el primer
+arranque no descarga los ~7 GB por steamcmd.
+
+Notas operativas derivadas de la lectura del código:
+
+- En este repo el nombre del server se fija con `SERVERNAME=servertest`; si no se define, el
+  entrypoint igual usa `servertest` como default para los nombres de archivo pero **no** pasa
+  `-servername`, lo cual es equivalente. Se define explícito para que no dependa del default.
+- `FORCEUPDATE=true` actualiza el juego con steamcmd en cada arranque y rompe el pinneo por digest.
+  Se deja en `false`; para actualizar se hace `docker compose pull` de una imagen nueva.
+- `MEMORY` es ignorada si `MIN_MEMORY` **y** `MAX_MEMORY` están definidas (`entry.sh:42-46`).
+
+---
+
 ### Sources (deduplicated)
 - https://respawnhost.com/en/wiki/games/project-zomboid/project-zomboid-b42-server/
 - https://supercraft.host/article/project-zomboid-roadmap-2026/

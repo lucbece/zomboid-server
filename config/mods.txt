@@ -1,0 +1,16 @@
+# Fuente de verdad de los mods. scripts/render-config.sh genera desde aca las lineas
+# Mods= y WorkshopItems= de servertest.ini, respetando el orden de este archivo
+# (el orden de Mods= es el load order).
+#
+# Formato, una linea por mod:
+#   <workshop_id>  <mod_id>  # nombre libre
+#
+# - workshop_id: el numero al final de la URL de Steam Workshop (?id=NNNN).
+# - mod_id: el campo id= del mod.info del mod (en B42 vive dentro de la carpeta 42/).
+# - Un mismo workshop_id puede traer varios mod_id (sub-mods): repetir el workshop_id
+#   en varias lineas, se deduplica al generar WorkshopItems=.
+# - Lineas vacias y las que empiezan con # se ignoran.
+#
+# Ver docs/mods.md para el procedimiento completo.
+
+3750253491  VB_CommonSense  # Common Sense [B42.20+]

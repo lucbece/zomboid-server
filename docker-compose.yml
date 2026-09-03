@@ -1,0 +1,47 @@
+# Servidor dedicado de Project Zomboid Build 42.
+#
+# La imagen viene con el juego ya instalado (buildid 24909836, B42 estable) y se pinnea por
+# digest para que el arranque sea reproducible: `docker compose pull` es la unica forma de
+# cambiar de version. Ver docs/research/02-docker-and-tooling.md §7 para la verificacion del
+# entrypoint (que claves del ini reescribe y cuales no).
+services:
+  zomboid:
+    container_name: zomboid-server
+    # danixu86/project-zomboid-dedicated-server:latest al 2026-09-03
+    image: danixu86/project-zomboid-dedicated-server@sha256:a98b0f219f63ad9f08b0658cf77c2c165705ab8d74775fd3db6e50fd6f4961e1
+    restart: unless-stopped
+    # El entrypoint atrapa SIGTERM y le manda `quit` al server para que guarde el mundo.
+    # Guardar un mundo grande tarda bastante mas que los 10s de gracia por default.
+    stop_grace_period: 120s
+    # Variables explicitas en vez de env_file: el entrypoint reescribe claves del ini segun
+    # que variables esten definidas, asi que solo le pasamos las que queremos que toque.
+    # NO definir PASSWORD, PUBLIC ni DISPLAYNAME: esas claves las controla config/servertest.ini.tpl.
+    environment:
+      # Deja Mods= y WorkshopItems= del ini intactos (los maneja scripts/render-config.sh).
+      SELF_MANAGED_MODS: "1"
+      SERVERNAME: servertest
+      ADMINUSERNAME: ${ADMINUSERNAME:?falta ADMINUSERNAME en .env}
+      ADMINPASSWORD: ${ADMINPASSWORD:?falta ADMINPASSWORD en .env}
+      # Redundante con el ini renderizado (mismo valor); actua como red de seguridad.
+      RCONPASSWORD: ${RCONPASSWORD:?falta RCONPASSWORD en .env}
+      MIN_MEMORY: ${MIN_MEMORY:-2048m}
+      MAX_MEMORY: ${MAX_MEMORY:?falta MAX_MEMORY en .env}
+      PORT: ${GAME_PORT:-16261}
+      UDPPORT: ${GAME_UDP_PORT:-16262}
+      STEAMVAC: "true"
+      # MODFOLDERS no se setea: 42.20.4 rechaza -modfolders ("unknown option") y ensucia el log.
+      LANG: en_US.UTF-8
+      # true rompe el pinneo por digest (steamcmd actualiza el juego en cada arranque).
+      FORCEUPDATE: "false"
+      # Vacia a proposito: con SERVERPRESET seteada el entrypoint puede pisar SandboxVars.
+      SERVERPRESET: ""
+    ports:
+      - "${GAME_PORT:-16261}:${GAME_PORT:-16261}/udp"
+      - "${GAME_UDP_PORT:-16262}:${GAME_UDP_PORT:-16262}/udp"
+      # RCON solo desde localhost. En la nube se abre por firewall a la IP del admin.
+      - "127.0.0.1:${RCON_PORT:-27015}:${RCON_PORT:-27015}/tcp"
+    volumes:
+      # Datos del server: Server/, Saves/, Logs/, db/, backups/
+      - ./data/zomboid:/home/steam/Zomboid
+      # Mods del Workshop (contenido real en .../content/108600)
+      - ./data/workshop:/home/steam/pz-dedicated/steamapps/workshop
