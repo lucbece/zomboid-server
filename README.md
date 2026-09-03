@@ -343,6 +343,25 @@ Otras cosas que podés ajustar: PVP, cantidad máxima de jugadores, chat y antic
 `config/servertest.ini.tpl`. Dónde aparecen los jugadores nuevos, en
 `config/servertest_spawnpoints.lua`.
 
+### Que decidan tus amigos
+
+Si preferís que las reglas las vote el grupo, hay una encuesta web que se hospeda en la misma VM:
+tus amigos abren un link desde el celular, votan (todo viene con el default del juego ya marcado) y
+vos aplicás lo más votado de una.
+
+```bash
+make encuesta-up          # te imprime el link http://TU_IP:8080 para pasarles
+make encuesta-estado      # cuántos votaron
+make encuesta-resultados  # el conteo, con barritas, y qué cambiaría
+make encuesta-aplicar     # escribe lo votado en config/ (después: make sync RESTART=1)
+make encuesta-down        # cerrar la votación
+```
+
+Antes de la primera vez hay que abrir el puerto: `survey_port = 8080` en
+`infra/terraform/envs/prod/terraform.tfvars` y `make infra-apply`. Cuando termina la votación,
+volvelo a `0` y aplicá de nuevo. El detalle está en
+[`docs/runbook.md` §8.2](docs/runbook.md).
+
 ---
 
 ## Copias de seguridad

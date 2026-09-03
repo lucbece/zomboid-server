@@ -17,6 +17,7 @@ DATA_GID := $(shell id -g)
 .PHONY: backup restore wipe update
 .PHONY: infra-init infra-plan infra-apply infra-destroy
 .PHONY: require-ip remote-status remote-logs remote-restart remote-down remote-up remote-rcon remote-backup sync
+.PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
 
 help: ## Muestra esta ayuda
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -150,10 +151,13 @@ remote-rcon: require-ip ## Comando RCON contra la VM. Uso: make remote-rcon CMD=
 remote-backup: require-ip ## Fuerza un backup en la VM (queda en el bucket)
 	@$(REMOTE) 'cd $(VM_DIR) && ./scripts/backup.sh'
 
-sync: require-ip ## rsync de config/, scripts/, Makefile y docker-compose.yml a la VM. Uso: make sync [RESTART=1]
+sync: require-ip ## rsync de config/, scripts/, tools/, infra/systemd/, Makefile y compose a la VM. Uso: make sync [RESTART=1]
 	@rsync -az --delete-after --chmod=D755,F644 \
 	  --include='/config/***' \
 	  --include='/scripts/***' \
+	  --include='/tools/***' \
+	  --include='/infra/' \
+	  --include='/infra/systemd/***' \
 	  --include='/Makefile' \
 	  --include='/docker-compose.yml' \
 	  --exclude='*' \
@@ -163,3 +167,22 @@ sync: require-ip ## rsync de config/, scripts/, Makefile y docker-compose.yml a 
 	@echo "sync: NO se sincronizan .env, data/ ni bin/ (son propios de la VM)."
 	@if [ -n '$(RESTART)' ]; then $(MAKE) remote-restart; else \
 	  echo "sync: para aplicar los cambios: make remote-restart (o make sync RESTART=1)"; fi
+
+# =============================================================================================
+# Encuesta de reglas de la partida (tools/encuesta)
+# =============================================================================================
+
+encuesta-up: ## Levanta la encuesta web en la VM e imprime la URL para pasarles a los amigos
+	@scripts/encuesta.sh up
+
+encuesta-down: ## Apaga la encuesta (los votos quedan guardados en la VM)
+	@scripts/encuesta.sh down
+
+encuesta-estado: ## Estado de la encuesta y cuantas personas votaron
+	@scripts/encuesta.sh estado
+
+encuesta-resultados: ## Baja los votos y muestra el conteo y la propuesta de cambios
+	@scripts/encuesta.sh resultados
+
+encuesta-aplicar: ## Escribe en config/ lo que gano la votacion y muestra el diff
+	@scripts/encuesta.sh aplicar

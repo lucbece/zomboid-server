@@ -516,6 +516,99 @@ hay que borrar desde esa máquina o a mano en la consola.
 
 ---
 
+## 8.2 Encuesta de reglas
+
+Una encuesta web para que los amigos voten con qué configuración jugamos, antes del wipe. Vive en
+`tools/encuesta/`, corre en la propia VM y **no tiene base de datos**: cada voto es una línea JSON
+en `data/encuesta/votos.jsonl`.
+
+| Archivo | Qué es |
+| --- | --- |
+| `tools/encuesta/preguntas.json` | Fuente de verdad: 31 preguntas, sus opciones y qué clave de config toca cada una. |
+| `tools/encuesta/index.html` | La página que abren los amigos (mobile-first). Carga las preguntas de `/preguntas.json`. |
+| `tools/encuesta/server.py` | `http.server` de la stdlib: sirve la página y recibe los votos. Sin pip, sin venv. |
+| `tools/encuesta/tally.py` | Cuenta los votos y propone (o aplica) el cambio de configuración. |
+| `infra/systemd/zomboid-encuesta.service` | La unit. **No** la instala cloud-init: la levanta el admin. |
+
+### Abrir el puerto (una sola vez)
+
+El puerto está cerrado por default. En `infra/terraform/envs/prod/terraform.tfvars`:
+
+```hcl
+survey_port = 8080
+```
+
+```bash
+make infra-apply        # crea la regla de ingress TCP 8080 desde 0.0.0.0/0
+```
+
+Es HTTP plano y sin login, abierto a todo internet: **no poner nada sensible en las preguntas** y
+volver a `survey_port = 0` + `make infra-apply` cuando termina la votación.
+
+### Correr la encuesta
+
+```bash
+make encuesta-up          # sync + instala la unit + systemctl enable --now, e imprime la URL
+make encuesta-estado      # estado de la unit + cuántas personas votaron
+make encuesta-down        # apaga la encuesta (los votos quedan en la VM)
+```
+
+`make encuesta-up` imprime `http://IP:8080`: ese link se les pasa a los amigos. La página viene con
+**el default del juego preseleccionado en cada pregunta**, así que se puede enviar sin tocar nada;
+guarda un borrador en el `localStorage` del celular mientras responden.
+
+Cada persona se identifica con un nombre o mail. El identificador se normaliza (minúsculas, sin
+acentos, sin espacios de más): si alguien vota de nuevo con el mismo nombre, la línea nueva
+**reemplaza a la anterior al contar** (el archivo no se edita nunca, solo crece).
+
+### Contar y aplicar
+
+```bash
+make encuesta-resultados  # scp de votos.jsonl a data/encuesta/ + conteo con barras + propuesta
+make encuesta-aplicar     # lo mismo, pero escribe los cambios en config/ y muestra el diff
+```
+
+El conteo muestra, por pregunta, los votos de cada opción y quién gana. **En empate gana el default
+del juego**, así que un empate nunca cambia nada. Al final lista solo las claves donde el ganador
+difiere de lo que hay hoy en `config/`, separadas en `servertest_SandboxVars.lua` y
+`servertest.ini.tpl`.
+
+Dos preguntas son especiales:
+
+- **"Cantidad de loot en general"** (`LootNew*`) aplica el mismo factor a *todas* las claves
+  `*LootNew` del SandboxVars (19 hoy). La opción por default es "como viene el juego", que no toca
+  ninguna.
+- **"Dormir"** (`SleepAllowed+SleepNeeded`) escribe dos claves del ini de una.
+
+`tally.py` ubica cada clave respetando la tabla anidada: `ZombieLore.Speed` se busca dentro del
+bloque `ZombieLore = { ... }`, así no se confunde con el `Strength` de `MultiplierConfig`. Sin
+`--aplicar` no escribe nada.
+
+Después de aplicar:
+
+```bash
+git diff config/          # revisar
+make sync RESTART=1       # subirlo al server
+```
+
+Recordar que varias reglas (población inicial de zombies, mapa de loot, erosión) quedan grabadas al
+crear el mundo: si la partida ya arrancó, hay que hacer el wipe de §8.
+
+### Probar en local
+
+```bash
+python3 tools/encuesta/server.py --puerto 18080 --host 127.0.0.1 --datos /tmp/encuesta
+curl -sS -X POST http://127.0.0.1:18080/votar -H 'Content-Type: application/json' \
+  -d '{"identificador":"prueba","respuestas":{"zombies_cantidad":"3"},"comentario":""}'
+python3 tools/encuesta/tally.py --votos /tmp/encuesta/votos.jsonl \
+  --sandbox /tmp/sb.lua --ini /tmp/s.ini.tpl        # sobre COPIAS, no sobre config/
+```
+
+`GET /votos.jsonl` devuelve 404 a propósito: los votos solo salen por `scp`. Hay rate limit de 30
+requests por minuto por IP (429 si se pasa) y el cuerpo del POST está limitado a 16 KB.
+
+---
+
 ## 9. Fase 3: on-demand (código listo, sin cron todavía)
 
 Encender y apagar la VM a mano desde la PC del admin (requiere el CLI `oci` de §1.4):
