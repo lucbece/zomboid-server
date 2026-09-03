@@ -11,13 +11,16 @@ por mod, y `scripts/render-config.sh` genera desde ahí las claves `Mods=` y `Wo
 del ini renderizado.
 
 ```
-# <workshop_id>  <mod_id>  # nombre libre
-3750253491  VB_CommonSense  # Common Sense [B42.20+]
+# <workshop_id>  <mod_id>[; <mod_id>; ...]  # comentario libre
+3389606570  Jump Jump                                   # un mod con espacio en el ID
+2719850086  CapacityLimitBypass; CustomizableBackpacks  # un item con dos mods adentro
 ```
 
 - El **orden del archivo es el load order** (`Mods=` se arma en ese orden).
-- Un mismo `workshop_id` puede aparecer en varias líneas si el item del Workshop trae varios
-  sub-mods: `WorkshopItems=` los deduplica, `Mods=` los conserva todos.
+- El campo de Mod ID va desde después del workshop_id hasta el `#` o el fin de línea, así que
+  **puede tener espacios** ("Jump Jump", "Mad Crafter").
+- Si un item del Workshop trae varios mods, van en la misma línea **separados por `;`**:
+  `WorkshopItems=` lleva el item una sola vez y `Mods=` lleva todos los IDs.
 - Líneas vacías y comentarios (`#`) se ignoran.
 
 ## 2. Cómo obtener los dos IDs

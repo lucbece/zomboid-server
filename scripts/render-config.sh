@@ -35,18 +35,31 @@ set +a
 MOD_ID_PREFIX="${MOD_ID_PREFIX:-}"
 mod_ids=()
 workshop_ids=()
+trim() { sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$1"; }
 if [[ -f "${MODS_FILE}" ]]; then
-  while read -r workshop_id mod_id _rest; do
-    [[ -z "${workshop_id}" ]] && continue
-    [[ "${workshop_id}" == \#* ]] && continue
-    [[ -n "${mod_id}" ]] || die "${MODS_FILE}: la linea de '${workshop_id}' no tiene mod_id"
-    [[ "${workshop_id}" =~ ^[0-9]+$ ]] || die "${MODS_FILE}: workshop id invalido '${workshop_id}'"
-    mod_ids+=("${MOD_ID_PREFIX}${mod_id}")
+  lineno=0
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    lineno=$((lineno + 1))
+    line="$(trim "${line%%#*}")"
+    [[ -z "${line}" ]] && continue
+    # Formato: <workshop_id>  <mod_id>[; <mod_id>...]  # comentario
+    # Los Mod IDs pueden tener espacios ("Jump Jump"), por eso el campo va hasta el final de la
+    # linea y los sub-mods se separan con ';'.
+    workshop_id="${line%%[[:space:]]*}"
+    ids_field="$(trim "${line#"${workshop_id}"}")"
+    [[ "${workshop_id}" =~ ^[0-9]+$ ]] || die "${MODS_FILE}:${lineno}: workshop id invalido '${workshop_id}'"
+    [[ -n "${ids_field}" ]] || die "${MODS_FILE}:${lineno}: falta el mod_id para el workshop ${workshop_id}"
+    IFS=';' read -r -a ids <<<"${ids_field}"
+    for id in "${ids[@]}"; do
+      id="$(trim "${id}")"
+      [[ -n "${id}" ]] || continue
+      mod_ids+=("${MOD_ID_PREFIX}${id}")
+    done
     # Un workshop item puede traer varios mods: no repetirlo en WorkshopItems=.
     if [[ " ${workshop_ids[*]-} " != *" ${workshop_id} "* ]]; then
       workshop_ids+=("${workshop_id}")
     fi
-  done < <(sed 's/#.*$//' "${MODS_FILE}")
+  done <"${MODS_FILE}"
 fi
 MODS="$(IFS=';'; echo "${mod_ids[*]-}")"
 WORKSHOP_ITEMS="$(IFS=';'; echo "${workshop_ids[*]-}")"
