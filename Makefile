@@ -3,19 +3,40 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
+# setup.sh instala tofu y el CLI oci en ~/.local/bin (no hay sudo en el camino feliz), y esa
+# carpeta no siempre esta en el PATH de una sesion recien abierta.
+export PATH := $(HOME)/.local/bin:$(PATH)
+
 COMPOSE := docker compose
 SERVICE := zomboid
 DATA_UID := $(shell id -u)
 DATA_GID := $(shell id -g)
 
-.PHONY: help dirs mcrcon render up down restart logs rcon status
+.PHONY: help setup doctor deploy destroy-all
+.PHONY: dirs mcrcon render up down restart logs rcon status
 .PHONY: backup restore wipe update
 .PHONY: infra-init infra-plan infra-apply infra-destroy
 .PHONY: require-ip remote-status remote-logs remote-restart remote-down remote-up remote-rcon remote-backup sync
 
 help: ## Muestra esta ayuda
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
-	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'
+
+# =============================================================================================
+# Los cuatro comandos del camino feliz (ver README.md)
+# =============================================================================================
+
+setup: ## Asistente de configuracion: te pregunta todo y escribe .env y terraform.tfvars
+	@./setup.sh
+
+doctor: ## Revisa que este todo listo y explica que falta, en castellano
+	@scripts/doctor.sh
+
+deploy: ## Crea el server en la nube de punta a punta. Uso: make deploy [YES=1] [DRY_RUN=1]
+	@scripts/deploy.sh $(if $(YES),--yes,) $(if $(DRY_RUN),--dry-run,)
+
+destroy-all: ## Borra el server de la nube para dejar de pagar (con backup final y confirmacion)
+	@scripts/destroy-all.sh $(if $(DRY_RUN),--dry-run,)
 
 dirs: ## Crea los bind mounts con el UID correcto (uid/gid 1000 = usuario steam de la imagen)
 	@mkdir -p data/zomboid data/workshop

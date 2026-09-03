@@ -6,13 +6,28 @@
 
 TF_ENV_DIR="${TF_ENV_DIR:-${REPO_DIR}/infra/terraform/envs/prod}"
 
-# tofu_output <nombre> -> imprime el output, o falla en silencio si no hay state.
+# tofu_output <nombre> [regex] -> imprime el output, o nada si todavia no hay state.
+#
+# El filtro por regex no es paranoia: sin state, `tofu output` escribe un warning en stdout y
+# sale con 0, asi que hay que quedarse solo con la linea que tiene la forma esperada.
 tofu_output() {
-  local name="$1"
-  command -v tofu >/dev/null 2>&1 || return 1
+  local name="$1" pattern="${2:-^.+$}"
+  command -v "${TOFU:-tofu}" >/dev/null 2>&1 || return 1
   [[ -d "${TF_ENV_DIR}" ]] || return 1
-  tofu -chdir="${TF_ENV_DIR}" output -raw "${name}" 2>/dev/null
+  "${TOFU:-tofu}" -chdir="${TF_ENV_DIR}" output -raw -no-color "${name}" 2>/dev/null \
+    | grep -Eom1 "${pattern}" || true
 }
+
+# Patrones de los outputs que se usan mas seguido. Los consumen doctor.sh y deploy.sh, que
+# hacen source de este archivo: shellcheck no lo ve y hay que callarle el SC2034.
+# shellcheck disable=SC2034
+TF_RE_OCID='^ocid1\.[a-z0-9]+\.[A-Za-z0-9._-]+$'
+# shellcheck disable=SC2034
+TF_RE_IP='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+# shellcheck disable=SC2034
+TF_RE_NOMBRE='^[A-Za-z0-9._-]+$'
+# shellcheck disable=SC2034
+TF_RE_BOOL='^(true|false)$'
 
 oci_instance_ocid() {
   if [[ -n "${INSTANCE_OCID:-}" ]]; then
@@ -20,7 +35,7 @@ oci_instance_ocid() {
     return 0
   fi
   local ocid
-  if ocid="$(tofu_output instance_ocid)" && [[ -n "${ocid}" ]]; then
+  if ocid="$(tofu_output instance_ocid "${TF_RE_OCID}")" && [[ -n "${ocid}" ]]; then
     echo "${ocid}"
     return 0
   fi
