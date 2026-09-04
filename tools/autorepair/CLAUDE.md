@@ -16,7 +16,8 @@ Oracle Cloud como un unico servicio de Docker Compose.
 - El mundo vive en `data/zomboid/Saves/Multiplayer/servertest` y los usuarios en
   `data/zomboid/db`. Son irreemplazables: no hay otra copia mas que los backups del bucket.
 - Los mods se declaran en `config/mods.txt`, una linea por item del Workshop:
-  `<workshop_id>  <mod_id>[; <mod_id>]  # comentario`.
+  `<workshop_id>  <mod_id>[; <mod_id>]  # comentario`. El archivo no esta en git (llega por
+  `make sync` desde la PC del admin): nunca lo borres; si falta, avisa en vez de arrancar vanilla.
 
 ## Prohibido, sin excepciones
 

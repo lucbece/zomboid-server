@@ -208,6 +208,20 @@ else
   say_hint "Solo hace falta para correr el server en esta computadora. Lo crea ./setup.sh."
 fi
 
+MODS_FILE="${REPO_DIR}/config/mods.txt"
+if [[ -f "${MODS_FILE}" ]]; then
+  mods_n="$(grep -cE '^[[:space:]]*[0-9]+' "${MODS_FILE}" || true)"
+  if [[ "${mods_n}" -gt 0 ]]; then
+    say_ok "config/mods.txt: ${mods_n} mods del Workshop"
+  else
+    say_ok "config/mods.txt: sin mods activos (partida vanilla)"
+    say_hint "Para agregar mods, editá config/mods.txt (el formato está adentro y en docs/mods.md)."
+  fi
+else
+  say_warn "no existe config/mods.txt: la partida va a ser vanilla (sin mods)"
+  say_hint "Lo crea ./setup.sh, o:  cp config/mods.example.txt config/mods.txt"
+fi
+
 # --- El repo tiene que estar accesible desde la máquina de la nube ------------------------------
 repo_url="$(tfvar repo_url)"
 if [[ -n "${repo_url}" ]]; then

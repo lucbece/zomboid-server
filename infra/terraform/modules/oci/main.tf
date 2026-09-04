@@ -373,6 +373,7 @@ resource "oci_core_instance" "this" {
       max_players     = var.max_players
       max_memory      = var.max_memory
       min_memory      = var.min_memory
+      mods_txt        = var.mods_txt
 
       os_namespace = data.oci_objectstorage_namespace.this.namespace
       region       = var.region

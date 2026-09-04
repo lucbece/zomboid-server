@@ -151,6 +151,15 @@ write_files:
   # instance_principal_auth = la VM se autentica con su propio certificado de instancia.
   # No hay ninguna API key ni secreto en el disco; los permisos salen del dynamic group
   # y la policy que crea OpenTofu.
+%{ if mods_txt != "" ~}
+  # config/mods.txt no esta en git: llega desde la PC del admin (terraform.tfvars no lo tiene,
+  # lo lee envs/prod/main.tf del working tree). runcmd lo copia al repo despues del clon.
+  - path: /etc/zomboid/mods.txt
+    owner: root:root
+    permissions: "0644"
+    content: |
+      ${indent(6, mods_txt)}
+%{ endif ~}
   - path: /home/${vm_user}/.config/rclone/rclone.conf
     owner: ${vm_user}:${vm_user}
     permissions: "0600"
@@ -256,6 +265,9 @@ runcmd:
   # --- .env y directorios de datos ---------------------------------------------------------
   - install -m 0600 -o ${vm_user} -g ${vm_user} /etc/zomboid/env ${repo_dir}/.env
   - shred -u /etc/zomboid/env
+%{ if mods_txt != "" ~}
+  - install -m 0644 -o ${vm_user} -g ${vm_user} /etc/zomboid/mods.txt ${repo_dir}/config/mods.txt
+%{ endif ~}
   - install -d -m 0755 -o ${vm_user} -g ${vm_user} ${repo_dir}/data ${repo_dir}/data/zomboid ${repo_dir}/data/workshop ${repo_dir}/backups
   - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/log/zomboid
 

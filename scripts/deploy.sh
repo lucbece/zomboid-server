@@ -347,7 +347,7 @@ cat <<FINAL
      make remote-backup      guardar una copia de la partida ahora mismo
      make destroy-all        borrar todo y dejar de pagar
 
-   Para agregar mods: editá config/mods.txt y corré  make sync RESTART=1
+   Para agregar mods: editá config/mods.txt (formato adentro del archivo) y corré  make sync RESTART=1
    Manual completo: README.md      Referencia avanzada: docs/runbook.md
 
 FINAL

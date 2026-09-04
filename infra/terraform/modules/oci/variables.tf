@@ -289,6 +289,16 @@ variable "min_memory" {
   default     = "2048m"
 }
 
+variable "mods_txt" {
+  description = <<-EOT
+    Contenido de config/mods.txt (no versionado) para instalarlo en la VM en el primer boot,
+    asi el mundo se crea ya con los mods. Vacio = partida vanilla. Despues del primer boot
+    los cambios viajan con `make sync`, no por aca (metadata esta en ignore_changes).
+  EOT
+  type        = string
+  default     = ""
+}
+
 # ---------------------------------------------------------------------------------------------
 # Backups y presupuesto
 # ---------------------------------------------------------------------------------------------

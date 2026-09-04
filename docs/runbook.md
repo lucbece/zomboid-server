@@ -12,7 +12,7 @@ decisions behind it are in [`architecture.md`](architecture.md).
 
 | Path | Contents |
 |---|---|
-| `config/` | Source of truth: `servertest.ini.tpl`, the sandbox and spawn Lua files, `mods.txt` |
+| `config/` | Source of truth: `servertest.ini.tpl`, the sandbox and spawn Lua files, `mods.txt` (not in git; created from `mods.example.txt`) |
 | `.env` | Secrets and per-machine settings. Not in git |
 | `data/zomboid/` | The container's `/home/steam/Zomboid`: rendered config, saves, logs, native backups, `db/` |
 | `data/workshop/` | Downloaded Workshop content, under `content/108600/<workshop_id>/` |
@@ -35,7 +35,9 @@ and — with the exception of the Discord and mod placeholders — non-empty; ot
 fails instead of writing a half-configured server. And if any placeholder survives substitution,
 the output is discarded.
 
-The mod keys are generated from `config/mods.txt`:
+The mod keys are generated from `config/mods.txt`, which is optional: without it both keys are
+empty and the server is vanilla. See [`mods.md`](mods.md) §1 for how the file reaches a VM and
+for the guard against rendering an empty list over a modded world.
 
 - `WorkshopItems=` lists each Workshop ID once, in file order.
 - `Mods=` lists every Mod ID, in file order, which is the load order.
@@ -125,9 +127,9 @@ the configuration before the new world is generated.
 After a wipe:
 
 1. Edit `config/servertest_SandboxVars.lua`.
-2. Set the final mod list in `config/mods.txt`.
+2. Set the final mod list in `config/mods.txt` (not versioned; absent means vanilla).
 3. Review `PVP`, `MaxPlayers`, `Public` and `SafetySystem` in `config/servertest.ini.tpl`.
-4. Commit, then start the server.
+4. Commit the versioned files, `make sync` against a VM, then start the server.
 
 Leave `ServerPlayerID` and `ResetID` alone. Changing them forces every client to create a new
 character; they are versioned so that a rebuilt server keeps the same identity.

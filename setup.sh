@@ -659,6 +659,22 @@ ENV_EOF
 chmod 600 "${ENV_FILE}"
 ui_ok ".env"
 
+# --- Mods: config/mods.txt es propio de cada partida y no se versiona ---------------------------
+MODS_FILE="${REPO_DIR}/config/mods.txt"
+if [[ -f "${MODS_FILE}" ]]; then
+  mods_n="$(grep -cE '^[[:space:]]*[0-9]+' "${MODS_FILE}" || true)"
+  if [[ "${mods_n}" -gt 0 ]]; then
+    ui_ok "config/mods.txt (${mods_n} mods del Workshop)"
+  else
+    ui_ok "config/mods.txt (sin mods activos: partida vanilla)"
+  fi
+else
+  cp "${REPO_DIR}/config/mods.example.txt" "${MODS_FILE}"
+  ui_ok "config/mods.txt creado (partida vanilla, sin mods)"
+  ui_hint "Para agregar mods editá config/mods.txt: una línea por item del Workshop, el formato"
+  ui_hint "está explicado adentro del archivo y en docs/mods.md. Se aplican con make deploy o make restart."
+fi
+
 umask 022
 
 # =============================================================================================
@@ -678,6 +694,7 @@ cat <<RESUMEN
     Avisos de gasto ........ ${alert_email} (a partir de ${budget_usd} USD/mes)
     Administración desde ... ${admin_cidr}
     Contraseña del server .. ${server_password}
+    Mods ................... $(if [[ "${mods_n:-0}" -gt 0 ]]; then echo "${mods_n} (config/mods.txt)"; else echo "ninguno, partida vanilla (config/mods.txt)"; fi)
 
   Ahora:
 

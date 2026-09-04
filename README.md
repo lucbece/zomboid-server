@@ -18,8 +18,9 @@ a cloud provider is supported as one option, not as a requirement — see
   change it.
 - Game rules, spawn points, spawn regions and server settings versioned in `config/`; secrets
   kept out of git in `.env`.
-- Workshop mods declared in a single text file (`config/mods.txt`) that also defines load order,
-  kept in step with the Workshop automatically so a mod update does not lock players out.
+- Vanilla by default. Workshop mods are declared in a single text file (`config/mods.txt`) that
+  also defines load order, and are kept in step with the Workshop automatically so a mod update
+  does not lock players out.
 - Clean shutdown and restart: RCON `save` + `quit`, never a bare `docker stop`.
 - Backups: a `save`-then-archive script with optional upload to object storage, plus restore and
   wipe procedures.
@@ -112,7 +113,7 @@ from `config/` plus `.env`.
 | `config/servertest_SandboxVars.lua` | Game rules: zombie count and behaviour, loot, weather, XP rates, erosion. Each value is documented in place. |
 | `config/servertest_spawnpoints.lua` | Where new characters spawn. |
 | `config/servertest_spawnregions.lua` | Which spawn regions are offered. |
-| `config/mods.txt` | Workshop mods, one per line; file order is load order. |
+| `config/mods.txt` | Workshop mods, one per line; file order is load order. Not in git: `setup.sh` creates it from `config/mods.example.txt`, and without it the server runs vanilla. |
 | `.env` | Passwords, ports, JVM heap, backup settings. Not in git. |
 
 Apply configuration changes with:
@@ -136,11 +137,25 @@ direct IP.
 
 ### Mods
 
-Add a line to `config/mods.txt` with the Workshop ID and the Mod ID, then `make restart`:
+The server runs vanilla until you declare mods. The list lives in `config/mods.txt`, which is
+specific to your world and therefore not versioned; `setup.sh` creates it from
+`config/mods.example.txt`, or copy the example yourself:
+
+```bash
+cp config/mods.example.txt config/mods.txt
+```
+
+Add one line per Workshop item with the Workshop ID and the Mod ID, then `make restart`
+(or `make sync RESTART=1` against a cloud VM):
 
 ```
 3750253491  VB_CommonSense  # Common Sense
 ```
+
+On a first cloud deployment the file is shipped to the VM with the rest of the configuration, so
+the world is created with the mods already loaded. If the file is missing, the render step refuses
+to turn a world that had mods into a vanilla one; `ALLOW_VANILLA=1 make restart` overrides that
+on purpose.
 
 Removing a mod from a world that already contains its items or map cells can corrupt saves. Take
 a backup first. Full procedure, including how to read a mod's `require=` dependencies and how to

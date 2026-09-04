@@ -19,9 +19,9 @@ El despliegue en un proveedor de nube es una opción soportada, no un requisito;
   cambia cuando vos la cambiás.
 - Reglas de la partida, puntos y regiones de aparición y configuración del servidor versionados
   en `config/`; los secretos quedan fuera de git, en `.env`.
-- Mods del Workshop declarados en un único archivo de texto (`config/mods.txt`) que además define
-  el orden de carga, y que se mantiene al día con el Workshop solo, para que la actualización de
-  un mod no deje a los jugadores afuera.
+- Vanilla por defecto. Los mods del Workshop se declaran en un único archivo de texto
+  (`config/mods.txt`) que además define el orden de carga, y se mantienen al día con el Workshop
+  solos, para que la actualización de un mod no deje a los jugadores afuera.
 - Apagado y reinicio limpios: `save` + `quit` por RCON, nunca un `docker stop` a secas.
 - Backups: un script que guarda el mundo y lo archiva, con subida opcional a almacenamiento de
   objetos, más procedimientos de restauración y de wipe.
@@ -116,7 +116,7 @@ reescribe a partir de `config/` y `.env`.
 | `config/servertest_SandboxVars.lua` | Reglas de la partida: cantidad y comportamiento de los zombies, loot, clima, velocidad de aprendizaje, erosión. Cada valor está documentado en el propio archivo. |
 | `config/servertest_spawnpoints.lua` | Dónde aparecen los personajes nuevos. |
 | `config/servertest_spawnregions.lua` | Qué regiones de aparición se ofrecen. |
-| `config/mods.txt` | Mods del Workshop, uno por línea; el orden del archivo es el orden de carga. |
+| `config/mods.txt` | Mods del Workshop, uno por línea; el orden del archivo es el orden de carga. No está en git: `setup.sh` lo crea desde `config/mods.example.txt`, y sin él el servidor corre vanilla. |
 | `.env` | Contraseñas, puertos, heap de la JVM, configuración de backups. No está en git. |
 
 Los cambios de configuración se aplican con:
@@ -141,11 +141,25 @@ preferís que solo se pueda llegar por IP directa.
 
 ### Mods
 
-Agregá una línea a `config/mods.txt` con el Workshop ID y el Mod ID, y después `make restart`:
+El servidor corre vanilla hasta que declarás mods. La lista vive en `config/mods.txt`, que es
+propio de tu partida y por eso no se versiona; `setup.sh` lo crea desde
+`config/mods.example.txt`, o copiá el ejemplo vos:
+
+```bash
+cp config/mods.example.txt config/mods.txt
+```
+
+Agregá una línea por item del Workshop con el Workshop ID y el Mod ID, y después `make restart`
+(o `make sync RESTART=1` contra una VM en la nube):
 
 ```
 3750253491  VB_CommonSense  # Common Sense
 ```
+
+En el primer despliegue en la nube el archivo viaja a la VM junto con el resto de la
+configuración, así que el mundo se crea con los mods ya cargados. Si el archivo falta, el render
+se niega a convertir en vanilla un mundo que tenía mods; `ALLOW_VANILLA=1 make restart` lo
+permite a propósito.
 
 Sacar un mod de un mundo que ya contiene sus objetos o sus celdas de mapa puede corromper el
 save. Hacé un backup antes. El procedimiento completo, incluido cómo leer las dependencias

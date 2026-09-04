@@ -9,6 +9,19 @@ Mods are never edited directly in `servertest.ini`. They are declared in `config
 line per Workshop item, and `scripts/render-config.sh` generates the `Mods=` and `WorkshopItems=`
 keys from it.
 
+The file belongs to a specific world, so it is not versioned (`.gitignore`). The repository ships
+`config/mods.example.txt` with the format and a few commented examples; `setup.sh` copies it into
+place, or do it by hand with `cp config/mods.example.txt config/mods.txt`. With no file, or with
+every line commented out, the server runs vanilla.
+
+Because the file is outside git, it reaches a cloud VM in two ways: on the first boot, OpenTofu
+reads the local file and cloud-init installs it before the world is created; after that,
+`make sync` copies it with the rest of `config/`. A VM never pulls from git on its own.
+
+`render-config.sh` refuses to render an empty mod list over a world whose `servertest.ini`
+already lists mods, since the usual cause is a lost `mods.txt` rather than a decision to go
+vanilla. `ALLOW_VANILLA=1` overrides the check.
+
 ```
 # <workshop_id>  <mod_id>[; <mod_id>; ...]  # free-form comment
 3171167894  damnlib                                     # a library other mods depend on
@@ -144,7 +157,8 @@ For map mods, check for overlapping cells before combining them.
    Build 42 became stable, and many mods have parallel Build 41 and Build 42 versions.
 2. Note the Workshop ID and the Mod ID.
 3. Read `require=` and add any missing dependencies first (section 3).
-4. Add the line to `config/mods.txt` at the position that gives the load order you want.
+4. Add the line to `config/mods.txt` at the position that gives the load order you want
+   (create the file from `config/mods.example.txt` if it does not exist yet).
 5. `make restart` locally, or `make sync RESTART=1` against a VM.
 6. Verify in the log that the item downloaded and the mod loaded (section 4).
 

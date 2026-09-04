@@ -4,7 +4,10 @@
 #   config/servertest.ini.tpl + .env + config/mods.txt -> data/zomboid/Server/servertest.ini
 #   config/*.lua                                       -> data/zomboid/Server/
 #
-# Falla si falta cualquier variable que el template use.
+# config/mods.txt es opcional y no se versiona: sin el, la partida es vanilla (sin mods).
+# Falla si falta cualquier variable que el template use, y tambien si el ini ya renderizado
+# tenia mods y ahora no habria ninguno (ALLOW_VANILLA=1 lo permite): sacar todos los mods de
+# un mundo existente rompe los objetos y celdas que dependen de ellos.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -60,10 +63,26 @@ if [[ -f "${MODS_FILE}" ]]; then
       workshop_ids+=("${workshop_id}")
     fi
   done <"${MODS_FILE}"
+else
+  echo "render-config: no existe config/mods.txt: partida vanilla (sin mods)."
+  echo "render-config:   para agregar mods:  cp config/mods.example.txt config/mods.txt  (ver docs/mods.md)"
 fi
 MODS="$(IFS=';'; echo "${mod_ids[*]-}")"
 WORKSHOP_ITEMS="$(IFS=';'; echo "${workshop_ids[*]-}")"
 export MODS WORKSHOP_ITEMS
+
+# Freno: si el mundo ya corria con mods y este render los sacaria todos, lo mas probable es
+# que config/mods.txt se haya perdido (no se versiona), no que alguien quiera un mundo vanilla.
+if [[ -z "${MODS}" && -f "${OUT_INI}" && "${ALLOW_VANILLA:-0}" != "1" ]]; then
+  mods_previos="$(sed -n 's/^Mods=//p' "${OUT_INI}" | head -n1)"
+  if [[ -n "${mods_previos}" ]]; then
+    echo "render-config: ERROR: el server venia con mods y ahora no habria ninguno." >&2
+    echo "render-config:   Mods= actual: ${mods_previos}" >&2
+    echo "render-config:   Si falta config/mods.txt, restauralo (en la VM lo trae 'make sync' desde tu PC)." >&2
+    echo "render-config:   Para pasar a vanilla a proposito:  ALLOW_VANILLA=1 make restart" >&2
+    exit 1
+  fi
+fi
 
 # --- Validacion: toda variable ${VAR} del template tiene que estar definida ----------------
 # shellcheck disable=SC2016  # el patron busca literalmente ${VAR} en el template

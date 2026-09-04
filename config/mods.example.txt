@@ -1,0 +1,34 @@
+# Mods del Workshop de Steam para este server.
+#
+# Este archivo es un EJEMPLO. El que se usa de verdad es config/mods.txt, que no se versiona
+# (esta en .gitignore) porque es propio de cada partida. Para empezar:
+#
+#   cp config/mods.example.txt config/mods.txt
+#
+# Sin config/mods.txt, o con todas las lineas comentadas, la partida es vanilla (sin mods).
+#
+# scripts/render-config.sh genera desde aca las lineas Mods= y WorkshopItems= de servertest.ini,
+# respetando el orden de este archivo (el orden de Mods= es el load order).
+#
+# Formato, una linea por item del Workshop:
+#   <workshop_id>  <mod_id>[; <mod_id>; ...]  # comentario libre
+#
+# - workshop_id: el numero al final de la URL de Steam Workshop (?id=NNNN).
+# - mod_id: el campo "Mod ID" de la pagina del Workshop (= id= del mod.info, en B42 dentro de 42/).
+#   Puede tener espacios. Si el item trae varios mods, separarlos con ';'.
+# - Lineas vacias y todo lo que sigue a # se ignoran.
+# - Las librerias de las que dependen otros mods van primero (campo require= del mod.info).
+#
+# Ver docs/mods.md para el procedimiento completo: como leer las dependencias, como verificar
+# que un mod cargo y como diagnosticar uno que no arranca.
+#
+# Ejemplos (descomentar para activarlos):
+#
+# --- Librerias (van primero: otros mods dependen de ellas) ---
+# 3423660713  ModLoadOrderSorter_b42   # Mod Load Order Sorter [b42] (lo requiere Mod Manager)
+#
+# --- Utilidades ---
+# 3567084868  ModManager
+#
+# --- Un item que trae varios mods ---
+# 2799152995  78amgeneralM35A2; 78amgeneralM35A2extra; 78amgeneralM49A2C

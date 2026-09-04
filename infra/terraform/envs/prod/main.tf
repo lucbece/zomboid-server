@@ -36,6 +36,8 @@ module "zomboid" {
   public_name     = var.public_name
   max_players     = var.max_players
   max_memory      = var.max_memory
+  # config/mods.txt no se versiona: si existe en esta PC, viaja a la VM en el primer boot.
+  mods_txt = fileexists("${path.module}/../../../../config/mods.txt") ? file("${path.module}/../../../../config/mods.txt") : ""
 
   # Bot de Discord (encendido on-demand). Con bot_enabled = false no se crea ninguno de sus
   # recursos y el modulo queda igual que antes.

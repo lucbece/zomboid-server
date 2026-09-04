@@ -6,7 +6,8 @@
 #
 # Hace: apagado limpio -> backup final etiquetado 'pre-wipe' -> borrar Saves/Multiplayer/servertest,
 # db/ y los backups nativos del server. NO levanta el server: primero hay que definir
-# config/servertest_SandboxVars.lua y config/mods.txt de la partida definitiva.
+# config/servertest_SandboxVars.lua y config/mods.txt (no versionado; sin el, vanilla) de la
+# partida definitiva.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -72,9 +73,9 @@ cat <<'MSG'
 wipe: listo. Antes de arrancar la partida definitiva:
 
   1. Editar config/servertest_SandboxVars.lua (varias opciones quedan fijadas al crear el mundo).
-  2. Editar config/mods.txt (descomentar los mods definitivos).
+  2. Editar config/mods.txt (los mods definitivos; sin el archivo la partida es vanilla).
   3. Revisar config/servertest.ini.tpl (PVP, MaxPlayers, backups).
-  4. git commit de esos cambios (en la VM: git pull, o desde la PC: make sync).
+  4. Desde la PC: make sync (mods.txt no esta en git; en la VM solo llega por rsync).
   5. make up
 
 MSG

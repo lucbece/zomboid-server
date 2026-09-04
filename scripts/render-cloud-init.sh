@@ -26,9 +26,10 @@ die() {
 }
 
 case "${mode}" in
-  https) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git" ;;
-  ssh) use_deploy_key=true; repo_url="git@github.com:lucbece/zomboid-server.git" ;;
-  bot) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git" ;;
+  # https renderiza con un mods.txt de ejemplo (ejercita el bloque de write_files); ssh sin mods.
+  https) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="$(cat "${REPO_DIR}/config/mods.example.txt")" ;;
+  ssh) use_deploy_key=true; repo_url="git@github.com:lucbece/zomboid-server.git"; mods_txt="" ;;
+  bot) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="" ;;
   *) die "modo desconocido '${mode}': usar 'https', 'ssh' o 'bot'" ;;
 esac
 
@@ -87,6 +88,7 @@ variable "template" { type = string }
 variable "use_deploy_key" { type = bool }
 variable "deploy_private_key" { type = string }
 variable "repo_url" { type = string }
+variable "mods_txt" { type = string }
 
 output "rendered" {
   value = templatefile(var.template, {
@@ -113,6 +115,7 @@ output "rendered" {
     max_players     = 16
     max_memory      = "12g"
     min_memory      = "2048m"
+    mods_txt        = var.mods_txt
 
     os_namespace = "grejemplo"
     region       = "sa-saopaulo-1"
@@ -126,7 +129,8 @@ TF
   -var "template=${REPO_DIR}/infra/cloud-init.yaml" \
   -var "use_deploy_key=${use_deploy_key}" \
   -var "deploy_private_key=${fake_key}" \
-  -var "repo_url=${repo_url}" >/dev/null
+  -var "repo_url=${repo_url}" \
+  -var "mods_txt=${mods_txt}" >/dev/null
 "${TOFU}" -chdir="${work}" output -raw rendered >"${out}"
 
 echo "render-cloud-init: modo '${mode}' -> ${out}"

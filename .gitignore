@@ -22,3 +22,6 @@ bin/
 # bytecode de python (tools/encuesta, tools/panel)
 __pycache__/
 *.pyc
+
+# mods de cada partida: se versiona solo config/mods.example.txt
+config/mods.txt

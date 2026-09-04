@@ -31,6 +31,12 @@ in git, optional deployment to a cloud VM with OpenTofu.
 - `Mods=` holds `mod.info` IDs separated by `;` (load order); `WorkshopItems=` holds numeric IDs.
   The per-ID `\` prefix was verified as irrelevant on 42.20.4; the repository uses the unprefixed
   form. See `docs/mods.md`.
+- `config/mods.txt` is **not versioned** (each world has its own; the template is vanilla by
+  default). `config/mods.example.txt` is the committed template; `setup.sh` copies it when the
+  file is missing. It reaches a VM via cloud-init on first boot (`mods_txt` variable, read from
+  the local working tree by `envs/prod/main.tf`) and via `make sync` afterwards.
+  `render-config.sh` refuses to render an empty mod list over an ini that already had mods
+  unless `ALLOW_VANILLA=1`.
 - VM paths: repository at `/opt/zomboid-server`, data at `/opt/zomboid-server/data/zomboid`,
   local backups at `/opt/zomboid-server/backups`, cron logs at `/var/log/zomboid/`, systemd unit
   at `/etc/systemd/system/zomboid.service` installed from `infra/systemd/`.
