@@ -107,7 +107,7 @@ class TestStart(unittest.IsolatedAsyncioTestCase):
         oci = OCIFalso(["STOPPED"], falla_en={"arrancar"})
         pasos = await recolectar(accion_start(contexto(oci, A2SFalso(reloj), reloj)))
 
-        self.assertIn("No se pudo prender la VM", pasos[-1])
+        self.assertIn("No se pudo prender el server", pasos[-1])
 
 
 class TestStatus(unittest.IsolatedAsyncioTestCase):
@@ -132,7 +132,7 @@ class TestStatus(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Muldraugh, KY", pasos[0])
         self.assertIn("2 jugadores de 16", pasos[0])
         self.assertIn("versión 42.20", pasos[0])
-        self.assertIn("Encendida hace 1 h 15 min", pasos[0])
+        self.assertIn("Encendido hace 1 h 15 min", pasos[0])
 
     async def test_vm_arriba_pero_el_juego_no_contesta(self):
         reloj = Reloj()

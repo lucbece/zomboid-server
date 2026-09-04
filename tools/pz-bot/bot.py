@@ -149,7 +149,7 @@ async def _rechazar_si_no_puede(interaction: discord.Interaction) -> bool:
     return True
 
 
-@pz.command(name="start", description="Prende el server si está apagado y avisa cuando entra")
+@pz.command(name="start", description="Prende el server y avisa cuando se puede entrar")
 async def cmd_start(interaction: discord.Interaction) -> None:
     if await _rechazar_si_no_puede(interaction):
         return
@@ -157,7 +157,7 @@ async def cmd_start(interaction: discord.Interaction) -> None:
     await responder(interaction, accion_start(cliente.ctx))
 
 
-@pz.command(name="status", description="Estado del server: VM, jugadores conectados y mapa")
+@pz.command(name="status", description="Estado del server y jugadores conectados")
 async def cmd_status(interaction: discord.Interaction) -> None:
     if await _rechazar_si_no_puede(interaction):
         return
@@ -165,7 +165,7 @@ async def cmd_status(interaction: discord.Interaction) -> None:
     await responder(interaction, accion_status(cliente.ctx))
 
 
-@pz.command(name="stop", description="Apaga el server (solo si no hay nadie jugando)")
+@pz.command(name="stop", description="Apaga el server si no hay nadie jugando")
 async def cmd_stop(interaction: discord.Interaction) -> None:
     if await _rechazar_si_no_puede(interaction):
         return

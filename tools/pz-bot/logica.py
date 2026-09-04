@@ -134,30 +134,30 @@ async def accion_start(ctx: Contexto) -> AsyncIterator[str]:
     try:
         estado = await ctx.estado_vm()
     except Exception as exc:
-        yield f"No se pudo consultar el estado de la VM. {exc}"
+        yield f"No se pudo consultar el estado del server. {exc}"
         return
 
     if estado == RUNNING:
         info = await ctx.info_juego()
         if info is not None:
             ctx.estado.marcar_encendida(ctx.ahora(), aproximado=True)
-            yield f"Ya está en línea · {texto_jugadores(info)}\n{texto_en_linea(info, ctx.direccion)}"
+            yield f"Ya está en línea.\n{texto_en_linea(info, ctx.direccion)}"
             return
-        yield "La VM ya está encendida pero el juego todavía no responde. Esperando…"
+        yield "El server está prendido y el juego todavía no responde. Esperando…"
     elif estado == STOPPED:
-        yield "Prendiendo el server, tarda ~3 minutos."
+        yield "Prendiendo el server. Tarda ~3 minutos."
         try:
             await ctx.ejecutar(ctx.oci.arrancar)
         except Exception as exc:
-            yield f"No se pudo prender la VM. {exc}"
+            yield f"No se pudo prender el server. {exc}"
             return
     elif estado in (STARTING, PROVISIONING):
-        yield "El server ya se está prendiendo, tarda ~3 minutos."
+        yield "El server ya se está prendiendo. Tarda ~3 minutos."
     elif estado == STOPPING:
-        yield "El server se está apagando ahora mismo. Probá de nuevo en un minuto."
+        yield "El server se está apagando. Probá de nuevo en un minuto."
         return
     else:
-        yield f"La VM está {estado_legible(estado)}: no se puede prender desde acá."
+        yield f"El server está {estado_legible(estado)}. No se puede prender desde acá."
         return
 
     inicio = ctx.ahora()
@@ -170,10 +170,10 @@ async def accion_start(ctx: Contexto) -> AsyncIterator[str]:
             yield texto_en_linea(info, ctx.direccion)
             return
         transcurrido = ctx.ahora() - inicio
-        yield f"Prendiendo el server… ({duracion_legible(transcurrido)} esperando)"
+        yield f"Prendiendo el server… {duracion_legible(transcurrido)}"
 
     yield ("El server no respondió después de "
-           f"{duracion_legible(ctx.espera_maxima)}. Probá `/pz status`; si sigue así, avisá al admin.")
+           f"{duracion_legible(ctx.espera_maxima)}. Probá `/pz status` en unos minutos.")
 
 
 async def accion_status(ctx: Contexto) -> AsyncIterator[str]:
@@ -181,17 +181,17 @@ async def accion_status(ctx: Contexto) -> AsyncIterator[str]:
     try:
         estado = await ctx.estado_vm()
     except Exception as exc:
-        yield f"No se pudo consultar el estado de la VM. {exc}"
+        yield f"No se pudo consultar el estado del server. {exc}"
         return
 
     if estado != RUNNING:
         ctx.estado.marcar_apagada()
-        yield f"VM {estado_legible(estado)}. Con `/pz start` la prende cualquiera del server."
+        yield f"Server {estado_legible(estado)}. Para prenderlo: `/pz start`."
         return
 
     info = await ctx.info_juego()
     if info is None:
-        yield ("VM encendida, pero el juego todavía no responde: puede estar cargando los mods. "
+        yield ("Server prendido, el juego todavía no responde: puede estar cargando los mods. "
                "Reintentá en un minuto.")
         return
 
@@ -199,20 +199,20 @@ async def accion_status(ctx: Contexto) -> AsyncIterator[str]:
     lineas = [texto_en_linea(info, ctx.direccion)]
     if ctx.estado.encendida_desde is not None:
         transcurrido = duracion_legible(ctx.ahora() - ctx.estado.encendida_desde)
-        lineas.append(f"Encendida hace {'~' if ctx.estado.aproximado else ''}{transcurrido}")
+        lineas.append(f"Encendido hace {'~' if ctx.estado.aproximado else ''}{transcurrido}")
     yield "\n".join(lineas)
 
 
 async def accion_stop(ctx: Contexto, autorizado: bool = True) -> AsyncIterator[str]:
     """Apaga la VM, y solo si el juego reporta 0 jugadores conectados."""
     if not autorizado:
-        yield "Solo los admins del server pueden apagarlo."
+        yield "Solo los admins pueden apagar el server."
         return
 
     try:
         estado = await ctx.estado_vm()
     except Exception as exc:
-        yield f"No se pudo consultar el estado de la VM. {exc}"
+        yield f"No se pudo consultar el estado del server. {exc}"
         return
 
     if estado == STOPPED:
@@ -222,29 +222,29 @@ async def accion_stop(ctx: Contexto, autorizado: bool = True) -> AsyncIterator[s
         yield "El server ya se está apagando."
         return
     if estado != RUNNING:
-        yield f"La VM está {estado_legible(estado)}: no se puede apagar desde acá."
+        yield f"El server está {estado_legible(estado)}. No se puede apagar desde acá."
         return
 
     info = await ctx.info_juego()
     if info is None:
         # Nunca a ciegas: si A2S no contesta no hay forma de saber si hay alguien adentro.
-        yield ("El juego no responde, así que no se puede saber si hay gente jugando. "
-               "No se apaga nada; probá de nuevo en un minuto.")
+        yield ("El juego no responde y no se puede saber si hay gente jugando. "
+               "No se apaga. Probá de nuevo en un minuto.")
         return
 
     if info.jugadores > 0:
         yield (f"Hay {texto_jugadores(info)} conectados: no se apaga. "
-               "Se apaga solo a los 30 minutos sin nadie.")
+               "Se apaga solo cuando pasan 30 minutos sin nadie.")
         return
 
-    yield "Sin jugadores. Apagando con guardado limpio, tarda un minuto."
+    yield "Sin jugadores. Apagando el server; la partida se guarda antes."
     try:
         await ctx.ejecutar(ctx.oci.apagar)
     except Exception as exc:
-        yield f"No se pudo apagar la VM. {exc}"
+        yield f"No se pudo apagar el server. {exc}"
         return
     ctx.estado.marcar_apagada()
-    yield "Apagado pedido. El server guarda la partida y la VM queda detenida (no se cobra cómputo)."
+    yield "Apagado en curso: el server guarda la partida y se apaga. Para volver a jugar: `/pz start`."
 
 
 # --- Autorizacion ---------------------------------------------------------------------------
