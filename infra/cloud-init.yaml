@@ -15,6 +15,7 @@
 #   - ${repo_dir}/.env con los secretos que vienen de terraform.tfvars
 #   - mcrcon compilado, systemd unit habilitada (arranca el server en el boot)
 #   - watchdog habilitado (timer cada 2 minutos; ver docs/self-healing.md)
+#   - actualizador de mods habilitado (timer cada 5 minutos; ver docs/mods.md)
 #   - avisos de estado a Discord habilitados (daemon; ver docs/discord.md)
 #   - rclone contra Object Storage por instance principal (sin claves en disco)
 #   - cron de backup diario a las 0${backup_hour}:00 hora de ${timezone}
@@ -276,6 +277,18 @@ runcmd:
   - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/tmp/zomboid-watchdog
   - systemctl daemon-reload
   - systemctl enable --now zomboid-watchdog.timer
+
+  # --- Mods al dia con el Workshop -----------------------------------------------------------
+  # El server baja los mods solo al arrancar: cuando un autor publica una version nueva, los
+  # clientes (que Steam actualiza solos) dejan de poder entrar hasta el proximo reinicio. Este
+  # timer compara con la API de Steam y reinicia con aviso. Ver docs/mods.md.
+  # El lock se comparte con el watchdog: los dos pueden reiniciar y no pueden hacerlo a la vez.
+  - install -m 0644 ${repo_dir}/infra/systemd/zomboid-mod-updater.service /etc/systemd/system/zomboid-mod-updater.service
+  - install -m 0644 ${repo_dir}/infra/systemd/zomboid-mod-updater.timer /etc/systemd/system/zomboid-mod-updater.timer
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/tmp/zomboid-mod-updater
+  - install -m 0644 -o ${vm_user} -g ${vm_user} /dev/null /var/tmp/zomboid-ops.lock
+  - systemctl daemon-reload
+  - systemctl enable --now zomboid-mod-updater.timer
 
   # --- Avisos de estado a Discord ------------------------------------------------------------
   # Daemon (no timer): sigue el log del contenedor, los eventos de Docker y el archivo de

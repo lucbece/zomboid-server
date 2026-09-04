@@ -19,6 +19,7 @@ DATA_GID := $(shell id -g)
 .PHONY: require-ip remote-status remote-logs remote-restart remote-down remote-up remote-rcon remote-backup remote-diff sync
 .PHONY: watchdog-install watchdog-status
 .PHONY: notifier-install notifier-status
+.PHONY: mod-updater-install mod-updater-status mods-check
 .PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
 .PHONY: panel-up panel-down panel-estado panel-token panel-tokens panel-revoke panel-log
 
@@ -178,6 +179,31 @@ watchdog-status: require-ip ## Estado del watchdog en la VM y ultimas lineas de 
 	            systemctl status --no-pager --lines=5 zomboid-watchdog.service || true; \
 	            echo "--- /var/log/zomboid/watchdog.log ---"; \
 	            tail -n $${N:-20} /var/log/zomboid/watchdog.log 2>/dev/null || echo "(todavia no hay log)"'
+
+# =============================================================================================
+# Mods al dia con el Workshop (docs/mods.md, "Mod updates")
+# =============================================================================================
+
+mod-updater-install: require-ip ## Instala y habilita el actualizador de mods en la VM (timer cada 5 minutos)
+	@$(MAKE) sync VM_IP=$(VM_IP) >/dev/null
+	@$(REMOTE) "sudo install -m 644 -o root -g root \
+	              '$(VM_DIR)/infra/systemd/zomboid-mod-updater.service' \
+	              '$(VM_DIR)/infra/systemd/zomboid-mod-updater.timer' /etc/systemd/system/ && \
+	            sudo install -d -m 755 -o $(VM_USER) -g $(VM_USER) /var/log/zomboid /var/tmp/zomboid-mod-updater && \
+	            sudo install -m 644 -o $(VM_USER) -g $(VM_USER) /dev/null /var/tmp/zomboid-ops.lock && \
+	            sudo systemctl daemon-reload && \
+	            sudo systemctl enable --now zomboid-mod-updater.timer"
+	@echo "mod-updater: instalado. Primer chequeo en menos de 5 minutos; verlo con 'make mod-updater-status'."
+	@echo "mod-updater: la politica de reinicio sale del .env DE LA VM (MOD_UPDATE_*, ver docs/mods.md)."
+
+mod-updater-status: require-ip ## Estado del actualizador de mods en la VM y ultimas lineas de su log
+	@$(REMOTE) 'systemctl list-timers --no-pager zomboid-mod-updater.timer; \
+	            systemctl status --no-pager --lines=5 zomboid-mod-updater.service || true; \
+	            echo "--- /var/log/zomboid/mod-updater.log ---"; \
+	            tail -n $${N:-20} /var/log/zomboid/mod-updater.log 2>/dev/null || echo "(todavia no hay log)"'
+
+mods-check: require-ip ## Compara los mods de la VM con el Workshop (solo lectura, no reinicia nada)
+	@$(REMOTE) 'cd $(VM_DIR) && ./scripts/mod-updater.sh --check'
 
 # =============================================================================================
 # Avisos de estado en Discord (docs/discord.md)

@@ -1,0 +1,28 @@
+# Mantiene los mods del Workshop al dia (ver docs/mods.md, seccion "Mod updates"). No se
+# arranca sola: la dispara zomboid-mod-updater.timer cada 5 minutos. La instala cloud-init en
+# las VMs nuevas y `make mod-updater-install` en las que ya existen.
+#
+# Type=oneshot: compara, avisa o reinicia, y sale. La cuenta regresiva no vive en un sleep
+# sino en /var/tmp/zomboid-mod-updater/, para que una corrida nunca se quede con el lock
+# compartido mientras espera.
+[Unit]
+Description=Actualizacion de mods del servidor de Project Zomboid (Workshop)
+Documentation=https://github.com/lucbece/zomboid-server
+After=docker.service zomboid.service network-online.target
+Wants=docker.service
+
+ConditionPathExists=/opt/zomboid-server/scripts/mod-updater.sh
+
+[Service]
+Type=oneshot
+User=pz
+Group=pz
+WorkingDirectory=/opt/zomboid-server
+ExecStart=/opt/zomboid-server/scripts/mod-updater.sh
+
+# Lo mas largo que puede durar una pasada es un reinicio (stop.sh espera hasta 120 s a que el
+# mundo termine de escribirse, mas el aviso de 60 s a los jugadores).
+TimeoutStartSec=10min
+
+[Install]
+WantedBy=multi-user.target
