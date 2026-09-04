@@ -7,7 +7,7 @@ SandboxVars = {
     -- 4 = Normal
     -- 5 = Low
     -- 6 = None
-    Zombies = 4,
+    Zombies = 3,
     -- How zombies are distributed across the map. Default = Urban Focused
     -- 1 = Urban Focused
     -- 2 = Uniform
@@ -19,7 +19,7 @@ SandboxVars = {
     -- 2 = Normal
     -- 3 = Low
     -- 4 = None
-    ZombieRespawn = 4,
+    ZombieRespawn = 2,
     -- Zombie allowed to migrate to empty cells.
     ZombieMigrate = true,
     -- Default = 1 Hour, 30 Minutes
@@ -134,7 +134,7 @@ SandboxVars = {
     -- How long alarm batteries can last for after the power shuts off. Min: -1 Max: 2147483647 Default: 14
     AlarmDecayModifier = 14,
     -- Any food that can rot or spoil. Min: 0.00 Max: 4.00 Default: 0.80
-    FoodLootNew = 0.8,
+    FoodLootNew = 0.6,
     -- All other items that can be read, including books, fliers, and newspapers. Min: 0.00 Max: 4.00 Default: 0.60
     LiteratureLootNew = 0.6,
     -- Books that provide skill XP multipliers. Min: 0.00 Max: 4.00 Default: 0.60
@@ -150,19 +150,19 @@ SandboxVars = {
     -- Weapons that are not tools in other categories. Min: 0.00 Max: 4.00 Default: 0.60
     WeaponLootNew = 0.6,
     -- Also includes weapon attachments. Min: 0.00 Max: 4.00 Default: 1.20
-    RangedWeaponLootNew = 1.2,
+    RangedWeaponLootNew = 0.6,
     -- Loose ammo, boxes and magazines. Min: 0.00 Max: 4.00 Default: 0.60
     AmmoLootNew = 0.6,
     -- Vehicle parts and the tools needed to install them. Min: 0.00 Max: 4.00 Default: 0.60
     MechanicsLootNew = 0.6,
     -- Everything else. Also affects foraging for all items in Town/Road zones. Min: 0.00 Max: 4.00 Default: 0.80
-    OtherLootNew = 0.8,
+    OtherLootNew = 0.6,
     -- All wearable items that are not containers. Min: 0.00 Max: 4.00 Default: 0.60
     ClothingLootNew = 0.6,
     -- Backpacks and other wearable/equippable containers, eg. cases. Min: 0.00 Max: 4.00 Default: 0.60
     ContainerLootNew = 0.6,
     -- Keys for buildings/cars, key rings, and locks. Min: 0.00 Max: 4.00 Default: 0.40
-    KeyLootNew = 0.4,
+    KeyLootNew = 0.6,
     -- VHS tapes and CDs. Min: 0.00 Max: 4.00 Default: 0.60
     MediaLootNew = 0.6,
     -- Spiffo items, plushies, and other collectible keepsake items eg. Photos. Min: 0.00 Max: 4.00 Default: 0.60
@@ -287,7 +287,7 @@ SandboxVars = {
     -- 6 = No decay
     FridgeFactor = 3,
     -- When greater than 0, loot will not respawn in zones that have been visited within this number of in-game hours. Min: 0 Max: 2147483647 Default: 0
-    SeenHoursPreventLootRespawn = 0,
+    SeenHoursPreventLootRespawn = 168,
     -- When greater than 0, after X hours, all containers in towns and trailer parks in the world will respawn loot. To spawn loot a container must have been looted at least once. Loot respawn is not impacted by visibility or subsequent looting. Min: 0 Max: 2147483647 Default: 0
     HoursForLootRespawn = 0,
     -- Containers with a number of items greater, or equal to, this setting will not respawn. Min: 0 Max: 2147483647 Default: 5
@@ -341,7 +341,7 @@ SandboxVars = {
     -- 2 = Once
     -- 3 = Sometimes
     -- 4 = Often
-    Helicopter = 2,
+    Helicopter = 3,
     -- How often zombie-attracting metagame events like distant gunshots will occur. Default = Sometimes
     -- 1 = Never
     -- 2 = Sometimes
@@ -789,7 +789,7 @@ SandboxVars = {
         -- 2 = Fast Shamblers
         -- 3 = Shamblers
         -- 4 = Random
-        Speed = 4,
+        Speed = 3,
         -- If Random Speed is enabled, this controls what percentage of zombies are Sprinters. Check the "Advanced" box below to use a custom percentage. Min: 0 Max: 100 Default: 0
         SprinterPercentage = 0,
         -- The damage zombies inflict per attack. Default = Normal
@@ -803,7 +803,7 @@ SandboxVars = {
         -- 2 = Normal
         -- 3 = Fragile
         -- 4 = Random
-        Toughness = 4,
+        Toughness = 2,
         -- How the Knox Virus spreads. Default = Blood and Saliva
         -- 1 = Blood and Saliva
         -- 2 = Saliva Only

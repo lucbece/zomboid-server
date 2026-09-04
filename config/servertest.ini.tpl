@@ -1,5 +1,5 @@
 # Players can hurt and kill other players
-PVP=false
+PVP=true
 
 # PVP is logged to admin chat
 PVPLogToolChat=true
