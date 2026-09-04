@@ -386,7 +386,10 @@ resource "oci_core_instance" "this" {
 
   lifecycle {
     # Canonical publica una imagen nueva por mes; sin esto cualquier `apply` recrearia la VM.
-    ignore_changes = [source_details[0].source_id]
+    # cloud-init (metadata.user_data) corre solo en el primer boot: un cambio en el template no
+    # debe recrear la VM (se perderia el mundo). Para aplicar un cloud-init nuevo a una VM
+    # existente se replica el cambio a mano, o se recrea a proposito con `tofu apply -replace`.
+    ignore_changes = [source_details[0].source_id, metadata]
   }
 }
 
