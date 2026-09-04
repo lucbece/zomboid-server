@@ -4,10 +4,12 @@
 #
 #   scripts/render-cloud-init.sh https /tmp/rendered-https.yaml
 #   scripts/render-cloud-init.sh ssh   /tmp/rendered-ssh.yaml
+#   scripts/render-cloud-init.sh bot   /tmp/rendered-bot.yaml
 #
-# El primer argumento elige el modo de clonado del repo:
-#   https -> repo publico, sin deploy key
-#   ssh   -> repo privado, con deploy key
+# El primer argumento elige que se renderiza:
+#   https -> infra/cloud-init.yaml, repo publico, sin deploy key
+#   ssh   -> infra/cloud-init.yaml, repo privado, con deploy key
+#   bot   -> infra/cloud-init-bot.yaml (la instancia del bot de Discord; ver docs/on-demand.md)
 #
 # Lo usa el CI (.github/workflows/ci.yml) y esta documentado en docs/runbook.md §12.
 set -euo pipefail
@@ -26,14 +28,54 @@ die() {
 case "${mode}" in
   https) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git" ;;
   ssh) use_deploy_key=true; repo_url="git@github.com:lucbece/zomboid-server.git" ;;
-  *) die "modo desconocido '${mode}': usar 'https' o 'ssh'" ;;
+  bot) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git" ;;
+  *) die "modo desconocido '${mode}': usar 'https', 'ssh' o 'bot'" ;;
 esac
 
-[[ -n "${out}" ]] || die "falta el archivo de salida. Uso: $0 {https|ssh} salida.yaml"
+[[ -n "${out}" ]] || die "falta el archivo de salida. Uso: $0 {https|ssh|bot} salida.yaml"
 command -v "${TOFU}" >/dev/null 2>&1 || die "falta 'tofu' en el PATH"
 
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
+
+# El cloud-init del bot tiene otro juego de variables (no hay deploy key ni config del juego),
+# asi que se renderiza con su propio main.tf y el script termina aca.
+if [[ "${mode}" == "bot" ]]; then
+  cat >"${work}/main.tf" <<'TFBOT'
+variable "template" { type = string }
+
+output "rendered" {
+  value = templatefile(var.template, {
+    vm_user        = "pz"
+    ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJEMPLOEJEMPLOEJEMPLOEJEMPLOEJEMPLO usuario@pc"
+    repo_url       = "https://github.com/lucbece/zomboid-server.git"
+    repo_branch    = "main"
+    repo_dir       = "/opt/zomboid-server"
+    venv_dir       = "/opt/pz-bot-venv"
+    timezone       = "America/Argentina/Buenos_Aires"
+    admin_cidr     = "203.0.113.10/32"
+    region         = "sa-saopaulo-1"
+
+    discord_bot_token    = "EJEMPLO.DE.TOKEN"
+    bot_guild_id         = "000000000000000000"
+    bot_admin_user_ids   = ""
+    bot_allowed_role_ids = ""
+
+    game_instance_ocid = "ocid1.instance.oc1..aaaaaaaaCAMBIAME"
+    game_ip            = "203.0.113.10"
+    game_port          = 16261
+  })
+}
+TFBOT
+
+  "${TOFU}" -chdir="${work}" init -input=false -backend=false >/dev/null
+  "${TOFU}" -chdir="${work}" apply -input=false -auto-approve \
+    -var "template=${REPO_DIR}/infra/cloud-init-bot.yaml" >/dev/null
+  "${TOFU}" -chdir="${work}" output -raw rendered >"${out}"
+
+  echo "render-cloud-init: modo 'bot' -> ${out}"
+  exit 0
+fi
 
 # Clave de descarte generada al vuelo: el template solo la indenta, no la valida, y asi no
 # queda ninguna clave privada escrita en el repo (gitleaks la marcaria, con razon).

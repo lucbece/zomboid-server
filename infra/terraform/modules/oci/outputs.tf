@@ -56,3 +56,30 @@ output "image_id" {
   description = "OCID de la imagen de Ubuntu que se uso para crear la VM."
   value       = data.oci_core_images.ubuntu.images[0].id
 }
+
+# --- Bot de Discord (solo con bot_enabled = true) ---------------------------------------------
+
+output "bot_enabled" {
+  description = "true si el modulo creo la instancia del bot de Discord."
+  value       = var.bot_enabled
+}
+
+output "bot_public_ip" {
+  description = "IP publica efimera de la instancia del bot. Vacia si bot_enabled = false."
+  value       = var.bot_enabled ? data.oci_core_vnic.bot[0].public_ip_address : ""
+}
+
+output "bot_ssh_command" {
+  description = "Comando para entrar a la instancia del bot."
+  value       = var.bot_enabled ? "ssh ${var.vm_user}@${data.oci_core_vnic.bot[0].public_ip_address}" : ""
+}
+
+output "bot_instance_ocid" {
+  description = "OCID de la instancia del bot (la del juego es instance_ocid)."
+  value       = var.bot_enabled ? oci_core_instance.bot[0].id : ""
+}
+
+output "bot_shape" {
+  description = "Shape con el que quedo la instancia del bot."
+  value       = var.bot_enabled ? var.bot_shape : ""
+}

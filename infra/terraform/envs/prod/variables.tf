@@ -136,3 +136,57 @@ variable "max_memory" {
   type        = string
   default     = "12g"
 }
+
+# --- Bot de Discord: encendido on-demand (docs/on-demand.md) ----------------------------------
+
+variable "bot_enabled" {
+  description = "Crear la instancia del bot de Discord que prende y apaga el server. false = no se crea nada."
+  type        = bool
+  default     = false
+}
+
+variable "bot_shape" {
+  description = <<-EOT
+    Shape Always Free del bot. VM.Standard.A1.Flex (ARM) es la primera opcion; si el apply
+    falla con "Out of host capacity", pasar a VM.Standard.E2.1.Micro (x86, 1 GB) y reintentar.
+  EOT
+  type        = string
+  default     = "VM.Standard.A1.Flex"
+}
+
+variable "bot_ocpus" {
+  description = "OCPUs del bot (solo shapes .Flex)."
+  type        = number
+  default     = 1
+}
+
+variable "bot_memory_gb" {
+  description = "RAM del bot en GB (solo shapes .Flex)."
+  type        = number
+  default     = 6
+}
+
+variable "discord_bot_token" {
+  description = "Token del bot de Discord. Obligatorio con bot_enabled = true."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "bot_guild_id" {
+  description = "ID del servidor de Discord donde se registran los comandos /pz."
+  type        = string
+  default     = ""
+}
+
+variable "bot_admin_user_ids" {
+  description = "IDs de usuario de Discord (coma) que pueden usar /pz stop. Vacio = cualquiera."
+  type        = string
+  default     = ""
+}
+
+variable "bot_allowed_role_ids" {
+  description = "IDs de rol (coma) que pueden usar los comandos /pz. Vacio = todos."
+  type        = string
+  default     = ""
+}

@@ -42,3 +42,25 @@ output "use_deploy_key" {
   description = "true si repo_url es SSH y hace falta cargar la deploy key en GitHub."
   value       = module.zomboid.use_deploy_key
 }
+
+# --- Bot de Discord ---------------------------------------------------------------------------
+
+output "bot_enabled" {
+  description = "true si existe la instancia del bot de Discord."
+  value       = module.zomboid.bot_enabled
+}
+
+output "bot_public_ip" {
+  description = "IP publica efimera del bot (cambia en cada recreacion; nadie la necesita salvo para SSH)."
+  value       = module.zomboid.bot_public_ip
+}
+
+output "bot_ssh_command" {
+  description = "Comando para entrar a la instancia del bot."
+  value       = module.zomboid.bot_ssh_command
+}
+
+output "bot_instance_ocid" {
+  description = "OCID de la instancia del bot."
+  value       = module.zomboid.bot_instance_ocid
+}

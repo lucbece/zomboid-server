@@ -1,0 +1,132 @@
+#cloud-config
+# ---------------------------------------------------------------------------------------------
+# Provisioning de la instancia del BOT de Discord (ver docs/on-demand.md).
+#
+# Es la maquina chica que queda siempre encendida para poder prender la del juego. No corre
+# Docker, no toca el mundo y no tiene ninguna credencial de OCI en disco: habla con la API por
+# instance principal, con una policy acotada a prender y apagar una sola instancia.
+#
+# Igual que infra/cloud-init.yaml, este archivo es un TEMPLATE de OpenTofu: lo renderiza
+# `templatefile()` desde infra/terraform/modules/oci/bot.tf. Las variables con la forma
+# dolar-llave las reemplaza Tofu; para dejar una llave literal para el shell hay que duplicar
+# el dolar.
+#
+# Lo que deja listo:
+#   - usuario ${vm_user} con sudo sin password y la ssh key del admin
+#   - clon HTTPS de ${repo_url} en ${repo_dir} (el repo es publico: sin deploy key)
+#   - venv en ${venv_dir} con discord.py y el SDK de oci
+#   - /etc/pz-bot/env (0600) con el token de Discord y el OCID de la instancia del juego
+#   - pz-bot.service habilitado, Restart=always
+#
+# Validar cambios antes de un apply:
+#   scripts/render-cloud-init.sh bot /tmp/ci-bot.yaml
+#   docker run --rm -v /tmp:/mnt ubuntu:24.04 bash -c \
+#     'apt-get update -qq && apt-get install -y -qq cloud-init >/dev/null &&
+#      cloud-init schema --config-file /mnt/ci-bot.yaml'
+# ---------------------------------------------------------------------------------------------
+
+hostname: zomboid-bot
+timezone: ${timezone}
+
+package_update: true
+package_upgrade: true
+
+users:
+  # 'default' mantiene el usuario ubuntu con la key que OCI inyecta por metadata.
+  - default
+  - name: ${vm_user}
+    gecos: Bot de Discord de Project Zomboid
+    shell: /bin/bash
+    groups: [sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - python3-venv
+  - python3-pip
+  - unattended-upgrades
+  - ufw
+
+write_files:
+  # --- .env del bot -----------------------------------------------------------------------
+  # Vive fuera del repo a proposito: asi `make sync` no lo pisa y no ensucia `git status`.
+  # DISCORD_BOT_TOKEN es una credencial: el archivo es 0600 y systemd lo lee como root.
+  - path: /etc/pz-bot/env
+    owner: root:root
+    permissions: "0600"
+    content: |
+      # Generado por cloud-init desde terraform.tfvars. No editar a mano: se pisa cuando se
+      # recrea la instancia del bot.
+      DISCORD_BOT_TOKEN=${discord_bot_token}
+      PZ_BOT_GUILD_ID=${bot_guild_id}
+
+      # La instancia que el bot prende y apaga: la del JUEGO, no la suya.
+      PZ_INSTANCE_OCID=${game_instance_ocid}
+      PZ_GAME_IP=${game_ip}
+      PZ_GAME_PORT=${game_port}
+
+      # Vacio = cualquier miembro del server de Discord. Ver docs/on-demand.md.
+      PZ_BOT_ADMIN_USER_IDS=${bot_admin_user_ids}
+      PZ_BOT_ALLOWED_ROLE_IDS=${bot_allowed_role_ids}
+
+      # Instance principal: sin claves de API en el disco.
+      PZ_BOT_OCI_AUTH=instance_principal
+      PZ_BOT_OCI_REGION=${region}
+
+  # Actualizaciones de seguridad automaticas. A diferencia de la VM del juego, aca el reboot
+  # automatico no molesta a nadie: systemd levanta el bot solo.
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root:root
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+
+runcmd:
+  # --- Firewall preinstalado de Oracle -----------------------------------------------------
+  # Mismo problema que en la VM del juego: la imagen trae reglas de iptables que van por
+  # delante de ufw. Se apagan y ufw pasa a ser el unico firewall del host (el NSG filtra afuera).
+  - systemctl disable --now netfilter-persistent || true
+  - mkdir -p /root/oracle-iptables-backup && cp /etc/iptables/rules.v4 /etc/iptables/rules.v6 /root/oracle-iptables-backup/ || true
+  - rm -f /etc/iptables/rules.v4 /etc/iptables/rules.v6
+  - iptables -P INPUT ACCEPT && iptables -F INPUT
+  - ip6tables -P INPUT ACCEPT && ip6tables -F INPUT
+
+  # --- Firewall del host -------------------------------------------------------------------
+  # El bot no escucha nada: solo abre conexiones salientes a Discord y a la API de OCI. Lo
+  # unico que entra es el SSH del admin.
+  - ufw --force reset
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow from ${admin_cidr} to any port 22 proto tcp comment 'SSH admin'
+  - ufw --force enable
+
+  # --- Repo (publico, clon anonimo por HTTPS) ----------------------------------------------
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} ${repo_dir}
+  - su - ${vm_user} -c 'git clone --branch ${repo_branch} ${repo_url} ${repo_dir}'
+
+  # --- venv del bot ------------------------------------------------------------------------
+  # Fuera del repo: `make sync` no lo toca y `git status` no lo ve.
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} ${venv_dir}
+  - su - ${vm_user} -c 'python3 -m venv ${venv_dir}'
+  - su - ${vm_user} -c '${venv_dir}/bin/pip install --upgrade pip'
+  # El `||` cubre el caso de un clon sin el requirements.txt (una rama vieja, o el repo
+  # todavia sin el bot): la instancia arranca igual y despues `make bot-install` la pone al dia.
+  - su - ${vm_user} -c '${venv_dir}/bin/pip install -r ${repo_dir}/tools/pz-bot/requirements.txt || ${venv_dir}/bin/pip install "discord.py>=2.4,<3" "oci>=2.130,<3"'
+
+  # --- systemd -----------------------------------------------------------------------------
+  # Se instala la unit solo si el clon la trae. Si no (rama vieja), la instancia queda lista y
+  # `make bot-install` copia el bot y lo arranca, sin que cloud-init termine en estado 'error'.
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/tmp/pz-bot
+  - test -f ${repo_dir}/infra/systemd/pz-bot.service && install -m 0644 ${repo_dir}/infra/systemd/pz-bot.service /etc/systemd/system/pz-bot.service || true
+  - systemctl daemon-reload
+  - test -f /etc/systemd/system/pz-bot.service && systemctl enable --now pz-bot.service || true
+
+final_message: "pz-bot: cloud-init termino en $UPTIME s. Seguir el bot con: journalctl -u pz-bot -f"

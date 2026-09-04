@@ -36,4 +36,15 @@ module "zomboid" {
   public_name     = var.public_name
   max_players     = var.max_players
   max_memory      = var.max_memory
+
+  # Bot de Discord (encendido on-demand). Con bot_enabled = false no se crea ninguno de sus
+  # recursos y el modulo queda igual que antes.
+  bot_enabled          = var.bot_enabled
+  bot_shape            = var.bot_shape
+  bot_ocpus            = var.bot_ocpus
+  bot_memory_gb        = var.bot_memory_gb
+  discord_bot_token    = var.discord_bot_token
+  bot_guild_id         = var.bot_guild_id
+  bot_admin_user_ids   = var.bot_admin_user_ids
+  bot_allowed_role_ids = var.bot_allowed_role_ids
 }

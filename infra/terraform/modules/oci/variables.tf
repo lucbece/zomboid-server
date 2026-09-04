@@ -324,3 +324,104 @@ variable "enable_budget" {
   type        = bool
   default     = true
 }
+
+# ---------------------------------------------------------------------------------------------
+# Bot de Discord (encendido on-demand). Ver docs/on-demand.md y bot.tf.
+# ---------------------------------------------------------------------------------------------
+
+variable "bot_enabled" {
+  description = <<-EOT
+    Crear la instancia del bot de Discord, su NSG, su dynamic group y su policy. Con false no
+    se crea ninguno de esos recursos y el modulo se comporta como antes de la Fase 3.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "bot_shape" {
+  description = <<-EOT
+    Shape de la instancia del bot. Las dos opciones Always Free:
+      - VM.Standard.A1.Flex     ARM Ampere, hasta 4 OCPU / 24 GB gratis. La preferida.
+      - VM.Standard.E2.1.Micro  x86, 1 OCPU / 1 GB fijo. El plan B cuando A1 no tiene capacidad
+        ("Out of host capacity" es la respuesta habitual en Sao Paulo).
+    Un shape .Flex lleva bot_ocpus/bot_memory_gb; uno fijo los ignora.
+  EOT
+  type        = string
+  default     = "VM.Standard.A1.Flex"
+}
+
+variable "bot_ocpus" {
+  description = "OCPUs del bot, solo para shapes .Flex. Con 1 sobra: el bot duerme casi todo el dia."
+  type        = number
+  default     = 1
+}
+
+variable "bot_memory_gb" {
+  description = "RAM del bot en GB, solo para shapes .Flex. A1.Flex pide como minimo 6 GB por OCPU."
+  type        = number
+  default     = 6
+}
+
+variable "bot_boot_volume_size_gb" {
+  description = "Boot volume del bot. 50 GB es el minimo que acepta OCI."
+  type        = number
+  default     = 50
+
+  validation {
+    condition     = var.bot_boot_volume_size_gb >= 50
+    error_message = "El boot volume tiene que ser de al menos 50 GB (es el minimo de OCI)."
+  }
+}
+
+variable "bot_repo_url" {
+  description = <<-EOT
+    URL del repo a clonar en la instancia del bot. Siempre HTTPS: el repo es publico, el clon
+    es anonimo y asi no hay ninguna clave privada en la maquina del bot (que es la unica que
+    queda encendida todo el tiempo).
+  EOT
+  type        = string
+  default     = "https://github.com/lucbece/zomboid-server.git"
+
+  validation {
+    condition     = startswith(trimspace(var.bot_repo_url), "https://")
+    error_message = "bot_repo_url tiene que ser una URL https:// (el bot clona sin credenciales)."
+  }
+}
+
+variable "discord_bot_token" {
+  description = <<-EOT
+    Token del bot de Discord (Developer Portal -> Bot -> Reset Token). Va al .env de la
+    instancia del bot, con mode 0600. Queda en el .tfstate local, que esta gitignoreado:
+    tratarlo como cualquier otra password del proyecto.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "bot_guild_id" {
+  description = <<-EOT
+    ID del servidor de Discord donde se registran los slash commands. Con el ID los comandos
+    aparecen al instante; sin el se registran globales y Discord tarda hasta una hora.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "bot_admin_user_ids" {
+  description = <<-EOT
+    IDs de usuario de Discord separados por coma que pueden usar /pz stop. Vacio = cualquiera
+    puede apagarlo, pero solo con 0 jugadores conectados (eso lo chequea el bot siempre).
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "bot_allowed_role_ids" {
+  description = <<-EOT
+    IDs de rol separados por coma que pueden usar los comandos /pz. Vacio = cualquier miembro
+    del servidor de Discord.
+  EOT
+  type        = string
+  default     = ""
+}

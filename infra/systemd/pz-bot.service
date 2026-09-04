@@ -1,0 +1,40 @@
+# Bot de Discord que prende y apaga el server a pedido (ver docs/on-demand.md). Corre en la
+# instancia del BOT, no en la del juego: es la unica maquina que queda siempre encendida.
+#
+# La instala infra/cloud-init-bot.yaml en el primer boot y `make bot-install` en una que ya
+# existe. El venv con discord.py y el SDK de oci vive fuera del repo (/opt/pz-bot-venv) para
+# que un `make sync` no lo toque.
+[Unit]
+Description=Bot de Discord del servidor de Project Zomboid (prende y apaga la VM)
+Documentation=https://github.com/lucbece/zomboid-server
+After=network-online.target
+Wants=network-online.target
+
+ConditionPathExists=/opt/zomboid-server/tools/pz-bot/bot.py
+
+[Service]
+Type=simple
+User=pz
+Group=pz
+WorkingDirectory=/opt/zomboid-server/tools/pz-bot
+# El .env del bot: token de Discord, OCID de la instancia del juego e IP. Lo escribe cloud-init
+# desde terraform.tfvars, con mode 0600. Vive fuera del repo para que no lo pise `make sync`
+# ni aparezca en `git status`.
+EnvironmentFile=/etc/pz-bot/env
+Environment=PZ_BOT_STATE=/var/tmp/pz-bot/estado.json
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/pz-bot-venv/bin/python /opt/zomboid-server/tools/pz-bot/bot.py
+Restart=always
+RestartSec=15
+
+# El bot no necesita nada del sistema salvo salida a internet y su propio estado en /var/tmp.
+NoNewPrivileges=yes
+# Sin PrivateTmp: privatiza /tmp Y /var/tmp, donde vive el estado que sobrevive un restart.
+ProtectSystem=full
+ProtectHome=no
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target
