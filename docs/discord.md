@@ -52,7 +52,8 @@ webhook. It runs as `pz`, is restarted by systemd if it dies, and keeps its stat
 |---|---|
 | `docker compose logs -f zomboid` | `*** SERVER STARTED ****` and the `version=42.x` line |
 | `docker events` | The container stopped (`die`, `stop`, `kill`) |
-| `data/zomboid/Logs/*_user.txt` | Players joining and leaving |
+| `data/zomboid/Logs/*_user.txt` | Players joining, leaving and dying |
+| `data/zomboid/Logs/*_PerkLog.txt` | How many hours the dead player had survived |
 | `scripts/rcon.sh players` | How many are connected, and a reconciliation every 60 s |
 
 ### Creating the webhook, in four steps
@@ -92,6 +93,7 @@ neither the notifier nor the watchdog ever prints it.
 | **&lt;name&gt; entró · N en línea** | blue | A player finished connecting |
 | **&lt;name&gt; salió · N en línea** | blue | A player's connection ended |
 | **Movimiento de jugadores · N en línea** | blue | Two or more of the above within the same 30-second window |
+| **&lt;name&gt; murió · sobrevivió N horas** | red | A player died |
 
 The server name is always in the title of the status messages, so a channel that carries more
 than one server stays readable; on player messages it is the footer.
@@ -105,6 +107,29 @@ and was removed; nobody acts on the number, and an embed cannot fold away a list
 Messages are in Spanish, matching the rest of the player-facing output. Player names are escaped
 before they go into an embed and `allowed_mentions` is empty, so a player called `@everyone`
 cannot ping the channel.
+
+### How deaths are detected
+
+A death is written to two files, about a tenth of a second apart. `_user.txt` says who died and
+whether another player did it; `_PerkLog.txt` says how long they had survived:
+
+```
+[04-09-26 04:09:38.457] user Fulano died at (10627,10284,0) (non pvp).
+[04-09-26 04:09:38.524] [76561198000000000][Fulano][10627,10284,0][Died][Hours Survived: 10].
+```
+
+The notifier holds the death for up to `NOTIFIER_DEATH_WAIT` seconds waiting for the other half,
+then posts once — whichever line arrived first, and whether or not the second one ever does. A
+death that never gets its `Hours Survived` is titled `<name> murió` and nothing else. Coordinates
+are never posted.
+
+Only `(non pvp)` has been observed on this server, which runs with PVP off; anything other than
+`non pvp` in that last parenthesis is treated as a player kill and adds the line "A manos de otro
+jugador." The exact PVP wording is therefore assumed, not verified.
+
+Dying is followed a few seconds later by the respawn pair described above — `disconnected player`
+then a fresh `fully connected`. Neither is a join or a leave, and the death does not touch the
+connected list, so a death produces exactly one message.
 
 ### Including the password
 
@@ -136,6 +161,7 @@ Everything is read from the environment, which on the VM is the `.env` loaded by
 | `NOTIFIER_GROUP_SECONDS` | `30` | Grouping window for player events |
 | `NOTIFIER_POST_INTERVAL` | `2` | Minimum seconds between two POSTs |
 | `NOTIFIER_RCON_INTERVAL` | `60` | How often the player list is reconciled against RCON |
+| `NOTIFIER_DEATH_WAIT` | `5` | How long a death waits for its `Hours Survived` line |
 | `NOTIFIER_DRY_RUN` | `0` | `1` logs the messages instead of posting them |
 
 The rate limit is self-imposed: at most one POST every two seconds, one message at a time. A
@@ -199,6 +225,7 @@ State lives in `/var/tmp/zomboid-notifier/estado.json`:
 | Key | Contents |
 |---|---|
 | `user_log` | Path, inode and byte offset of the user file being followed |
+| `perk_log` | The same, for the perk file |
 | `ultimo_arranque` | The container's `StartedAt` for the boot already announced |
 
 Deleting that file makes the next start announce the current state again. It never re-reads the
@@ -210,6 +237,6 @@ The notifier resolves the repository from `NOTIFIER_REPO`, its state from `NOTIF
 game logs from `NOTIFIER_LOGS_DIR` and RCON from `NOTIFIER_RCON`, and it looks `docker` up
 through `PATH`. That is enough to run the whole daemon against stubs on a workstation: a `docker`
 stub that tails control files for `compose logs -f` and `events`, a synthetic `user.txt` that
-grows, an `rcon.sh` stub, and a local HTTP server standing in for the webhook that records every
+grows next to a synthetic `PerkLog.txt`, an `rcon.sh` stub, and a local HTTP server standing in for the webhook that records every
 payload — and, on demand, answers one `429` with a `retry_after` so the retry path is exercised.
 `NOTIFIER_DRY_RUN=1` is the cheaper version: it logs what it would post and posts nothing.

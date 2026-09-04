@@ -74,11 +74,19 @@ jobs:
               # Muerte y respawn: la linea existe pero NO es una salida.
               ('[04-09-26 03:15:59.025] 76561198000000000 "Fulano" disconnected player (7919,11484,0).', None),
               ('[04-09-26 03:24:40.059] Connection add index=0 guid=923238236217336958 id=null.', None),
-              ('[04-09-26 01:36:03.553] user Bob died at (12056,6686,0) (non pvp).', None),
+              ('[04-09-26 04:09:38.457] user Fulano died at (10627,10284,0) (non pvp).',
+               ("murio", ("Fulano", False))),
+              ('[04-09-26 04:09:38.457] user Fulano died at (10627,10284,0) (pvp).',
+               ("murio", ("Fulano", True))),
           ]
           for linea, esperado in casos:
               obtenido = s.interpretar(linea)
               assert obtenido == esperado, f"{linea!r}: {obtenido!r} != {esperado!r}"
+
+          perk = '[04-09-26 03:15:41.777] [76561198000000000][Fulano][7919,11484,0][Died][Hours Survived: 3].'
+          assert s.interpretar_perk(perk) == ("murio-horas", ("Fulano", 3)), s.interpretar_perk(perk)
+          login = '[04-09-26 03:27:32.199] [76561198000000000][Fulano][10776,9764,0][Login][Hours Survived: 0].'
+          assert s.interpretar_perk(login) is None
 
           assert n.RE_ARRANQUE.search("LOG : Network f:0 st:22,940,489> *** SERVER STARTED ****")
           assert n.RE_VERSION.search("st:22,911,512> version=42.20.4 b0bbce05d5 demo=false").group(1) == "42.20.4"

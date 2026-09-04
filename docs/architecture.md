@@ -93,7 +93,8 @@ zomboid-watchdog.timer, every 2 min ──> scripts/watchdog.sh
 zomboid-notifier.service, always on ──> tools/discord-notifier/notifier.py
                                           ├─ docker compose logs -f   SERVER STARTED, version
                                           ├─ docker events            the container stopped
-                                          ├─ data/zomboid/Logs/*_user.txt  joins and leaves
+                                          ├─ data/zomboid/Logs/*_user.txt  joins, leaves, deaths
+                                          ├─ data/zomboid/Logs/*_PerkLog.txt  hours survived
                                           ├─ scripts/rcon.sh players  how many are connected
                                           └─ post ────────────────────> Discord webhook
 ```

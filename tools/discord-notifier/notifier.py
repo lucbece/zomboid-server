@@ -15,12 +15,14 @@ Que publica:
                                   contenedor. Trae estado, IP, puerto, password y version.
     <PUBLIC_NAME> - Fuera de linea  cuando Docker emite un evento die/stop/kill del contenedor.
     Jugadores                     entradas y salidas, agrupadas en una ventana de 30 segundos.
+    Muertes                       quien murio y cuantas horas sobrevivio.
 
 De donde sale cada cosa:
 
     docker compose logs -f  -> '*** SERVER STARTED ****' y 'version=42.x' (se reconecta solo)
     docker events           -> el contenedor se detuvo
-    data/zomboid/Logs/*_user.txt -> entradas y salidas de jugadores
+    data/zomboid/Logs/*_user.txt -> entradas, salidas y muertes de jugadores
+    data/zomboid/Logs/*_PerkLog.txt -> horas sobrevividas del que murio
     scripts/rcon.sh players -> cuantos hay conectados, y como red de seguridad cada 60 s
 
 El archivo de usuarios cambia de nombre en cada arranque del server ('YYYY-MM-DD_HH-MM_user.txt')
@@ -85,6 +87,7 @@ DRY_RUN = os.environ.get("NOTIFIER_DRY_RUN", "0").strip() not in ("0", "", "no",
 VENTANA = float(os.environ.get("NOTIFIER_GROUP_SECONDS", "30"))  # agrupacion de jugadores
 INTERVALO_POST = float(os.environ.get("NOTIFIER_POST_INTERVAL", "2"))  # rate limit propio
 INTERVALO_RCON = float(os.environ.get("NOTIFIER_RCON_INTERVAL", "60"))  # red de seguridad
+ESPERA_MUERTE = float(os.environ.get("NOTIFIER_DEATH_WAIT", "5"))  # espera de las horas del PerkLog
 ESPERA_RECONEXION = float(os.environ.get("NOTIFIER_RECONNECT_SECONDS", "5"))
 TIMEOUT_RCON = float(os.environ.get("NOTIFIER_RCON_TIMEOUT", "15"))
 TIMEOUT_HTTP = float(os.environ.get("NOTIFIER_HTTP_TIMEOUT", "15"))
@@ -94,6 +97,7 @@ REINTENTOS = int(os.environ.get("NOTIFIER_MAX_RETRIES", "5"))
 VERDE = 3066993
 GRIS = 9807270
 AZUL = 3447003
+ROJO = 15158332
 
 # --- Patrones ---------------------------------------------------------------------------------
 
@@ -103,6 +107,14 @@ RE_VERSION = re.compile(r"\bversion=([0-9][0-9A-Za-z.]*)")
 RE_ENTRA = re.compile(r'^\[[^\]]*\]\s+(\d{5,25})\s+"(.*)"\s+fully connected\b')
 RE_NOMBRE = re.compile(r'^\[[^\]]*\]\s+(\d{5,25})\s+"(.*)"\s+(?:attempting to join|allowed to join)\b')
 RE_SALE = re.compile(r"^\[[^\]]*\]\s+Connection disconnect\b.*\bid=(\d{5,25})\b")
+# '[...] user Fulano died at (10627,10284,0) (non pvp).' El ultimo parentesis es el unico
+# indicio de si lo mato otro jugador. Solo se vio 'non pvp' en este server (PVP apagado):
+# cualquier otro valor se toma como PVP.
+RE_MUERTE = re.compile(r"^\[[^\]]*\]\s+user\s+(.+?)\s+died at\s+\([-\d, ]+\)\s+\((.*?)\)")
+# '[...] [<steamid>][Fulano][7919,11484,0][Died][Hours Survived: 3].' Llega en el PerkLog
+# menos de un segundo despues de la linea de user.txt, y es de donde salen las horas.
+RE_PERK_MUERTE = re.compile(
+    r"^\[[^\]]*\]\s+\[(\d{5,25})\]\[(.+?)\]\[[-\d, ]+\]\[Died\]\[Hours Survived:\s*(\d+)\]")
 RE_RCON_N = re.compile(r"Players connected\s*\((\d+)\)")
 
 # Caracteres de markdown que hay que neutralizar en un nombre elegido por el jugador.
@@ -433,6 +445,14 @@ def mensaje_apagado() -> dict:
                  campos=[{"name": "Estado", "value": "Fuera de línea", "inline": True}])
 
 
+def mensaje_muerte(nombre: str, horas: int | None, pvp: bool) -> dict:
+    titulo = f"{escapar(nombre)} murió"
+    if horas is not None:
+        titulo += f" · sobrevivió {horas} hora" + ("" if horas == 1 else "s")
+    descripcion = "A manos de otro jugador." if pvp else ""
+    return embed(titulo, ROJO, descripcion=descripcion, pie=PUBLIC_NAME)
+
+
 def mensaje_jugadores(entradas: list[str], salidas: list[str], conectados: int) -> dict:
     cuenta = f"{conectados} en línea"
     if len(entradas) + len(salidas) == 1:
@@ -541,10 +561,12 @@ class SeguidorDeEventos(Fuente):
 
 
 class SeguidorDeUsuarios(Fuente):
-    """Sigue el *_user.txt mas nuevo de Logs/ y publica entradas y salidas.
+    """Sigue los dos logs del juego que importan: *_user.txt y *_PerkLog.txt.
 
-    El server abre un archivo nuevo en cada arranque y archiva el viejo en logs_YYYY-MM-DD/,
-    asi que hay que re-elegir el archivo cada vuelta y no quedarse pegado a un descriptor.
+    Del primero salen las entradas, las salidas y las muertes; del segundo, las horas que
+    sobrevivio el que murio. Los dos rotan igual: el server abre un archivo nuevo en cada
+    arranque y archiva el viejo en logs_YYYY-MM-DD/, asi que hay que re-elegirlos cada vuelta
+    y no quedarse pegado a un descriptor.
     """
 
     def __init__(self, cola: queue.Queue, parar: threading.Event, estado: Estado) -> None:
@@ -554,11 +576,15 @@ class SeguidorDeUsuarios(Fuente):
         self.inode: int | None = None
         self.offset = 0
         self.nombres: dict[str, str] = {}  # steamid -> nombre
+        self.perk: Path | None = None
+        self.perk_inode: int | None = None
+        self.perk_offset = 0
+        self.perk_primera = True
 
     # --- eleccion del archivo -----------------------------------------------------------
-    def mas_nuevo(self) -> Path | None:
+    def mas_nuevo(self, patron: str = "*_user.txt") -> Path | None:
         try:
-            candidatos = [p for p in LOGS_DIR.glob("*_user.txt") if p.is_file()]
+            candidatos = [p for p in LOGS_DIR.glob(patron) if p.is_file()]
         except OSError:
             return None
         if not candidatos:
@@ -598,7 +624,8 @@ class SeguidorDeUsuarios(Fuente):
         })
 
     # --- lectura ------------------------------------------------------------------------
-    def _leer(self, archivo: Path, desde: int, hasta: int) -> list[tuple[str, tuple[str, str]]]:
+    def _leer(self, archivo: Path, desde: int, hasta: int, interpretar=None) -> list[tuple]:
+        interpretar = interpretar or self.interpretar
         if hasta <= desde:
             return []
         try:
@@ -610,7 +637,7 @@ class SeguidorDeUsuarios(Fuente):
             return []
         eventos = []
         for linea in crudo.decode("utf-8", "replace").splitlines():
-            ev = self.interpretar(linea)
+            ev = interpretar(linea)
             if ev:
                 eventos.append(ev)
         return eventos
@@ -629,7 +656,58 @@ class SeguidorDeUsuarios(Fuente):
         if m:
             sid = m.group(1)
             return ("sale", (sid, self.nombres.get(sid, sid)))
+        m = RE_MUERTE.match(linea)
+        if m:
+            return ("murio", (m.group(1), m.group(2).strip().lower() != "non pvp"))
         return None
+
+    @staticmethod
+    def interpretar_perk(linea: str) -> tuple[str, tuple[str, int]] | None:
+        """Del PerkLog solo interesa la linea [Died]: trae las horas que sobrevivio."""
+        m = RE_PERK_MUERTE.match(linea)
+        if m:
+            return ("murio-horas", (m.group(2), int(m.group(3))))
+        return None
+
+    # --- PerkLog ------------------------------------------------------------------------
+    def paso_perk(self) -> None:
+        """Lee lo nuevo del PerkLog. Nunca relee el pasado: una muerte vieja no es noticia."""
+        archivo = self.mas_nuevo("*_PerkLog.txt")
+        if archivo is None:
+            return
+        try:
+            st = archivo.stat()
+        except OSError:
+            return
+
+        if self.perk is None or st.st_ino != self.perk_inode:
+            guardado = self.estado.get("perk_log") or {}
+            retomar = (
+                self.perk_primera
+                and guardado.get("path") == str(archivo)
+                and guardado.get("inode") == st.st_ino
+                and 0 <= int(guardado.get("offset", 0)) <= st.st_size
+            )
+            self.perk = archivo
+            self.perk_inode = st.st_ino
+            self.perk_offset = int(guardado["offset"]) if retomar else st.st_size
+            self.perk_primera = False
+            self._guardar_perk()
+            log(f"PerkLog: {archivo.name} (desde el byte {self.perk_offset})")
+            return
+
+        if st.st_size < self.perk_offset:
+            self.perk_offset = 0
+        if st.st_size > self.perk_offset:
+            for ev in self._leer(archivo, self.perk_offset, st.st_size, self.interpretar_perk):
+                self.cola.put(ev)
+            self.perk_offset = st.st_size
+            self._guardar_perk()
+
+    def _guardar_perk(self) -> None:
+        self.estado.set("perk_log", {
+            "path": str(self.perk), "inode": self.perk_inode, "offset": self.perk_offset,
+        })
 
     def run(self) -> None:
         primera_vez = True
@@ -664,6 +742,7 @@ class SeguidorDeUsuarios(Fuente):
                     self.cola.put(ev)
                 self.offset = st.st_size
                 self._guardar()
+            self.paso_perk()
             self.parar.wait(2)
 
 
@@ -693,6 +772,10 @@ class Notificador:
         self.entradas: list[str] = []
         self.salidas: list[str] = []
         self.limite: float | None = None  # cuando vence la ventana de agrupacion
+        # nombre -> {"pvp": bool|None, "horas": int|None, "limite": float}. Una muerte llega
+        # partida en dos lineas de dos archivos distintos; se publica cuando estan las dos, o
+        # cuando se acaba ESPERA_MUERTE, lo que pase primero.
+        self.muertes: dict[str, dict] = {}
         self.activo = False
         self.diferencia_previa: tuple[frozenset, frozenset] | None = None
         self.conectados = 0
@@ -716,6 +799,37 @@ class Notificador:
             self.salidas.append(nombre)
             self._agendar()
 
+    # --- muertes ------------------------------------------------------------------------
+    def murio(self, nombre: str, pvp: bool) -> None:
+        """La linea de user.txt: dice quien y si fue PVP, pero no cuantas horas sobrevivio."""
+        m = self.muertes.get(nombre)
+        if m is not None and m["pvp"] is not None:
+            return  # ya se conto esta muerte
+        if m is None:
+            m = self.muertes[nombre] = {"pvp": None, "horas": None,
+                                        "limite": time.monotonic() + ESPERA_MUERTE}
+        m["pvp"] = pvp
+        if m["horas"] is not None:
+            self._publicar_muerte(nombre)
+
+    def murio_horas(self, nombre: str, horas: int) -> None:
+        """La linea del PerkLog: trae las horas. Puede llegar antes o despues que la otra."""
+        m = self.muertes.get(nombre)
+        if m is not None and m["horas"] is not None:
+            return
+        if m is None:
+            m = self.muertes[nombre] = {"pvp": None, "horas": None,
+                                        "limite": time.monotonic() + ESPERA_MUERTE}
+        m["horas"] = horas
+        if m["pvp"] is not None:
+            self._publicar_muerte(nombre)
+
+    def _publicar_muerte(self, nombre: str) -> None:
+        m = self.muertes.pop(nombre, None)
+        if m is None:
+            return
+        self.pub.enviar(mensaje_muerte(nombre, m["horas"], bool(m["pvp"])))
+
     def _agendar(self) -> None:
         if self.limite is None:
             self.limite = time.monotonic() + VENTANA
@@ -724,6 +838,21 @@ class Notificador:
         self.entradas.clear()
         self.salidas.clear()
         self.limite = None
+        self.muertes.clear()
+
+    def proximo_vencimiento(self) -> float | None:
+        """El limite mas cercano entre la ventana de jugadores y las muertes pendientes."""
+        limites = [m["limite"] for m in self.muertes.values()]
+        if self.limite is not None:
+            limites.append(self.limite)
+        return min(limites) if limites else None
+
+    def vencidos(self) -> None:
+        ahora = time.monotonic()
+        for nombre in [n for n, m in self.muertes.items() if m["limite"] <= ahora]:
+            self._publicar_muerte(nombre)
+        if self.limite is not None and ahora >= self.limite:
+            self.vaciar()
 
     def vaciar(self) -> None:
         if not self.entradas and not self.salidas:
@@ -849,8 +978,9 @@ def arrancar(una_vez: bool) -> int:
     silencioso = False
     while not parar.is_set():
         espera = 1.0
-        if n.limite is not None:
-            espera = max(0.05, min(espera, n.limite - time.monotonic()))
+        vence = n.proximo_vencimiento()
+        if vence is not None:
+            espera = max(0.05, min(espera, vence - time.monotonic()))
         try:
             tipo, dato = cola.get(timeout=espera)
         except queue.Empty:
@@ -871,17 +1001,22 @@ def arrancar(una_vez: bool) -> int:
         elif tipo == "usuarios-listo":
             silencioso = False
         elif tipo == "silencioso":
-            clase, (sid, nombre) = dato
-            (n.entra if clase == "entra" else n.sale)(sid, nombre, silencioso=True)
+            # Solo entradas y salidas: una muerte vieja no se reconstruye ni se anuncia.
+            clase, valores = dato
+            if clase in ("entra", "sale"):
+                (n.entra if clase == "entra" else n.sale)(*valores, silencioso=True)
         elif tipo == "entra":
             n.entra(dato[0], dato[1], silencioso=silencioso)
         elif tipo == "sale":
             n.sale(dato[0], dato[1], silencioso=silencioso)
+        elif tipo == "murio":
+            n.murio(dato[0], dato[1])
+        elif tipo == "murio-horas":
+            n.murio_horas(dato[0], dato[1])
         elif tipo == "rcon":
             n.reconciliar(dato[0], dato[1])
 
-        if n.limite is not None and time.monotonic() >= n.limite:
-            n.vaciar()
+        n.vencidos()
 
     parar.set()
     return 0
