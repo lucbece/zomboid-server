@@ -11,10 +11,10 @@ publica lo que pasa.
 
 Que publica:
 
-    Servidor activo   cuando aparece '*** SERVER STARTED ****' en el log del contenedor.
-                      Trae nombre, direccion, password, mods y version del juego.
-    Servidor apagado  cuando Docker emite un evento die/stop/kill del contenedor.
-    Jugadores         entradas y salidas, agrupadas en una ventana de 30 segundos.
+    <PUBLIC_NAME> - En linea       cuando aparece '*** SERVER STARTED ****' en el log del
+                                  contenedor. Trae estado, IP, puerto, password y version.
+    <PUBLIC_NAME> - Fuera de linea  cuando Docker emite un evento die/stop/kill del contenedor.
+    Jugadores                     entradas y salidas, agrupadas en una ventana de 30 segundos.
 
 De donde sale cada cosa:
 
@@ -70,7 +70,6 @@ AQUI = Path(__file__).resolve().parent
 REPO = Path(os.environ.get("NOTIFIER_REPO", AQUI.parent.parent)).resolve()
 STATE_DIR = Path(os.environ.get("NOTIFIER_STATE", "/var/tmp/zomboid-notifier"))
 LOGS_DIR = Path(os.environ.get("NOTIFIER_LOGS_DIR", REPO / "data" / "zomboid" / "Logs"))
-MODS_TXT = Path(os.environ.get("NOTIFIER_MODS_TXT", REPO / "config" / "mods.txt"))
 RCON = os.environ.get("NOTIFIER_RCON", str(REPO / "scripts" / "rcon.sh"))
 SERVICIO = os.environ.get("NOTIFIER_SERVICE", "zomboid")
 CONTENEDOR = os.environ.get("NOTIFIER_CONTAINER", "zomboid-server")
@@ -323,19 +322,6 @@ def ip_publica() -> str:
     return "?"
 
 
-def cantidad_de_mods() -> int:
-    """Lineas utiles de config/mods.txt: una por item del Workshop, sin comentarios ni vacias."""
-    try:
-        crudo = MODS_TXT.read_text("utf-8")
-    except OSError:
-        return 0
-    n = 0
-    for linea in crudo.splitlines():
-        if linea.split("#", 1)[0].strip():
-            n += 1
-    return n
-
-
 def debug_log_actual() -> Path | None:
     """El DebugLog-server.txt del arranque en curso (mismo contenido que el log del contenedor).
 
@@ -416,53 +402,51 @@ def rcon_players() -> tuple[int, set[str]] | None:
 # =============================================================================================
 
 
-def embed(titulo: str, descripcion: str, color: int, campos: list[dict] | None = None) -> dict:
-    e = {
-        "title": titulo[:256],
-        "description": descripcion[:3900],
-        "color": color,
-        "timestamp": ahora_iso(),
-    }
+def embed(titulo: str, color: int, descripcion: str = "",
+          campos: list[dict] | None = None, pie: str = "") -> dict:
+    e: dict = {"title": titulo[:256], "color": color, "timestamp": ahora_iso()}
+    if descripcion:
+        e["description"] = descripcion[:3900]
     if campos:
         e["fields"] = campos
+    if pie:
+        e["footer"] = {"text": pie[:2048]}
     # allowed_mentions vacio: un jugador que se llame '@everyone' no puede pingear al canal.
     return {"embeds": [e], "allowed_mentions": {"parse": []}}
 
 
-def mensaje_activo(version: str, snapshot: bool) -> dict:
+def mensaje_activo(version: str) -> dict:
+    """Todo lo que hace falta para entrar, en campos separados. El titulo dice de que server."""
     campos = [
-        {"name": "Direccion", "value": f"`{ip_publica()}:{GAME_PORT}`", "inline": True},
-        {"name": "Mods", "value": str(cantidad_de_mods()), "inline": True},
-        {"name": "Version", "value": version or "?", "inline": True},
+        {"name": "Estado", "value": "En línea", "inline": True},
+        {"name": "IP", "value": f"`{ip_publica()}`", "inline": True},
+        {"name": "Puerto", "value": f"`{GAME_PORT}`", "inline": True},
     ]
     if INCLUIR_PASSWORD and SERVER_PASSWORD:
-        campos.insert(1, {"name": "Contrasena", "value": f"`{SERVER_PASSWORD}`", "inline": True})
-
-    descripcion = f"**{PUBLIC_NAME}**"
-    if snapshot:
-        descripcion += "\nEstado actual: el servidor ya estaba en linea."
-    else:
-        descripcion += "\nYa se puede entrar."
-    return embed("Servidor activo", descripcion, VERDE, campos)
+        campos.append({"name": "Contraseña", "value": f"`{SERVER_PASSWORD}`", "inline": True})
+    campos.append({"name": "Versión", "value": version or "?", "inline": True})
+    return embed(f"{PUBLIC_NAME} · En línea", VERDE, campos=campos)
 
 
-def mensaje_apagado(motivo: str) -> dict:
-    return embed("Servidor apagado", f"**{PUBLIC_NAME}**\n{motivo}", GRIS)
+def mensaje_apagado() -> dict:
+    return embed(f"{PUBLIC_NAME} · Fuera de línea", GRIS,
+                 campos=[{"name": "Estado", "value": "Fuera de línea", "inline": True}])
 
 
 def mensaje_jugadores(entradas: list[str], salidas: list[str], conectados: int) -> dict:
-    cuenta = f"{conectados} conectado" + ("" if conectados == 1 else "s")
+    cuenta = f"{conectados} en línea"
     if len(entradas) + len(salidas) == 1:
         quien = escapar((entradas or salidas)[0])
-        verbo = "entró al server" if entradas else "salió del server"
-        return embed(f"{quien} {verbo} ({cuenta})", f"**{PUBLIC_NAME}**", AZUL)
+        verbo = "entró" if entradas else "salió"
+        return embed(f"{quien} {verbo} · {cuenta}", AZUL, pie=PUBLIC_NAME)
 
-    lineas = [f"**{PUBLIC_NAME}**"]
+    lineas = []
     if entradas:
         lineas.append("Entraron: " + ", ".join(escapar(n) for n in entradas))
     if salidas:
         lineas.append("Salieron: " + ", ".join(escapar(n) for n in salidas))
-    return embed(f"Movimiento de jugadores ({cuenta})", "\n".join(lineas), AZUL)
+    return embed(f"Movimiento de jugadores · {cuenta}", AZUL,
+                 descripcion="\n".join(lineas), pie=PUBLIC_NAME)
 
 
 # =============================================================================================
@@ -754,7 +738,7 @@ class Notificador:
         self.descartar_pendientes()
 
     # --- server -------------------------------------------------------------------------
-    def arranco(self, version: str, snapshot: bool = False) -> None:
+    def arranco(self, version: str, ya_estaba: bool = False) -> None:
         clave = contenedor_arrancado_en() or ahora_iso()
         if self.estado.get("ultimo_arranque") == clave:
             log("el arranque actual ya se aviso: no se repite")
@@ -763,11 +747,11 @@ class Notificador:
         self.estado.set("ultimo_arranque", clave)
         self.activo = True
         self.descartar_pendientes()
-        if not snapshot:
-            self.presentes.clear()  # arranque nuevo: no queda nadie del anterior
-        self.pub.enviar(mensaje_activo(version, snapshot))
+        if not ya_estaba:
+            self.presentes.clear()  # arranque nuevo: no queda nadie de la partida anterior
+        self.pub.enviar(mensaje_activo(version))
 
-    def apago(self, motivo: str) -> None:
+    def apago(self) -> None:
         if not self.activo:
             return
         self.activo = False
@@ -775,7 +759,7 @@ class Notificador:
         self.descartar_pendientes()
         self.presentes.clear()
         self.estado.set("ultimo_arranque", "")
-        self.pub.enviar(mensaje_apagado(motivo))
+        self.pub.enviar(mensaje_apagado())
 
     # --- reconciliacion con RCON --------------------------------------------------------
     def reconciliar(self, n: int, nombres: set[str]) -> None:
@@ -834,7 +818,7 @@ def arrancar(una_vez: bool) -> int:
         r = rcon_players()
         if r is not None:
             n.conectados = r[0]
-        n.arranco(version_del_juego(), snapshot=True)
+        n.arranco(version_del_juego(), ya_estaba=True)
     else:
         log("el server no esta arriba (o todavia no llego a SERVER STARTED)")
 
@@ -875,11 +859,11 @@ def arrancar(una_vez: bool) -> int:
         if tipo == "arranque":
             n.arranco(dato or "?")
         elif tipo == "evento":
-            n.apago("El contenedor se detuvo.")
+            n.apago()
         elif tipo == "stream-fin":
             # El stream se corto sin evento de Docker: se pregunta directamente.
             if contenedor_arrancado_en() is None:
-                n.apago("El contenedor se detuvo.")
+                n.apago()
         elif tipo == "usuarios-reset":
             n.presentes.clear()
             n.descartar_pendientes()

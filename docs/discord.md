@@ -74,8 +74,7 @@ webhook. It runs as `pz`, is restarted by systemd if it dies, and keeps its stat
    make notifier-status
    ```
 
-   With the game server already up, the first message arrives within a minute: the current state,
-   marked as such.
+   With the game server already up, the first message arrives within a minute.
 
 The same URL is used by the watchdog (see [`self-healing.md`](self-healing.md)). One webhook is
 enough for both.
@@ -86,16 +85,22 @@ neither the notifier nor the watchdog ever prints it.
 
 ### What it posts
 
-| Message | Colour | When |
+| Title | Colour | When |
 |---|---|---|
-| **Servidor activo** | green | `*** SERVER STARTED ****` appears in the container log. Once at daemon startup too, if the server was already up, marked as the current state |
-| **Servidor apagado** | grey | Docker reports the container died or was stopped |
-| **&lt;name&gt; entró al server** | blue | A player finished connecting |
-| **&lt;name&gt; salió del server** | blue | A player's connection ended |
-| **Movimiento de jugadores** | blue | Two or more of the above within the same 30-second window |
+| **&lt;PUBLIC_NAME&gt; · En línea** | green | `*** SERVER STARTED ****` appears in the container log, and once when the daemon starts against a server that is already up |
+| **&lt;PUBLIC_NAME&gt; · Fuera de línea** | grey | Docker reports the container died or was stopped |
+| **&lt;name&gt; entró · N en línea** | blue | A player finished connecting |
+| **&lt;name&gt; salió · N en línea** | blue | A player's connection ended |
+| **Movimiento de jugadores · N en línea** | blue | Two or more of the above within the same 30-second window |
 
-The "servidor activo" message carries what a player needs in order to join: the server name, the
-address and port, the server password, how many mods are loaded, and the game version.
+The server name is always in the title of the status messages, so a channel that carries more
+than one server stays readable; on player messages it is the footer.
+
+The status message is a fixed set of fields — **Estado**, **IP**, **Puerto**, **Contraseña**,
+**Versión** — and nothing else. It is what somebody needs in order to join, and every state
+message says the same five things, so there is no reading between the lines about whether it is
+retroactive: the state is whatever the last message says it is. The mod count used to be there
+and was removed; nobody acts on the number, and an embed cannot fold away a list of forty.
 
 Messages are in Spanish, matching the rest of the player-facing output. Player names are escaped
 before they go into an embed and `allowed_mentions` is empty, so a player called `@everyone`
@@ -103,15 +108,15 @@ cannot ping the channel.
 
 ### Including the password
 
-`NOTIFIER_INCLUDE_PASSWORD=1` (the default) puts `SERVER_PASSWORD` in the "servidor activo"
-message, so nobody has to ask for it.
+`NOTIFIER_INCLUDE_PASSWORD=1` (the default) puts `SERVER_PASSWORD` in the **Contraseña** field of
+the "En línea" message, so nobody has to ask for it.
 
 **This is only reasonable in a private channel.** The message is as durable as the channel: it
 stays in the history, it is visible to anyone invited later, it is carried by search, and it
 appears in link previews and mobile notifications. Anyone who can read the channel can join the
 server for as long as that password stands. If the channel is public, shared with a wider group,
 or you would rather not think about who scrolled back, set `NOTIFIER_INCLUDE_PASSWORD=0`; the
-message keeps the address, mod count and version.
+message keeps the state, address, port and version.
 
 Changing the password means changing `SERVER_PASSWORD` in the VM's `.env` and
 `make remote-restart`; old messages keep showing the old one.
@@ -123,9 +128,9 @@ Everything is read from the environment, which on the VM is the `.env` loaded by
 | Variable | Default | Meaning |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | — | Empty means the daemon runs and only writes to the journal |
-| `PUBLIC_NAME` | `Project Zomboid` | Shown as the title line of every message |
+| `PUBLIC_NAME` | `Project Zomboid` | Title of the status messages, footer of the player ones |
 | `PUBLIC_IP` | — | Empty means it is resolved once and cached: OCI instance metadata, then `ifconfig.me` |
-| `GAME_PORT` | `16261` | Shown next to the address |
+| `GAME_PORT` | `16261` | The **Puerto** field |
 | `SERVER_PASSWORD` | — | Shown when `NOTIFIER_INCLUDE_PASSWORD` is on |
 | `NOTIFIER_INCLUDE_PASSWORD` | `1` | `0` leaves the password out |
 | `NOTIFIER_GROUP_SECONDS` | `30` | Grouping window for player events |

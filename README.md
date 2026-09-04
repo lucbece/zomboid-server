@@ -293,9 +293,9 @@ make remote-diff         # what the auto-repair changed on the VM, still uncommi
 Two independent integrations, either of which can be left off. The game's own chat bridge mirrors
 global chat into a channel and needs a bot with the Message Content intent; it is off by default.
 The status notifier is a small systemd daemon on the VM that posts to a webhook when the server
-comes up, when it goes down, and when players join or leave — the "server is up" message carries
-the address, the port, the server password, the mod count and the game version, so nobody has to
-ask. It shares `DISCORD_WEBHOOK_URL` with the watchdog, groups events inside a 30-second window,
+comes up, when it goes down, and when players join or leave. The status message is titled with
+the server's name and carries five fields — state, IP, port, password and game version — so
+nobody has to ask how to get in. It shares `DISCORD_WEBHOOK_URL` with the watchdog, groups events inside a 30-second window,
 and stays quiet if no webhook is configured. Putting the password in a channel is a decision:
 `NOTIFIER_INCLUDE_PASSWORD=0` leaves it out. See [`docs/discord.md`](docs/discord.md) for both
 integrations, how to create the webhook, and how joins and leaves are read out of the game's logs.

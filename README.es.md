@@ -304,8 +304,8 @@ Dos integraciones independientes, y cualquiera de las dos se puede dejar apagada
 chat del propio juego espeja el chat global en un canal y necesita un bot con el intent de
 Message Content; viene apagado. Los avisos de estado son un daemon chico de systemd en la VM que
 publica en un webhook cuando el server queda activo, cuando se apaga y cuando entra o sale
-alguien —el mensaje de "servidor activo" trae la dirección, el puerto, la password del server, la
-cantidad de mods y la versión del juego, así nadie tiene que preguntar—. Comparte
+alguien. El mensaje de estado lleva el nombre del server en el título y cinco campos —estado, IP,
+puerto, contraseña y versión del juego—, así nadie tiene que preguntar cómo entrar. Comparte
 `DISCORD_WEBHOOK_URL` con el watchdog, agrupa los eventos en una ventana de 30 segundos y se
 queda callado si no hay webhook configurada. Poner la password en un canal es una decisión:
 `NOTIFIER_INCLUDE_PASSWORD=0` la deja afuera. Ver [`docs/discord.md`](docs/discord.md): las dos
