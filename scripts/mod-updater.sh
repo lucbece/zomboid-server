@@ -23,6 +23,7 @@
 #   MOD_UPDATER_ACF         el .acf del Workshop (default: data/workshop/appworkshop_108600.acf)
 #   MOD_UPDATER_API_URL     endpoint de Steam    (default: el publico)
 #   ZOMBOID_OPS_LOCK        lock compartido con el watchdog (/var/tmp/zomboid-ops.lock)
+#   MOD_UPDATER_OPS_PATTERN patron de pgrep de las operaciones que bloquean una pasada
 # curl, python3, flock, pgrep y los scripts del repo se buscan por PATH a proposito, para
 # poder sustituirlos por stubs.
 set -euo pipefail
@@ -53,6 +54,10 @@ DELAY_MIN="${MOD_UPDATE_RESTART_DELAY_MIN:-15}"     # minutos de aviso si hay ge
 RECORDATORIOS="${MOD_UPDATE_REMINDERS:-5}"          # minutos restantes en los que se recuerda
 VERIFICAR_SEG="${MOD_UPDATE_VERIFY_SECONDS:-900}"   # espera maxima a que baje la version nueva
 CURL_TIMEOUT="${MOD_UPDATE_CURL_TIMEOUT:-25}"
+# `pgrep -f` mira la linea de comando entera, asi que esto tambien matchea el `ssh vm '... &&
+# ./scripts/stop.sh'` que alguien largo desde su maquina. En la VM eso es justo lo que se
+# quiere; se deja pisable para poder probarlo sin depender de que corre en el host.
+OPS_PATRON="${MOD_UPDATER_OPS_PATTERN:-scripts/(restart|stop|wipe|update|backup)\.sh}"
 
 NOTIF_LOG="${LOG_FILE}"
 NOTIF_PREFIJO="mod-updater"
@@ -243,7 +248,7 @@ main() {
   fi
 
   # El lock no cubre lo que se corre a mano por SSH ni lo que lanza el panel de moderadores.
-  if pgrep -f 'scripts/(restart|stop|wipe|update|backup)\.sh' >/dev/null 2>&1; then
+  if pgrep -f "${OPS_PATRON}" >/dev/null 2>&1; then
     log "hay un restart/stop/wipe/update/backup corriendo, se saltea esta pasada"
     return 0
   fi
@@ -393,7 +398,9 @@ main() {
     [[ "${umbral}" =~ ^[0-9]+$ ]] || continue
     (( restante <= umbral * 60 )) || continue
     [[ " ${ya} " == *" ${umbral} "* ]] && continue
-    mensaje_en_juego "Recordatorio: el server se reinicia en ${umbral} minutos para actualizar ${titulos_desact}. Ponete a salvo."
+    # El texto dice los minutos que faltan de verdad, no el umbral: entre el jitter del timer y
+    # una pasada salteada por el lock, el umbral de 5 se puede cruzar con 30 segundos restantes.
+    mensaje_en_juego "Recordatorio: el server se reinicia en $(( (restante + 59) / 60 )) minuto(s) para actualizar ${titulos_desact}. Ponete a salvo."
     ya="${ya} ${umbral}"
     escribir_estado recordatorios "${ya}"
   done
