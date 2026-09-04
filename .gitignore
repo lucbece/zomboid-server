@@ -19,6 +19,11 @@ backups/
 # binarios locales (mcrcon compilado)
 bin/
 
+# motor nativo de Windows: server instalado por SteamCMD, SteamCMD mismo y el pid del proceso
+server/
+steamcmd/
+*.pid
+
 # bytecode de python (tools/encuesta, tools/panel)
 __pycache__/
 *.pyc

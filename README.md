@@ -29,6 +29,7 @@ a cloud provider is supported as one option, not as a requirement — see
 - Optional web survey for the group to vote on the sandbox rules before the world is created.
 - Optional one-command deployment to Oracle Cloud with OpenTofu, including a reserved public IP,
   daily off-machine backups and a monthly budget alert.
+- A native path for Windows, with no Docker and no WSL — see [Windows](#windows) below.
 
 ## Requirements
 
@@ -79,6 +80,14 @@ make down      # warns players, saves over RCON, then quits
 
 Do not stop the container with `docker stop` or `docker kill`. The game does not handle SIGTERM
 reliably and the world can be left in an inconsistent state.
+
+### Windows
+
+Prefer to run the server on your own Windows PC instead of Linux and Docker? A native engine
+driven by PowerShell covers the same workflow with no Docker and no WSL: double-click
+`windows\setup.cmd` and follow the prompts. See [`docs/windows.md`](docs/windows.md) for
+requirements, the full setup and operations reference, and how it stays in sync with the
+Linux/Docker engine.
 
 ### Connecting from the game
 

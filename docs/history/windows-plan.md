@@ -1,7 +1,7 @@
 # Windows support: native dedicated server driven by PowerShell
 
-Status: specification, 2026-09-04. Implementation pending. When the work lands, the user-facing
-documentation lives in `docs/windows.md` and this file moves to `docs/history/`.
+Status: specification written 2026-09-04 and implemented the same day. Kept as a design record;
+the user-facing documentation is `docs/windows.md`, which is authoritative where they differ.
 
 ## Problem
 

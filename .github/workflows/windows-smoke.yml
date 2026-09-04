@@ -1,0 +1,79 @@
+name: Windows smoke test
+
+# Manual only: downloads several GB (SteamCMD plus the dedicated server) and is the only place
+# the native Windows engine actually runs the game. See docs/windows.md.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: windows-latest end-to-end
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # setup.ps1 renders the config, installs the server with SteamCMD, opens the firewall and
+      # starts java.exe, blocking until "SERVER STARTED" appears in the log (or failing after
+      # 10 minutes). -NonInteractive takes every answer from these ZS_* variables, the same way
+      # setup.sh --no-preguntar does on Linux.
+      - name: windows\setup.ps1 -NonInteractive
+        shell: pwsh
+        env:
+          ZS_LANG: en
+          ZS_PUBLIC_NAME: CI Zomboid Server
+          ZS_SERVER_PASSWORD: ci-server-pass-1234
+          ZS_MAX_PLAYERS: '4'
+          ZS_MAX_MEMORY: 4g
+          ZS_UPNP: '0'
+          ZS_FIREWALL: '1'
+        run: .\windows\setup.ps1 -NonInteractive
+
+      - name: zs status
+        shell: pwsh
+        run: .\windows\zs.ps1 status
+
+      - name: zs rcon players
+        shell: pwsh
+        run: .\windows\zs.ps1 rcon players
+
+      - name: zs backup
+        shell: pwsh
+        run: .\windows\zs.ps1 backup
+
+      - name: zs stop
+        shell: pwsh
+        run: .\windows\zs.ps1 stop
+
+      - name: assert a clean exit, the backup zip and the save directory
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+
+          if (Test-Path -LiteralPath 'data\server.pid') {
+            throw 'data\server.pid still exists after zs stop: the process did not exit cleanly'
+          }
+
+          $zips = @(Get-ChildItem -Path 'backups' -Filter '*.zip' -File -ErrorAction SilentlyContinue)
+          if ($zips.Count -eq 0) {
+            throw 'zs backup did not create a zip under backups\'
+          }
+
+          $saveDir = 'data\zomboid\Saves\Multiplayer\servertest'
+          if (-not (Test-Path -LiteralPath $saveDir)) {
+            throw "the save directory does not exist: $saveDir"
+          }
+
+          Write-Output 'OK: clean shutdown, backup zip and save directory all present'
+
+      - name: upload data\logs\server.log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: data\logs\server.log
+          if-no-files-found: ignore

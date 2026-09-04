@@ -30,6 +30,7 @@ El despliegue en un proveedor de nube es una opción soportada, no un requisito;
 - Encuesta web opcional para que el grupo vote las reglas del sandbox antes de crear el mundo.
 - Despliegue opcional en Oracle Cloud con OpenTofu en un comando, con IP pública reservada,
   backups diarios fuera de la máquina y alerta mensual de presupuesto.
+- Un camino nativo para Windows, sin Docker y sin WSL — ver [Windows](#windows) más abajo.
 
 ## Requisitos
 
@@ -82,6 +83,14 @@ make down      # avisa a los jugadores, guarda por RCON y cierra
 
 No apagues el contenedor con `docker stop` ni `docker kill`. El juego no maneja SIGTERM de forma
 confiable y el mundo puede quedar en un estado inconsistente.
+
+### Windows
+
+¿Preferís correr el server en tu propia PC con Windows en vez de Linux y Docker? Un motor nativo
+manejado por PowerShell cubre el mismo flujo sin Docker y sin WSL: hacé doble clic en
+`windows\setup.cmd` y seguí las preguntas. Ver [`docs/windows.md`](docs/windows.md) (en inglés)
+para los requisitos, la referencia completa de configuración y operación, y cómo se mantiene en
+sincronía con el motor de Linux/Docker.
 
 ### Conectarse desde el juego
 

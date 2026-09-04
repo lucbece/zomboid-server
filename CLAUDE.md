@@ -63,6 +63,21 @@ in git, optional deployment to a cloud VM with OpenTofu.
 - `setup.sh` sizes the VM from `max_players`: up to 8 players 2 OCPU / 12 GB, above that
   4 OCPU / 16 GB. The JVM heap is the machine's RAM minus 4 GB. `ZS_OCPUS` and `ZS_MEMORY_GB`
   override both.
+- Windows engine (`windows/`, `docs/windows.md`): native server driven by PowerShell, no Docker,
+  no WSL. Same `config/` and `.env` contract as Linux; same data layout, so `data/zomboid` is
+  interchangeable between a Windows PC and a Linux host.
+  - The Java command line is built by parsing the installed `StartServer64.bat`
+    (`windows/lib/Server.ps1`), not hardcoded: it keeps the classpath and JVM flags, swaps
+    `-Xms`/`-Xmx`, and appends `-servername`, `-adminusername`, `-adminpassword`,
+    `-cachedir=<absolute data\zomboid>` and `-port`.
+  - `Render.ps1` must stay byte-identical to `scripts/render-config.sh` for the same inputs; that
+    parity is enforced by `windows/tests/Render.Tests.ps1` and re-checked in CI.
+  - Run the tests without a Windows machine, via Docker:
+    `docker run --rm -v "$PWD:/repo" -w /repo mcr.microsoft.com/powershell:latest pwsh -NoProfile
+    -Command "Install-Module Pester -RequiredVersion 5.5.0 -Force -Scope CurrentUser
+    -SkipPublisherCheck; Import-Module Pester -RequiredVersion 5.5.0; Invoke-Pester
+    windows/tests"`. `.github/workflows/windows-smoke.yml` (`workflow_dispatch`) is the only
+    place the real game runs, on `windows-latest`.
 
 ## User-facing entry points
 
