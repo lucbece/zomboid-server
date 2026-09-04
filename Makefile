@@ -8,6 +8,8 @@ SHELL := /bin/bash
 export PATH := $(HOME)/.local/bin:$(PATH)
 
 COMPOSE := docker compose
+# venv del bot de Discord en su instancia (ver infra/cloud-init-bot.yaml).
+BOT_VENV := /opt/pz-bot-venv
 SERVICE := zomboid
 DATA_UID := $(shell id -u)
 DATA_GID := $(shell id -g)
@@ -22,6 +24,7 @@ DATA_GID := $(shell id -g)
 .PHONY: mod-updater-install mod-updater-status mods-check
 .PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
 .PHONY: panel-up panel-down panel-estado panel-token panel-tokens panel-revoke panel-log
+.PHONY: require-bot-ip bot-install bot-status bot-logs bot-tests idle-shutdown-install idle-shutdown-status
 
 help: ## Muestra esta ayuda
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -288,3 +291,59 @@ panel-revoke: ## Revoca el token de un moderador. Uso: make panel-revoke NAME=Fu
 
 panel-log: ## Ultimas acciones del panel (quien reinicio y cuando). Uso: make panel-log [N=50]
 	@scripts/panel.sh log $(N)
+
+# =============================================================================================
+# Encendido on-demand: bot de Discord y apagado por inactividad (docs/on-demand.md)
+# =============================================================================================
+
+# La instancia del bot es otra maquina: tiene su propia IP (efimera) y su propio output.
+BOT_IP   ?= $(shell $(TOFU) -chdir=$(TF_DIR) output -raw -no-color bot_public_ip 2>/dev/null \
+              | grep -Eom1 '^([0-9]{1,3}\.){3}[0-9]{1,3}$$')
+BOT_REMOTE = $(SSH) $(VM_USER)@$(BOT_IP)
+
+require-bot-ip:
+	@test -n '$(BOT_IP)' || { \
+	  echo "No hay BOT_IP. Opciones:"; \
+	  echo "  make bot-status BOT_IP=1.2.3.4"; \
+	  echo "  cd $(TF_DIR) && tofu output -raw bot_public_ip   (requiere bot_enabled = true)"; \
+	  exit 1; }
+
+bot-install: require-bot-ip ## Copia el bot a su instancia, actualiza el venv y lo reinicia
+	@rsync -az --delete-after --chmod=D755,F644 \
+	  --include='/tools/' \
+	  --include='/tools/pz-bot/***' \
+	  --include='/infra/' \
+	  --include='/infra/systemd/***' \
+	  --exclude='*' \
+	  ./ $(VM_USER)@$(BOT_IP):$(VM_DIR)/
+	@$(BOT_REMOTE) "$(BOT_VENV)/bin/pip install -q -r $(VM_DIR)/tools/pz-bot/requirements.txt && \
+	            sudo install -m 644 -o root -g root '$(VM_DIR)/infra/systemd/pz-bot.service' /etc/systemd/system/ && \
+	            sudo install -d -m 755 -o $(VM_USER) -g $(VM_USER) /var/tmp/pz-bot && \
+	            sudo systemctl daemon-reload && \
+	            sudo systemctl enable pz-bot.service && \
+	            sudo systemctl restart pz-bot.service"
+	@echo "bot: instalado. Los comandos /pz aparecen en Discord apenas se conecta ('make bot-status')."
+
+bot-status: require-bot-ip ## Estado del bot de Discord y sus ultimas lineas de log
+	@$(BOT_REMOTE) 'systemctl status --no-pager --lines=0 pz-bot.service || true; \
+	            echo "--- journalctl -u pz-bot ---"; \
+	            sudo journalctl -u pz-bot -n $${N:-20} --no-pager 2>/dev/null || echo "(todavia no hay log)"'
+
+bot-logs: require-bot-ip ## Sigue el log del bot (Ctrl-C para salir)
+	@$(BOT_REMOTE) -t 'sudo journalctl -u pz-bot -f'
+
+bot-tests: ## Corre los tests del bot (no necesita discord.py ni el SDK de oci)
+	@cd tools/pz-bot && python3 -m unittest
+
+idle-shutdown-install: require-ip ## Activa el apagado por inactividad en la VM del juego (cron cada 5 min)
+	@$(MAKE) sync VM_IP=$(VM_IP) >/dev/null
+	@$(REMOTE) "sudo install -d -m 755 -o $(VM_USER) -g $(VM_USER) /var/log/zomboid && \
+	            sudo sed -i 's|^#\(\*/5 .*idle-shutdown.sh.*\)$$|\1|' /etc/cron.d/zomboid && \
+	            grep -q '^\*/5 .*idle-shutdown' /etc/cron.d/zomboid"
+	@echo "idle-shutdown: activado. Con 0 jugadores durante IDLE_MINUTES la VM se apaga sola."
+	@echo "idle-shutdown: solo tiene sentido con el bot andando, si no nadie la puede volver a prender."
+
+idle-shutdown-status: require-ip ## Muestra si el apagado por inactividad esta activo y su ultimo log
+	@$(REMOTE) 'echo "--- /etc/cron.d/zomboid ---"; grep idle-shutdown /etc/cron.d/zomboid || echo "(sin linea de idle-shutdown)"; \
+	            echo "--- /var/log/zomboid/idle.log ---"; \
+	            tail -n $${N:-20} /var/log/zomboid/idle.log 2>/dev/null || echo "(todavia no hay log)"'
