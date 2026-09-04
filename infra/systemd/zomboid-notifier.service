@@ -1,0 +1,44 @@
+# Avisos del estado del server a un canal de Discord (ver docs/discord.md). La instala
+# cloud-init en las VMs nuevas y `make notifier-install` en las que ya existen.
+#
+# A diferencia del watchdog (Type=oneshot + timer), esto es un daemon: escucha el log del
+# contenedor, los eventos de Docker y el archivo de usuarios del juego, y publica cuando pasa
+# algo. Si se cae, systemd lo levanta; el estado en /var/tmp/zomboid-notifier/ hace que no
+# repita avisos al reiniciarse.
+[Unit]
+Description=Avisos del servidor de Project Zomboid a Discord (webhook)
+Documentation=https://github.com/lucbece/zomboid-server
+After=docker.service zomboid.service
+Wants=docker.service
+
+ConditionPathExists=/opt/zomboid-server/tools/discord-notifier/notifier.py
+
+[Service]
+Type=simple
+User=pz
+Group=pz
+# La raiz del repo: desde ahi salen docker compose, scripts/rcon.sh, config/mods.txt y
+# data/zomboid/Logs/.
+WorkingDirectory=/opt/zomboid-server
+# DISCORD_WEBHOOK_URL, PUBLIC_NAME, SERVER_PASSWORD, GAME_PORT y PUBLIC_IP salen del .env;
+# el guion hace que la unit no falle si todavia no existe.
+EnvironmentFile=-/opt/zomboid-server/.env
+Environment=NOTIFIER_STATE=/var/tmp/zomboid-notifier
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/zomboid-server/tools/discord-notifier/notifier.py
+Restart=always
+RestartSec=10
+
+# El notifier habla con el socket de Docker y lee data/zomboid/Logs/. No escribe nada del
+# repo ni del sistema salvo su propio estado en /var/tmp.
+NoNewPrivileges=yes
+# Sin PrivateTmp a proposito: privatiza /tmp Y /var/tmp, y el estado que evita los avisos
+# duplicados vive en /var/tmp/zomboid-notifier (igual que el del watchdog).
+ProtectSystem=full
+ProtectHome=no
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

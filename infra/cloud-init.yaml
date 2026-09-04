@@ -15,6 +15,7 @@
 #   - ${repo_dir}/.env con los secretos que vienen de terraform.tfvars
 #   - mcrcon compilado, systemd unit habilitada (arranca el server en el boot)
 #   - watchdog habilitado (timer cada 2 minutos; ver docs/self-healing.md)
+#   - avisos de estado a Discord habilitados (daemon; ver docs/discord.md)
 #   - rclone contra Object Storage por instance principal (sin claves en disco)
 #   - cron de backup diario a las 0${backup_hour}:00 hora de ${timezone}
 #
@@ -105,6 +106,9 @@ write_files:
       SERVER_PASSWORD="${server_password}"
       PUBLIC_NAME="${public_name}"
       MAX_PLAYERS=${max_players}
+      # Vacia: los avisos de Discord la averiguan solos (la IP reservada no sale por la
+      # metadata de la instancia, asi que el camino que funciona es ifconfig.me).
+      PUBLIC_IP=
 
       GAME_PORT=${game_port}
       GAME_UDP_PORT=${game_udp_port}
@@ -133,6 +137,10 @@ write_files:
       # este archivo, en la VM, para que no queden en el state ni en el repo.
       DISCORD_WEBHOOK_URL=
       WATCHDOG_MAX_RESTARTS_HOUR=2
+
+      # --- Avisos de estado en Discord (ver docs/discord.md) ---
+      # Mismo webhook. 1 = el aviso de "servidor activo" incluye SERVER_PASSWORD.
+      NOTIFIER_INCLUDE_PASSWORD=1
       CLAUDE_AUTOREPAIR=0
       AUTOREPAIR_MAX_PER_DAY=3
       ANTHROPIC_API_KEY=
@@ -268,5 +276,14 @@ runcmd:
   - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/tmp/zomboid-watchdog
   - systemctl daemon-reload
   - systemctl enable --now zomboid-watchdog.timer
+
+  # --- Avisos de estado a Discord ------------------------------------------------------------
+  # Daemon (no timer): sigue el log del contenedor, los eventos de Docker y el archivo de
+  # usuarios del juego, y publica arranques, apagados y entradas/salidas. Sin
+  # DISCORD_WEBHOOK_URL en el .env arranca igual y solo escribe al journal.
+  - install -m 0644 ${repo_dir}/infra/systemd/zomboid-notifier.service /etc/systemd/system/zomboid-notifier.service
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/tmp/zomboid-notifier
+  - systemctl daemon-reload
+  - systemctl enable --now zomboid-notifier.service
 
 final_message: "zomboid: cloud-init termino en $UPTIME s. El server arranca solo; seguirlo con: cd /opt/zomboid-server && make logs (journalctl -u zomboid muestra solo el arranque de la unit)"

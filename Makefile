@@ -18,6 +18,7 @@ DATA_GID := $(shell id -g)
 .PHONY: infra-init infra-plan infra-apply infra-destroy
 .PHONY: require-ip remote-status remote-logs remote-restart remote-down remote-up remote-rcon remote-backup remote-diff sync
 .PHONY: watchdog-install watchdog-status
+.PHONY: notifier-install notifier-status
 .PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
 .PHONY: panel-up panel-down panel-estado panel-token panel-tokens panel-revoke panel-log
 
@@ -177,6 +178,27 @@ watchdog-status: require-ip ## Estado del watchdog en la VM y ultimas lineas de 
 	            systemctl status --no-pager --lines=5 zomboid-watchdog.service || true; \
 	            echo "--- /var/log/zomboid/watchdog.log ---"; \
 	            tail -n $${N:-20} /var/log/zomboid/watchdog.log 2>/dev/null || echo "(todavia no hay log)"'
+
+# =============================================================================================
+# Avisos de estado en Discord (docs/discord.md)
+# =============================================================================================
+
+notifier-install: require-ip ## Instala y habilita los avisos de Discord en la VM (daemon)
+	@$(MAKE) sync VM_IP=$(VM_IP) >/dev/null
+	@$(REMOTE) "sudo install -m 644 -o root -g root \
+	              '$(VM_DIR)/infra/systemd/zomboid-notifier.service' /etc/systemd/system/ && \
+	            sudo install -d -m 755 -o $(VM_USER) -g $(VM_USER) /var/tmp/zomboid-notifier && \
+	            sudo systemctl daemon-reload && \
+	            sudo systemctl enable --now zomboid-notifier.service && \
+	            sudo systemctl restart zomboid-notifier.service"
+	@echo "notifier: instalado. Con el server arriba publica el estado actual en menos de un minuto."
+	@echo "notifier: necesita DISCORD_WEBHOOK_URL en el .env DE LA VM (ver docs/discord.md)."
+
+notifier-status: require-ip ## Estado de los avisos de Discord en la VM y sus ultimas lineas
+	@$(REMOTE) 'systemctl status --no-pager --lines=0 zomboid-notifier.service || true; \
+	            echo "--- journalctl -u zomboid-notifier ---"; \
+	            sudo journalctl -u zomboid-notifier -n $${N:-20} --no-pager 2>/dev/null \
+	              || echo "(todavia no hay log)"'
 
 sync: require-ip ## rsync de config/, scripts/, tools/, infra/systemd/, Makefile y compose a la VM. Uso: make sync [RESTART=1]
 	@rsync -az --delete-after --chmod=D755,F644 \
