@@ -25,6 +25,28 @@ locals {
   bot_venv_dir = "/opt/pz-bot-venv"
 }
 
+# ---------------------------------------------------------------------------------------------
+# Compartment del bot
+#
+# El bot va en su propio compartment, y no es cosmetico: OCI no tiene ninguna variable de policy
+# que identifique una instancia concreta. Las generales llegan hasta target.compartment.id, y la
+# tabla de Core Services agrega solo target.boot-volume.kms-key.id y target.image.id — no existe
+# un target.instance.id (una policy que lo use no matchea nunca y la API contesta 404).
+#
+# La unica forma de que "prender y apagar instancias en el compartment zomboid" signifique
+# exactamente "la instancia del juego" es que no haya ninguna otra instancia ahi. Por eso el bot
+# vive afuera, en un compartment hermano: asi su permiso no lo alcanza ni a el mismo.
+# ---------------------------------------------------------------------------------------------
+
+resource "oci_identity_compartment" "bot" {
+  count = var.bot_enabled ? 1 : 0
+
+  compartment_id = var.tenancy_ocid
+  name           = "${var.compartment_name}-bot"
+  description    = "Instancia del bot de Discord de Project Zomboid (fuera del compartment del juego)"
+  enable_delete  = true
+}
+
 data "oci_core_images" "ubuntu_bot" {
   count = var.bot_enabled ? 1 : 0
 
@@ -102,7 +124,9 @@ resource "oci_core_network_security_group_security_rule" "bot_egress_all" {
 resource "oci_core_instance" "bot" {
   count = var.bot_enabled ? 1 : 0
 
-  compartment_id      = oci_identity_compartment.this.id
+  # Compartment propio (ver arriba). La subnet y el NSG siguen viviendo en el compartment del
+  # juego: una VNIC puede usar una subnet de otro compartment sin problema.
+  compartment_id      = oci_identity_compartment.bot[0].id
   availability_domain = data.oci_identity_availability_domains.this.availability_domains[var.availability_domain_index].name
   display_name        = "${local.name}-bot"
   shape               = var.bot_shape
@@ -171,7 +195,7 @@ resource "oci_core_instance" "bot" {
 data "oci_core_vnic_attachments" "bot" {
   count = var.bot_enabled ? 1 : 0
 
-  compartment_id = oci_identity_compartment.this.id
+  compartment_id = oci_identity_compartment.bot[0].id
   instance_id    = oci_core_instance.bot[0].id
 }
 
@@ -209,15 +233,16 @@ resource "oci_identity_policy" "bot" {
   statements = [
     # `use instances` de por si incluye INSTANCE_UPDATE, INSTANCE_ATTACH_VOLUME y varias mas:
     # el `any {request.permission = ...}` la recorta a mirar el estado (GetInstance) y a las
-    # acciones de energia (InstanceAction START / SOFTSTOP). El target.instance.id la ata a la
-    # instancia del juego y a ninguna otra del compartment.
+    # acciones de energia (InstanceAction START / SOFTSTOP), que es todo lo que hace el bot.
+    #
+    # El alcance es el compartment del juego, no un OCID: OCI no tiene una variable de policy
+    # que nombre una instancia (ver el comentario del compartment del bot). Como la unica
+    # instancia de ese compartment es la del juego —el bot esta en el suyo—, el permiso llega
+    # exactamente a una maquina, y ni siquiera a la del propio bot.
     join(" ", [
       "Allow dynamic-group ${oci_identity_dynamic_group.bot[0].name}",
       "to use instances in compartment ${oci_identity_compartment.this.name}",
-      "where all {",
-      "target.instance.id = '${oci_core_instance.this.id}',",
-      "any {request.permission = 'INSTANCE_INSPECT', request.permission = 'INSTANCE_POWER_ACTIONS'}",
-      "}",
+      "where any {request.permission = 'INSTANCE_INSPECT', request.permission = 'INSTANCE_POWER_ACTIONS'}",
     ]),
   ]
 }
