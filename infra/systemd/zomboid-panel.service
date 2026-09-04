@@ -1,0 +1,49 @@
+# Panel de moderadores: una pagina con el estado del server y un boton para reiniciarlo, para
+# 2-4 personas de confianza que no tienen SSH. La instala y la habilita el admin a mano con
+# scripts/panel.sh up; cloud-init NO la toca (el puerto 8081 esta cerrado por default en el
+# NSG: hay que poner panel_port en terraform.tfvars y hacer tofu apply).
+#
+# Es un http.server de la stdlib de Python: sin venv, sin pip, sin base de datos. Los tokens
+# estan en PANEL_DATOS/moderadores.json y cada accion queda en PANEL_DATOS/acciones.jsonl.
+[Unit]
+Description=Panel de moderadores de Project Zomboid (http.server de la stdlib)
+Documentation=https://github.com/lucbece/zomboid-server
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pz
+Group=pz
+# El WorkingDirectory es la raiz del repo porque desde ahi salen scripts/restart.sh y
+# scripts/rcon.sh (que necesitan el .env y el docker-compose.yml).
+WorkingDirectory=/opt/zomboid-server
+# PUBLIC_NAME (nombre del server) sale del .env; el guion hace que no falle si no existe.
+EnvironmentFile=-/opt/zomboid-server/.env
+Environment=PANEL_PUERTO=8081
+Environment=PANEL_DATOS=/opt/zomboid-server/data/panel
+Environment=PANEL_REPO=/opt/zomboid-server
+Environment=PANEL_RESTART_LOG=/var/log/zomboid/panel-restart.log
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/zomboid-server/tools/panel/server.py
+Restart=on-failure
+RestartSec=5
+
+# El reinicio se lanza con start_new_session=True y tarda ~2 minutos, mucho mas que un
+# 'systemctl restart' del panel. Con el KillMode por default (control-group) systemd mataria
+# a ese hijo y el mundo quedaria a medio guardar: KillMode=process solo toca al proceso
+# principal, que es el http.server.
+KillMode=process
+
+# Menos aislamiento que la encuesta a proposito: el panel tiene que hablarle al socket de
+# Docker y escribir /var/log/zomboid.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=no
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

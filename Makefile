@@ -18,6 +18,7 @@ DATA_GID := $(shell id -g)
 .PHONY: infra-init infra-plan infra-apply infra-destroy
 .PHONY: require-ip remote-status remote-logs remote-restart remote-down remote-up remote-rcon remote-backup sync
 .PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
+.PHONY: panel-up panel-down panel-estado panel-token panel-tokens panel-revoke panel-log
 
 help: ## Muestra esta ayuda
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -186,3 +187,30 @@ encuesta-resultados: ## Baja los votos y muestra el conteo y la propuesta de cam
 
 encuesta-aplicar: ## Escribe en config/ lo que gano la votacion y muestra el diff
 	@scripts/encuesta.sh aplicar
+
+# =============================================================================================
+# Panel de moderadores (tools/panel)
+# =============================================================================================
+
+panel-up: ## Levanta el panel de moderadores en la VM (puerto 8081) e instala la unit
+	@scripts/panel.sh up
+
+panel-down: ## Apaga el panel (los tokens quedan guardados en la VM)
+	@scripts/panel.sh down
+
+panel-estado: ## Estado del panel, /salud y moderadores cargados
+	@scripts/panel.sh estado
+
+panel-token: ## Crea el token de un moderador e imprime su URL. Uso: make panel-token NAME=Fulano
+	@test -n '$(NAME)' || { echo "uso: make panel-token NAME=Fulano"; exit 1; }
+	@scripts/panel.sh token add '$(NAME)'
+
+panel-tokens: ## Lista los moderadores con token (no imprime los tokens)
+	@scripts/panel.sh token list
+
+panel-revoke: ## Revoca el token de un moderador. Uso: make panel-revoke NAME=Fulano
+	@test -n '$(NAME)' || { echo "uso: make panel-revoke NAME=Fulano"; exit 1; }
+	@scripts/panel.sh token revoke '$(NAME)'
+
+panel-log: ## Ultimas acciones del panel (quien reinicio y cuando). Uso: make panel-log [N=50]
+	@scripts/panel.sh log $(N)
