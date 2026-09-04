@@ -240,8 +240,8 @@ resource "oci_identity_policy" "bot" {
     # instancia de ese compartment es la del juego —el bot esta en el suyo—, el permiso llega
     # exactamente a una maquina, y ni siquiera a la del propio bot.
     join(" ", [
-      "Allow dynamic-group ${oci_identity_dynamic_group.bot[0].name}",
-      "to use instances in compartment ${oci_identity_compartment.this.name}",
+      "Allow dynamic-group id ${oci_identity_dynamic_group.bot[0].id}",
+      "to use instances in compartment id ${oci_identity_compartment.this.id}",
       "where any {request.permission = 'INSTANCE_INSPECT', request.permission = 'INSTANCE_POWER_ACTIONS'}",
     ]),
   ]
