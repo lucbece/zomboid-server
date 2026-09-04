@@ -106,8 +106,8 @@ class TestMensajes(unittest.TestCase):
                       power._mensaje_de_error(RuntimeError("se cayo la red")))
 
     def test_estado_legible(self):
-        self.assertEqual(power.estado_legible("RUNNING"), "encendida")
-        self.assertEqual(power.estado_legible("STOPPED"), "apagada")
+        self.assertEqual(power.estado_legible("RUNNING"), "encendido")
+        self.assertEqual(power.estado_legible("STOPPED"), "apagado")
         self.assertEqual(power.estado_legible("ALGO_RARO"), "algo raro")
 
 
