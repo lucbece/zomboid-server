@@ -23,7 +23,7 @@ jobs:
             -x setup.sh scripts/*.sh scripts/lib/*.sh
 
   python:
-    name: python (tools/encuesta, tools/panel, tools/discord-notifier)
+    name: python (tools/encuesta, tools/panel, tools/discord-notifier, tools/mod-updater)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,8 @@ jobs:
         run: |
           python3 -m py_compile tools/encuesta/server.py tools/encuesta/tally.py \
             tools/panel/server.py tools/panel/tokens.py \
-            tools/discord-notifier/notifier.py
+            tools/discord-notifier/notifier.py \
+            tools/mod-updater/comparar.py
       - name: preguntas.json
         run: |
           python3 - <<'EOF'
@@ -92,6 +93,72 @@ jobs:
           assert n.RE_RCON_N.search("Players connected (3): ").group(1) == "3"
           print("OK: los patrones del notifier siguen matcheando el log real")
           EOF
+
+  mod-updater:
+    name: mod-updater (comparacion Workshop vs instalado)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # La comparacion decide si el server se reinicia solo con gente jugando. Los dos formatos
+      # que parsea son ajenos (el VDF del .acf de Steam y el JSON de la API) y ninguno de los
+      # dos avisa si cambia, asi que se verifican contra muestras con la forma real.
+      - name: los cuatro estados
+        run: |
+          set -euo pipefail
+          cat > /tmp/appworkshop_108600.acf <<'ACF'
+          "AppWorkshop"
+          {
+          	"appid"		"108600"
+          	"TimeLastUpdated"		"0"
+          	"WorkshopItemsInstalled"
+          	{
+          		"111"
+          		{
+          			"size"		"100"
+          			"timeupdated"		"1000"
+          			"manifest"		"1"
+          		}
+          		"222"
+          		{
+          			"size"		"200"
+          			"timeupdated"		"2000"
+          			"manifest"		"2"
+          		}
+          	}
+          	"WorkshopItemDetails"
+          	{
+          		"111"
+          		{
+          			"manifest"		"1"
+          			"timeupdated"		"1"
+          		}
+          	}
+          }
+          ACF
+          cat > /tmp/api.json <<'JSON'
+          {"response":{"result":1,"resultcount":4,"publishedfiledetails":[
+            {"publishedfileid":"111","result":1,"title":"Sin cambios","time_updated":1000},
+            {"publishedfileid":"222","result":1,"title":"Actualizado","time_updated":2500},
+            {"publishedfileid":"333","result":1,"title":"Nuevo","time_updated":3000},
+            {"publishedfileid":"444","result":9,"title":"","time_updated":0}
+          ]}}
+          JSON
+          salida="$(python3 tools/mod-updater/comparar.py /tmp/appworkshop_108600.acf /tmp/api.json 111 222 333 444)"
+          echo "$salida"
+          esperado=$'111\tSin cambios\t1000\t1000\tal-dia\n222\tActualizado\t2500\t2000\tdesactualizado\n333\tNuevo\t3000\t0\tno-instalado\n444\t444\t0\t0\tsin-datos'
+          test "$salida" = "$esperado" || { echo "la comparacion cambio de resultado"; exit 1; }
+          # El item 111 sale al-dia aunque el bloque WorkshopItemDetails traiga su propio
+          # "timeupdated" ("1"): confundir los dos lo daria por desactualizado para siempre.
+          echo "OK: al-dia, desactualizado, no-instalado y sin-datos salen como corresponde"
+      - name: una respuesta inutilizable no se puede confundir con "todo al dia"
+        run: |
+          set -euo pipefail
+          echo '{"response":{"result":1,"resultcount":0}}' > /tmp/api-rota.json
+          : > /tmp/vacio.acf
+          rc=0
+          python3 tools/mod-updater/comparar.py /tmp/vacio.acf /tmp/api-rota.json 111 || rc=$?
+          test "$rc" = "3" || { echo "esperaba salir con 3, salio con $rc"; exit 1; }
+          echo "OK: sale con 3 y el script que lo llama no actua"
 
   watchdog:
     name: watchdog (patrones)
