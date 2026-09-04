@@ -248,3 +248,18 @@ stub that tails control files for `compose logs -f` and `events`, a synthetic `u
 grows next to a synthetic `PerkLog.txt`, an `rcon.sh` stub, and a local HTTP server standing in for the webhook that records every
 payload — and, on demand, answers one `429` with a `retry_after` so the retry path is exercised.
 `NOTIFIER_DRY_RUN=1` is the cheaper version: it logs what it would post and posts nothing.
+
+## Avatars
+
+`assets/discord-avatar.png` (512×512, source in `assets/discord-avatar.svg`) is a generic avatar
+for the notifier's webhook or for the bot: a power symbol, which is what the bot does. Discord
+uses the webhook's own avatar for every message the notifier posts, so it only has to be set
+once:
+
+```bash
+python3 tools/discord-notifier/set-avatar.py assets/discord-avatar.png            # webhook, URL from .env
+DISCORD_BOT_TOKEN=... python3 tools/discord-notifier/set-avatar.py --bot image.png  # the bot user
+```
+
+The script only needs the standard library. The bot token is read from the environment, never
+from an argument; Discord limits bot avatar changes to a few per hour.

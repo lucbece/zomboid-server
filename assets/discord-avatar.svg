@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#1e2b1c"/><stop offset="1" stop-color="#0a100a"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="512" cy="512" r="512" fill="url(#bg)"/>
+  <mask id="bites"><rect width="1024" height="1024" fill="#fff"/>
+    <circle cx="262" cy="762" r="66" fill="#000"/><circle cx="318" cy="808" r="30" fill="#000"/>
+    <circle cx="846" cy="400" r="52" fill="#000"/><circle cx="574" cy="300" r="34" fill="#000"/><circle cx="452" cy="420" r="26" fill="#000"/>
+  </mask>
+  <g mask="url(#bites)" filter="url(#glow)" fill="none" stroke="#8fd14f" stroke-width="96" stroke-linecap="round">
+    <!-- ring with gap at top: arc from -60deg to 240deg measured from top -->
+    <path d="M 340 275 A 300 300 0 1 0 684 275"/>
+    <line x1="512" y1="150" x2="512" y2="500"/>
+  </g>
+  <!-- drips -->
+  <g fill="#8fd14f">
+    <path d="M 700 800 q 0 70 26 70 q 26 0 26 -70 z"/>
+    <circle cx="726" cy="878" r="16"/>
+    <path d="M 490 528 q 0 66 22 66 q 22 0 22 -66 z"/>
+  </g>
+</svg>
