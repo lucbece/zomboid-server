@@ -288,6 +288,23 @@ make watchdog-status     # next run, last result, tail of the log
 make remote-diff         # what the auto-repair changed on the VM, still uncommitted
 ```
 
+## Discord
+
+Two independent integrations, either of which can be left off. The game's own chat bridge mirrors
+global chat into a channel and needs a bot with the Message Content intent; it is off by default.
+The status notifier is a small systemd daemon on the VM that posts to a webhook when the server
+comes up, when it goes down, and when players join or leave — the "server is up" message carries
+the address, the port, the server password, the mod count and the game version, so nobody has to
+ask. It shares `DISCORD_WEBHOOK_URL` with the watchdog, groups events inside a 30-second window,
+and stays quiet if no webhook is configured. Putting the password in a channel is a decision:
+`NOTIFIER_INCLUDE_PASSWORD=0` leaves it out. See [`docs/discord.md`](docs/discord.md) for both
+integrations, how to create the webhook, and how joins and leaves are read out of the game's logs.
+
+```bash
+make notifier-install    # install and enable the daemon on an existing VM
+make notifier-status     # unit state and the last 20 journal lines
+```
+
 ## Documentation
 
 | Document | Contents |
@@ -299,6 +316,7 @@ make remote-diff         # what the auto-repair changed on the VM, still uncommi
 | [`docs/survey.md`](docs/survey.md) | The rules survey: running it, tallying it, closing it |
 | [`docs/panel.md`](docs/panel.md) | The moderator panel: tokens, cooldowns, security model |
 | [`docs/self-healing.md`](docs/self-healing.md) | The watchdog, the Discord alerts and the optional Claude Code auto-repair |
+| [`docs/discord.md`](docs/discord.md) | The two Discord integrations: the native chat bridge and the status notifier |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run before opening a pull request |
 | [`docs/history/`](docs/history/) | The original plan and research notes, in Spanish. Historical, not maintained |
 

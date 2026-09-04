@@ -298,6 +298,24 @@ make watchdog-status     # próxima corrida, último resultado, final del log
 make remote-diff         # qué cambió el auto-arreglo en la VM y sigue sin commitear
 ```
 
+## Discord
+
+Dos integraciones independientes, y cualquiera de las dos se puede dejar apagada. El puente de
+chat del propio juego espeja el chat global en un canal y necesita un bot con el intent de
+Message Content; viene apagado. Los avisos de estado son un daemon chico de systemd en la VM que
+publica en un webhook cuando el server queda activo, cuando se apaga y cuando entra o sale
+alguien —el mensaje de "servidor activo" trae la dirección, el puerto, la password del server, la
+cantidad de mods y la versión del juego, así nadie tiene que preguntar—. Comparte
+`DISCORD_WEBHOOK_URL` con el watchdog, agrupa los eventos en una ventana de 30 segundos y se
+queda callado si no hay webhook configurada. Poner la password en un canal es una decisión:
+`NOTIFIER_INCLUDE_PASSWORD=0` la deja afuera. Ver [`docs/discord.md`](docs/discord.md): las dos
+integraciones, cómo crear el webhook y cómo se leen las entradas y salidas de los logs del juego.
+
+```bash
+make notifier-install    # instala y habilita el daemon en una VM que ya existe
+make notifier-status     # estado de la unit y las últimas 20 líneas del journal
+```
+
 ## Documentación
 
 | Documento | Contenido |
@@ -309,6 +327,7 @@ make remote-diff         # qué cambió el auto-arreglo en la VM y sigue sin com
 | [`docs/survey.md`](docs/survey.md) | La encuesta de reglas: cómo levantarla, contarla y cerrarla |
 | [`docs/panel.md`](docs/panel.md) | El panel de moderadores: tokens, cooldowns, modelo de seguridad (en inglés) |
 | [`docs/self-healing.md`](docs/self-healing.md) | El watchdog, los avisos de Discord y el auto-arreglo opcional con Claude Code (en inglés) |
+| [`docs/discord.md`](docs/discord.md) | Las dos integraciones con Discord: el puente de chat nativo y los avisos de estado (en inglés) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Qué verificar antes de abrir un pull request |
 | [`docs/history/`](docs/history/) | El plan original y las notas de investigación, en castellano. Material histórico, sin mantenimiento |
 
