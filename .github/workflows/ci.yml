@@ -50,6 +50,45 @@ jobs:
           print(f"OK: {len(ids)} preguntas, una opcion default cada una")
           EOF
 
+  watchdog:
+    name: watchdog (patrones)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Los archivos de patrones se le pasan a `grep -E -f`: un regex invalido rompe el
+      # chequeo del log en la VM y no se nota hasta que el server se cae. Ademas se verifica
+      # que el par fatales/ignorar siga haciendo lo que dice: atrapar una caida real y
+      # descartar el ruido conocido de los mods.
+      - name: patrones validos y con el efecto esperado
+        run: |
+          set -euo pipefail
+          limpiar() { sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$1"; }
+          limpiar tools/watchdog/patrones-fatales.txt > /tmp/fatales.re
+          limpiar tools/watchdog/patrones-ignorar.txt > /tmp/ignorar.re
+          test -s /tmp/fatales.re
+          test -s /tmp/ignorar.re
+          while IFS= read -r re; do
+            echo | grep -E "$re" >/dev/null 2>&1 || [ $? -le 1 ] \
+              || { echo "regex invalido: $re"; exit 1; }
+          done < /tmp/fatales.re
+          while IFS= read -r re; do
+            echo | grep -E "$re" >/dev/null 2>&1 || [ $? -le 1 ] \
+              || { echo "regex invalido: $re"; exit 1; }
+          done < /tmp/ignorar.re
+
+          cat > /tmp/log-falla <<'LOG'
+          zomboid-server  | java.lang.OutOfMemoryError: Java heap space
+          LOG
+          cat > /tmp/log-ruido <<'LOG'
+          zomboid-server  | SEVERE: template zombie_torso_01 not found
+          zomboid-server  | SEVERE: duplicate texture Base.Hat_Cap
+          zomboid-server  | ERROR: IsoPropertyTypeNotFoundException: invalid room metaID 4211
+          LOG
+          filtrar() { grep -E -f /tmp/fatales.re "$1" | grep -E -v -f /tmp/ignorar.re || true; }
+          test -n "$(filtrar /tmp/log-falla)" || { echo "no detecto un OutOfMemoryError"; exit 1; }
+          test -z "$(filtrar /tmp/log-ruido)" || { echo "falso positivo con ruido de mods"; exit 1; }
+          echo "OK: patrones validos, atrapa la falla y descarta el ruido"
+
   tofu:
     name: opentofu fmt + validate
     runs-on: ubuntu-latest
