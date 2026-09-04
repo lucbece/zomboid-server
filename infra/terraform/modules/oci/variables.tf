@@ -94,6 +94,22 @@ variable "survey_port" {
   }
 }
 
+variable "panel_port" {
+  description = <<-EOT
+    Puerto TCP del panel de moderadores (tools/panel). 0 = deshabilitado: no se crea ninguna
+    regla de ingress. Con un valor > 0 se abre a 0.0.0.0/0, porque los moderadores entran desde
+    el celular y no se les puede pedir la IP. La autenticacion es el token de la URL, sobre HTTP
+    plano: ver docs/panel.md antes de abrirlo.
+  EOT
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.panel_port == 0 || (var.panel_port >= 1024 && var.panel_port <= 65535)
+    error_message = "panel_port tiene que ser 0 (deshabilitado) o un puerto entre 1024 y 65535."
+  }
+}
+
 # ---------------------------------------------------------------------------------------------
 # Instancia
 # ---------------------------------------------------------------------------------------------

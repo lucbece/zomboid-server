@@ -26,6 +26,12 @@ variable "survey_port" {
   default     = 0
 }
 
+variable "panel_port" {
+  description = "Puerto del panel de moderadores (tools/panel). 0 = cerrado. Ver docs/panel.md."
+  type        = number
+  default     = 0
+}
+
 variable "ssh_public_key" {
   description = "Clave publica SSH del admin (contenido de ~/.ssh/id_ed25519.pub)."
   type        = string

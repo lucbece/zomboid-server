@@ -59,3 +59,9 @@ bucket_name = "zomboid-backups"
 # votacion. 0 = cerrada. Ponerlo en 8080, tofu apply, make encuesta-up, y cuando termina la
 # votacion volver a 0 y aplicar de nuevo.
 survey_port = 0
+
+# --- Panel de moderadores -------------------------------------------------------------------
+# Puerto del panel (tools/panel): una pagina con un boton para que 2-4 moderadores de confianza
+# reinicien el server sin SSH. 0 = cerrado. La credencial es el token de la URL y viaja por HTTP
+# plano: leer docs/panel.md antes de abrirlo.
+panel_port = 0

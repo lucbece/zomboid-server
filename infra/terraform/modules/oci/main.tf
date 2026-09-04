@@ -199,6 +199,26 @@ resource "oci_core_network_security_group_security_rule" "survey" {
   }
 }
 
+# Panel de moderadores: solo existe si panel_port > 0. La credencial es el token de la URL,
+# no la IP de origen: por eso se abre a todo internet, igual que la encuesta.
+resource "oci_core_network_security_group_security_rule" "panel" {
+  count = var.panel_port > 0 ? 1 : 0
+
+  network_security_group_id = oci_core_network_security_group.this.id
+  direction                 = "INGRESS"
+  protocol                  = "6" # TCP
+  source                    = "0.0.0.0/0"
+  source_type               = "CIDR_BLOCK"
+  description               = "Panel de moderadores ${var.panel_port}/tcp"
+
+  tcp_options {
+    destination_port_range {
+      min = var.panel_port
+      max = var.panel_port
+    }
+  }
+}
+
 resource "oci_core_network_security_group_security_rule" "icmp_pmtu" {
   network_security_group_id = oci_core_network_security_group.this.id
   direction                 = "INGRESS"
