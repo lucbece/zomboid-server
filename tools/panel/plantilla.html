@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+{{REFRESCO}}
+<title>{{SERVER_NAME}} · {{TITULO}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=Archivo:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* =================================================================================
+   Mismos tokens que tools/encuesta/index.html: charcoal azulado + luz de sodio.
+   ================================================================================= */
+:root {
+  --noche:   #12161a;
+  --asfalto: #1c2228;
+  --linea:   #38424b;
+  --niebla:  #ccd3d8;
+  --sodio:   #f2a93b;
+  --ruta:    #5fa87f;
+  --alarma:  #cf5842;
+
+  --tenue:   #8b979f;
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --texto:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --max:     34rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--noche);
+  color: var(--niebla);
+  font-family: var(--texto);
+  font-size: 16px;
+  line-height: 1.55;
+  padding-bottom: 3rem;
+}
+
+/* Textura VHS: lineas de barrido fijas, muy tenues. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,.028) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.envoltorio {
+  width: 100%;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 1.15rem;
+}
+
+a { color: var(--sodio); }
+
+header {
+  border-bottom: 1px solid var(--linea);
+  background:
+    linear-gradient(180deg, rgba(242,169,59,.07), transparent 70%),
+    var(--noche);
+  padding: 2.2rem 0 1.3rem;
+}
+
+.chapa {
+  display: inline-block;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: .8rem;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--noche);
+  background: var(--sodio);
+  padding: .15rem .5rem .05rem;
+  margin-bottom: .9rem;
+}
+
+h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(2.8rem, 15vw, 4.4rem);
+  line-height: .86;
+  text-transform: uppercase;
+  margin: 0 0 .4rem;
+  color: #fff;
+}
+
+.hito {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--sodio);
+  margin: 0;
+}
+
+main { margin-top: 1.8rem; }
+
+.quien {
+  font-size: .92rem;
+  color: var(--tenue);
+  margin: 0 0 1.2rem;
+}
+.quien b { color: var(--niebla); font-weight: 600; }
+
+.tarjeta {
+  background: var(--asfalto);
+  border-left: 3px solid var(--linea);
+  padding: 1.1rem 1.15rem 1.25rem;
+}
+
+.linea {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin: 0 0 .3rem;
+  font-size: 1.12rem;
+  color: #fff;
+}
+
+.punto {
+  flex: 0 0 auto;
+  width: .7rem;
+  height: .7rem;
+  border-radius: 50%;
+  background: var(--tenue);
+}
+.punto.ok    { background: var(--ruta);   box-shadow: 0 0 .55rem rgba(95,168,127,.7); }
+.punto.tibio { background: var(--sodio);  box-shadow: 0 0 .55rem rgba(242,169,59,.6); }
+.punto.mal   { background: var(--alarma); box-shadow: 0 0 .55rem rgba(207,88,66,.6); }
+
+.detalle { margin: 0 0 1rem; color: var(--tenue); }
+.dato {
+  margin: 0 0 1.2rem;
+  padding-top: .9rem;
+  border-top: 1px solid var(--linea);
+  color: var(--tenue);
+  font-size: .95rem;
+}
+.dato b { color: var(--niebla); font-weight: 600; }
+
+.aviso {
+  margin: 0 0 1rem;
+  padding: .75rem .9rem;
+  background: rgba(242,169,59,.1);
+  border-left: 3px solid var(--sodio);
+  color: var(--niebla);
+  font-size: .95rem;
+}
+
+.boton {
+  display: block;
+  width: 100%;
+  min-height: 3.4rem;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.6rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--noche);
+  background: var(--sodio);
+  border: 0;
+  border-radius: 0;
+  padding: .55rem 1rem;
+  cursor: pointer;
+  transition: filter .12s ease;
+}
+.boton:hover { filter: brightness(1.08); }
+.boton:focus-visible { outline: 3px solid var(--niebla); outline-offset: 2px; }
+.boton[disabled] {
+  background: transparent;
+  color: var(--tenue);
+  border: 1px solid var(--linea);
+  cursor: not-allowed;
+  filter: none;
+}
+
+form { margin: 0; }
+
+.pie {
+  color: var(--tenue);
+  font-size: .9rem;
+  margin: .9rem 0 0;
+}
+
+footer {
+  margin-top: 1.6rem;
+  color: var(--tenue);
+  font-size: .85rem;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="envoltorio">
+    <span class="chapa">Moderación</span>
+    <h1>{{SERVER_NAME}}</h1>
+    <p class="hito">Panel de moderadores</p>
+  </div>
+</header>
+
+<main>
+  <div class="envoltorio">
+    {{CUERPO}}
+  </div>
+</main>
+
+<footer>
+  <div class="envoltorio">
+    Este link es la llave: cualquiera que lo tenga puede reiniciar el servidor. No lo pases por
+    grupos ni lo publiques. Si se te escapa, avisale al admin y lo revoca.
+  </div>
+</footer>
+
+</body>
+</html>
