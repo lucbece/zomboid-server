@@ -12,7 +12,7 @@ decisions behind it are in [`architecture.md`](architecture.md).
 
 | Path | Contents |
 |---|---|
-| `config/` | Source of truth: `servertest.ini.tpl`, the sandbox and spawn Lua files, `mods.txt` (not in git; created from `mods.example.txt`) |
+| `config/` | Source of truth: `servertest.ini.tpl`, the spawn Lua files, and two per-world files that are not in git: `servertest_SandboxVars.lua` and `mods.txt` (created from their `.example` twins) |
 | `.env` | Secrets and per-machine settings. Not in git |
 | `data/zomboid/` | The container's `/home/steam/Zomboid`: rendered config, saves, logs, native backups, `db/` |
 | `data/workshop/` | Downloaded Workshop content, under `content/108600/<workshop_id>/` |
@@ -126,7 +126,7 @@ the configuration before the new world is generated.
 
 After a wipe:
 
-1. Edit `config/servertest_SandboxVars.lua`.
+1. Edit `config/servertest_SandboxVars.lua` (not versioned; `setup.sh` creates it from the vanilla example).
 2. Set the final mod list in `config/mods.txt` (not versioned; absent means vanilla).
 3. Review `PVP`, `MaxPlayers`, `Public` and `SafetySystem` in `config/servertest.ini.tpl`.
 4. Commit the versioned files, `make sync` against a VM, then start the server.

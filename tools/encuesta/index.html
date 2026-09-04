@@ -468,7 +468,7 @@ button.secundario:focus-visible { outline: 2px solid var(--niebla); outline-offs
 (function () {
   "use strict";
 
-  var CLAVE_BORRADOR = "encuesta-pandaparkour-v1";
+  var CLAVE_BORRADOR = "encuesta-" + document.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-v1";
   var preguntas = [];
   var tocadas = Object.create(null);
 

@@ -1,5 +1,4 @@
 {
-  "server": "My Zomboid Server",
   "titulo": "Encuesta de reglas de la partida",
   "bajada": "Votá con qué configuración querés jugar. Toma dos minutos y se puede cambiar hasta que arranquemos.",
   "nota_valores": "El campo 'valor' es SIEMPRE un string: es el texto literal que se escribe en config/servertest_SandboxVars.lua o config/servertest.ini.tpl. Asi no se pierde el formato (1.0 no se convierte en 1) al pasar por JSON.",
@@ -429,8 +428,8 @@
       "target": "ini",
       "clave": "PVP",
       "opciones": [
-        { "etiqueta": "Desactivado (cooperativo)", "valor": "false", "default": true, "nota": "Es lo que tiene el server hoy. El juego viene con PVP activado, pero acá lo apagamos." },
-        { "etiqueta": "Activado", "valor": "true", "default": false, "nota": "Se puede matar a un amigo. Suele terminar mal." }
+        { "etiqueta": "Desactivado (cooperativo)", "valor": "false", "default": false, "nota": "Nadie puede lastimar a otro jugador." },
+        { "etiqueta": "Activado", "valor": "true", "default": true, "nota": "Es lo que trae el juego. Se puede matar a un amigo. Suele terminar mal." }
       ]
     },
     {

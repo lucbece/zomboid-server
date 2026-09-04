@@ -19,7 +19,7 @@ El despliegue en un proveedor de nube es una opción soportada, no un requisito;
   cambia cuando vos la cambiás.
 - Reglas de la partida, puntos y regiones de aparición y configuración del servidor versionados
   en `config/`; los secretos quedan fuera de git, en `.env`.
-- Vanilla por defecto. Los mods del Workshop se declaran en un único archivo de texto
+- Vanilla por defecto, en reglas y en mods. Los mods del Workshop se declaran en un único archivo de texto
   (`config/mods.txt`) que además define el orden de carga, y se mantienen al día con el Workshop
   solos, para que la actualización de un mod no deje a los jugadores afuera.
 - Apagado y reinicio limpios: `save` + `quit` por RCON, nunca un `docker stop` a secas.
@@ -113,7 +113,7 @@ reescribe a partir de `config/` y `.env`.
 | Archivo | Qué controla |
 |---|---|
 | `config/servertest.ini.tpl` | Configuración del servidor: PVP, jugadores máximos, visibilidad, chat, anticheat, backups nativos. Los secretos son placeholders que se completan desde `.env`. |
-| `config/servertest_SandboxVars.lua` | Reglas de la partida: cantidad y comportamiento de los zombies, loot, clima, velocidad de aprendizaje, erosión. Cada valor está documentado en el propio archivo. |
+| `config/servertest_SandboxVars.lua` | Reglas de la partida: cantidad y comportamiento de los zombies, loot, clima, velocidad de aprendizaje, erosión. Cada valor está documentado en el propio archivo. No está en git: `setup.sh` lo crea desde `config/servertest_SandboxVars.example.lua` (los valores vanilla del juego), y sin él el servidor usa el ejemplo tal cual. |
 | `config/servertest_spawnpoints.lua` | Dónde aparecen los personajes nuevos. |
 | `config/servertest_spawnregions.lua` | Qué regiones de aparición se ofrecen. |
 | `config/mods.txt` | Mods del Workshop, uno por línea; el orden del archivo es el orden de carga. No está en git: `setup.sh` lo crea desde `config/mods.example.txt`, y sin él el servidor corre vanilla. |

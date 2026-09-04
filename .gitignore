@@ -25,3 +25,6 @@ __pycache__/
 
 # mods de cada partida: se versiona solo config/mods.example.txt
 config/mods.txt
+
+# reglas de cada partida: se versiona solo config/servertest_SandboxVars.example.lua
+config/servertest_SandboxVars.lua

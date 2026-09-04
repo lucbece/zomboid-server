@@ -37,6 +37,11 @@ in git, optional deployment to a cloud VM with OpenTofu.
   the local working tree by `envs/prod/main.tf`) and via `make sync` afterwards.
   `render-config.sh` refuses to render an empty mod list over an ini that already had mods
   unless `ALLOW_VANILLA=1`.
+- `config/servertest_SandboxVars.lua` is **not versioned** either; the committed
+  `config/servertest_SandboxVars.example.lua` holds the game's vanilla values with every option
+  documented in place. `setup.sh` copies it when missing and `render-config.sh` falls back to the
+  example. `tools/encuesta/preguntas.json` marks the game default of every option with
+  `"default": true` (tie-break in `tally.py`), never "what this server has today".
 - VM paths: repository at `/opt/zomboid-server`, data at `/opt/zomboid-server/data/zomboid`,
   local backups at `/opt/zomboid-server/backups`, cron logs at `/var/log/zomboid/`, systemd unit
   at `/etc/systemd/system/zomboid.service` installed from `infra/systemd/`.
@@ -113,7 +118,8 @@ docker run --rm -v /tmp:/mnt ubuntu:24.04 bash -c \
   `quit` via `scripts/stop.sh`.
 - `config/` is the source of truth. Do not hand-edit files under `data/`.
 - Scripts are bash with `set -euo pipefail` and must pass `shellcheck`.
-- Documentation is written in English. The CLI is currently in Spanish; see `CONTRIBUTING.md`.
+- Documentation is written in English. The CLI is bilingual (es/en): the language is `ZS_LANG`
+  and the messages live in `scripts/lib/i18n/`; see `CONTRIBUTING.md`.
 - Code comments in the scripts are written in Spanish without accents, for consistency with what
   is already there. End-user messages do use accents.
 - `.env` is parsed by both bash (`source`) and Docker Compose, which escape differently: quote

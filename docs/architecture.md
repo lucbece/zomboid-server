@@ -10,8 +10,8 @@ On any Linux host, the server is a single Docker Compose service. The versioned 
 rendered into the bind mount that the container reads.
 
 ```
-config/*.tpl, *.lua ───────────┐
-config/mods.txt (not in git) ──┤
+config/*.tpl, spawn *.lua ─────┐
+SandboxVars.lua, mods.txt ─────┤  (per world, not in git)
                                ├─> scripts/render-config.sh ─> data/zomboid/Server/
 .env (secrets, ports, heap) ───┘                                        │
                                                                         v

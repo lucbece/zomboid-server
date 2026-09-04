@@ -18,7 +18,7 @@ a cloud provider is supported as one option, not as a requirement — see
   change it.
 - Game rules, spawn points, spawn regions and server settings versioned in `config/`; secrets
   kept out of git in `.env`.
-- Vanilla by default. Workshop mods are declared in a single text file (`config/mods.txt`) that
+- Vanilla by default, in rules and in mods. Workshop mods are declared in a single text file (`config/mods.txt`) that
   also defines load order, and are kept in step with the Workshop automatically so a mod update
   does not lock players out.
 - Clean shutdown and restart: RCON `save` + `quit`, never a bare `docker stop`.
@@ -110,7 +110,7 @@ from `config/` plus `.env`.
 | File | What it controls |
 |---|---|
 | `config/servertest.ini.tpl` | Server settings: PVP, max players, visibility, chat, anti-cheat, native backups. Secrets are placeholders filled from `.env`. |
-| `config/servertest_SandboxVars.lua` | Game rules: zombie count and behaviour, loot, weather, XP rates, erosion. Each value is documented in place. |
+| `config/servertest_SandboxVars.lua` | Game rules: zombie count and behaviour, loot, weather, XP rates, erosion. Each value is documented in place. Not in git: `setup.sh` creates it from `config/servertest_SandboxVars.example.lua` (the game's vanilla values), and without it the server uses the example as is. |
 | `config/servertest_spawnpoints.lua` | Where new characters spawn. |
 | `config/servertest_spawnregions.lua` | Which spawn regions are offered. |
 | `config/mods.txt` | Workshop mods, one per line; file order is load order. Not in git: `setup.sh` creates it from `config/mods.example.txt`, and without it the server runs vanilla. |

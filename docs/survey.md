@@ -65,7 +65,10 @@ make encuesta-aplicar     # the same, but writes the changes into config/ and sh
 The tally reports, per question, the votes for each option and the winner. **Ties are resolved in
 favour of the game's default**, so a tie never changes anything. Only the keys where the winner
 differs from what is currently in `config/` are listed, split between
-`servertest_SandboxVars.lua` and `servertest.ini.tpl`.
+`servertest_SandboxVars.lua` and `servertest.ini.tpl`. The `"default": true` flag in
+`preguntas.json` always marks the option the game ships with, never the server's current value;
+the current value is whatever `config/` holds, and `config/servertest_SandboxVars.lua` is a
+per-world file outside git (see the configuration table in the README).
 
 Two questions behave specially:
 
