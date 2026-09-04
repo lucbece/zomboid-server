@@ -54,12 +54,13 @@ OCI API as an instance principal, and its policy is deliberately minimal:
 Allow dynamic-group zomboid-bot-dg to use instances in compartment zomboid
   where all {
     target.instance.id = '<the game instance>',
-    any { request.permission = 'INSTANCE_INSPECT', request.permission = 'INSTANCE_POWER_ACTIONS' }
+    any { request.permission = 'INSTANCE_INSPECT', request.permission = 'INSTANCE_READ', request.permission = 'INSTANCE_POWER_ACTIONS' }
   }
 ```
 
-`INSTANCE_INSPECT` covers `GetInstance` (reading the lifecycle state) and
-`INSTANCE_POWER_ACTIONS` covers `InstanceAction` (`START` and `SOFTSTOP`). The bare `use
+`INSTANCE_INSPECT` covers `ListInstances`, `INSTANCE_READ` covers `GetInstance` (reading the
+lifecycle state; inspect alone is not enough for it) and `INSTANCE_POWER_ACTIONS` covers
+`InstanceAction` (`START` and `SOFTSTOP`). The bare `use
 instances` verb would also grant `INSTANCE_UPDATE` and volume attachment; the
 `request.permission` clause removes them. The `target.instance.id` clause pins the policy to the
 game instance, so the bot cannot touch anything else in the compartment — not the backup bucket,

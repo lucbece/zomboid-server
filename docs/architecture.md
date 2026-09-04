@@ -93,7 +93,7 @@ Discord                     bot instance (separate, always on)
 ───────                     ──────────────────────────────────
 /pz start|status|stop ──> tools/pz-bot/bot.py
                             ├─ GetInstance / InstanceAction ──oci──> the game VM
-                            │     (instance principal, INSTANCE_INSPECT + POWER_ACTIONS)
+                            │     (instance principal, INSPECT + READ + POWER_ACTIONS)
                             ├─ A2S_INFO on UDP 16261 ──────────────> the game server
                             └─ edits its own reply until the game answers
 
