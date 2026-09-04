@@ -34,6 +34,8 @@
 3774776279  SubirEscaleras
 3791279212  IAmBruceLeeNow
 3635856965  better-auto-mechanics
+2847184718  ProximityInventory       # Proximity Inventory B42.20+
+3713362869  Faster Reading           # [B42] Faster Reading
 
 # --- Vehiculos KI5 ---
 3647735736  95impreza
