@@ -268,6 +268,16 @@ línea JSON por voto, cuenta los resultados y puede escribir las opciones ganado
 en `config/`. Es opcional y está desactivada por defecto. Ver [`docs/survey.md`](docs/survey.md),
 incluidas las consideraciones de seguridad de exponerla por HTTP sin cifrar.
 
+## Panel de moderadores
+
+`tools/panel/` es una página web opcional para que dos a cuatro personas de confianza puedan
+reiniciar el servidor del juego sin cuenta de SSH: muestra el estado del server y quién está
+conectado, y ofrece un solo botón que hace el mismo reinicio limpio que `make restart`. Cada
+moderador recibe su propio link, que es además su credencial, y los reinicios tienen cooldown y
+quedan registrados. Es opcional y está desactivado por defecto. Ver
+[`docs/panel.md`](docs/panel.md), incluido el modelo de seguridad de repartir una URL sin
+autenticación por HTTP sin cifrar.
+
 ## Documentación
 
 | Documento | Contenido |
@@ -277,6 +287,7 @@ incluidas las consideraciones de seguridad de exponerla por HTTP sin cifrar.
 | [`docs/deploy-oracle.md`](docs/deploy-oracle.md) | Despliegue en Oracle Cloud: cuenta, clave de API, `setup.sh`, `make deploy`, costos |
 | [`docs/mods.md`](docs/mods.md) | Agregar, quitar y diagnosticar mods del Workshop |
 | [`docs/survey.md`](docs/survey.md) | La encuesta de reglas: cómo levantarla, contarla y cerrarla |
+| [`docs/panel.md`](docs/panel.md) | El panel de moderadores: tokens, cooldowns, modelo de seguridad (en inglés) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Qué verificar antes de abrir un pull request |
 | [`docs/history/`](docs/history/) | El plan original y las notas de investigación, en castellano. Material histórico, sin mantenimiento |
 

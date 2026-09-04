@@ -259,6 +259,15 @@ tallies the results and can write the winning options straight into `config/`. I
 off by default. See [`docs/survey.md`](docs/survey.md), including the security considerations of
 running it over plain HTTP.
 
+## Moderator panel
+
+`tools/panel/` is an optional web page that lets two to four trusted people restart the game
+server without an SSH account: it shows the server state and the connected players, and offers a
+single button that runs the same clean restart as `make restart`. Each moderator gets their own
+link, which is also their credential, and restarts are rate-limited and logged. It is optional
+and off by default. See [`docs/panel.md`](docs/panel.md), including the security model of
+handing out an unauthenticated URL over plain HTTP.
+
 ## Documentation
 
 | Document | Contents |
@@ -268,6 +277,7 @@ running it over plain HTTP.
 | [`docs/deploy-oracle.md`](docs/deploy-oracle.md) | Deploying to Oracle Cloud: account, API key, `setup.sh`, `make deploy`, costs |
 | [`docs/mods.md`](docs/mods.md) | Adding, removing and debugging Workshop mods |
 | [`docs/survey.md`](docs/survey.md) | The rules survey: running it, tallying it, closing it |
+| [`docs/panel.md`](docs/panel.md) | The moderator panel: tokens, cooldowns, security model |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run before opening a pull request |
 | [`docs/history/`](docs/history/) | The original plan and research notes, in Spanish. Historical, not maintained |
 

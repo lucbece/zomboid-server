@@ -23,14 +23,16 @@ jobs:
             -x setup.sh scripts/*.sh scripts/lib/*.sh
 
   python:
-    name: python (tools/encuesta)
+    name: python (tools/encuesta, tools/panel)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       # Solo stdlib: alcanza con verificar que compila y que preguntas.json es coherente
       # (cada pregunta con exactamente una opcion marcada como default del juego).
       - name: py_compile
-        run: python3 -m py_compile tools/encuesta/server.py tools/encuesta/tally.py
+        run: |
+          python3 -m py_compile tools/encuesta/server.py tools/encuesta/tally.py \
+            tools/panel/server.py tools/panel/tokens.py
       - name: preguntas.json
         run: |
           python3 - <<'EOF'
