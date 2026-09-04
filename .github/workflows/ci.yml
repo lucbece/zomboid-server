@@ -63,8 +63,7 @@ jobs:
           n = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(n)
 
-          s = n.SeguidorDeUsuarios.__new__(n.SeguidorDeUsuarios)
-          s.nombres = {}
+          s = n.LectorDeUsuarios()
           casos = [
               ('[04-09-26 03:27:00.540] 76561198000000000 "Fulano" attempting to join.', None),
               ('[04-09-26 03:27:35.424] 76561198000000000 "Fulano" fully connected (10624,9801,0).',

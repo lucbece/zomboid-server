@@ -88,6 +88,7 @@ VENTANA = float(os.environ.get("NOTIFIER_GROUP_SECONDS", "30"))  # agrupacion de
 INTERVALO_POST = float(os.environ.get("NOTIFIER_POST_INTERVAL", "2"))  # rate limit propio
 INTERVALO_RCON = float(os.environ.get("NOTIFIER_RCON_INTERVAL", "60"))  # red de seguridad
 ESPERA_MUERTE = float(os.environ.get("NOTIFIER_DEATH_WAIT", "5"))  # espera de las horas del PerkLog
+ESPERA_SIEMBRA = float(os.environ.get("NOTIFIER_SEED_TIMEOUT", "20"))  # cuanto se insiste con RCON
 ESPERA_RECONEXION = float(os.environ.get("NOTIFIER_RECONNECT_SECONDS", "5"))
 TIMEOUT_RCON = float(os.environ.get("NOTIFIER_RCON_TIMEOUT", "15"))
 TIMEOUT_HTTP = float(os.environ.get("NOTIFIER_HTTP_TIMEOUT", "15"))
@@ -560,90 +561,15 @@ class SeguidorDeEventos(Fuente):
             self.parar.wait(ESPERA_RECONEXION)
 
 
-class SeguidorDeUsuarios(Fuente):
-    """Sigue los dos logs del juego que importan: *_user.txt y *_PerkLog.txt.
+class LectorDeUsuarios:
+    """Traduce lineas de *_user.txt y *_PerkLog.txt a eventos. Sin hilos: tambien lo usa la
+    siembra inicial, que necesita las mismas reglas sin publicar nada."""
 
-    Del primero salen las entradas, las salidas y las muertes; del segundo, las horas que
-    sobrevivio el que murio. Los dos rotan igual: el server abre un archivo nuevo en cada
-    arranque y archiva el viejo en logs_YYYY-MM-DD/, asi que hay que re-elegirlos cada vuelta
-    y no quedarse pegado a un descriptor.
-    """
-
-    def __init__(self, cola: queue.Queue, parar: threading.Event, estado: Estado) -> None:
-        super().__init__("usuarios", cola, parar)
-        self.estado = estado
-        self.actual: Path | None = None
-        self.inode: int | None = None
-        self.offset = 0
+    def __init__(self) -> None:
         self.nombres: dict[str, str] = {}  # steamid -> nombre
-        self.perk: Path | None = None
-        self.perk_inode: int | None = None
-        self.perk_offset = 0
-        self.perk_primera = True
 
-    # --- eleccion del archivo -----------------------------------------------------------
-    def mas_nuevo(self, patron: str = "*_user.txt") -> Path | None:
-        try:
-            candidatos = [p for p in LOGS_DIR.glob(patron) if p.is_file()]
-        except OSError:
-            return None
-        if not candidatos:
-            return None
-        # Por mtime, con el nombre (que es cronologico) como desempate.
-        return max(candidatos, key=lambda p: (p.stat().st_mtime, p.name))
-
-    def adoptar(self, archivo: Path, primera_vez: bool) -> list[tuple[str, tuple[str, str]]]:
-        """Pasa a seguir 'archivo'. Devuelve los eventos de la parte ya escrita, en silencio.
-
-        Al arrancar el notifier se relee lo que va del archivo sin publicar nada: sirve para
-        saber quien esta adentro y como se llama cada steamid. Si el estado guardado ya tiene
-        un offset para este mismo archivo, se retoma desde ahi (nada de duplicados) y solo se
-        relee la parte vieja para reconstruir los nombres.
-        """
-        st = archivo.stat()
-        guardado = self.estado.get("user_log") or {}
-        retomar = (
-            primera_vez
-            and guardado.get("path") == str(archivo)
-            and guardado.get("inode") == st.st_ino
-            and 0 <= int(guardado.get("offset", 0)) <= st.st_size
-        )
-        hasta = int(guardado["offset"]) if retomar else st.st_size
-
-        eventos = self._leer(archivo, 0, hasta)
-        self.actual = archivo
-        self.inode = st.st_ino
-        self.offset = hasta
-        self._guardar()
-        log(f"archivo de usuarios: {archivo.name} (desde el byte {hasta})")
-        return [] if retomar else eventos
-
-    def _guardar(self) -> None:
-        self.estado.set("user_log", {
-            "path": str(self.actual), "inode": self.inode, "offset": self.offset,
-        })
-
-    # --- lectura ------------------------------------------------------------------------
-    def _leer(self, archivo: Path, desde: int, hasta: int, interpretar=None) -> list[tuple]:
-        interpretar = interpretar or self.interpretar
-        if hasta <= desde:
-            return []
-        try:
-            with archivo.open("rb") as fh:
-                fh.seek(desde)
-                crudo = fh.read(hasta - desde)
-        except OSError as e:
-            log(f"ADVERTENCIA: no se pudo leer {archivo}: {e}")
-            return []
-        eventos = []
-        for linea in crudo.decode("utf-8", "replace").splitlines():
-            ev = interpretar(linea)
-            if ev:
-                eventos.append(ev)
-        return eventos
-
-    def interpretar(self, linea: str) -> tuple[str, tuple[str, str]] | None:
-        """Devuelve ('entra'|'sale', (steamid, nombre)) o None si la linea no dice nada."""
+    def interpretar(self, linea: str) -> tuple[str, tuple] | None:
+        """Devuelve ('entra'|'sale'|'murio', (...)) o None si la linea no dice nada."""
         m = RE_NOMBRE.match(linea)
         if m:
             self.nombres[m.group(1)] = m.group(2)
@@ -668,6 +594,114 @@ class SeguidorDeUsuarios(Fuente):
         if m:
             return ("murio-horas", (m.group(2), int(m.group(3))))
         return None
+
+    def presentes(self, archivo: Path) -> dict[str, str]:
+        """steamid -> nombre de quien esta adentro, segun el archivo leido entero.
+
+        Es la siembra de reserva: no publica nada, solo reconstruye el estado.
+        """
+        try:
+            texto = archivo.read_text("utf-8", errors="replace")
+        except OSError as e:
+            log(f"ADVERTENCIA: no se pudo leer {archivo}: {e}")
+            return {}
+        dentro: dict[str, str] = {}
+        for linea in texto.splitlines():
+            ev = self.interpretar(linea)
+            if ev is None:
+                continue
+            clase, valores = ev
+            if clase == "entra":
+                dentro[valores[0]] = valores[1]
+            elif clase == "sale":
+                dentro.pop(valores[0], None)
+        return dentro
+
+
+class SeguidorDeUsuarios(Fuente):
+    """Sigue los dos logs del juego que importan: *_user.txt y *_PerkLog.txt.
+
+    Del primero salen las entradas, las salidas y las muertes; del segundo, las horas que
+    sobrevivio el que murio. Los dos rotan igual: el server abre un archivo nuevo en cada
+    arranque y archiva el viejo en logs_YYYY-MM-DD/, asi que hay que re-elegirlos cada vuelta
+    y no quedarse pegado a un descriptor.
+    """
+
+    def __init__(self, cola: queue.Queue, parar: threading.Event, estado: Estado) -> None:
+        super().__init__("usuarios", cola, parar)
+        self.estado = estado
+        self.actual: Path | None = None
+        self.inode: int | None = None
+        self.offset = 0
+        self.lector = LectorDeUsuarios()
+        self.perk: Path | None = None
+        self.perk_inode: int | None = None
+        self.perk_offset = 0
+        self.perk_primera = True
+
+    # --- eleccion del archivo -----------------------------------------------------------
+    def mas_nuevo(self, patron: str = "*_user.txt") -> Path | None:
+        try:
+            candidatos = [p for p in LOGS_DIR.glob(patron) if p.is_file()]
+        except OSError:
+            return None
+        if not candidatos:
+            return None
+        # Por mtime, con el nombre (que es cronologico) como desempate.
+        return max(candidatos, key=lambda p: (p.stat().st_mtime, p.name))
+
+    def adoptar(self, archivo: Path, primera_vez: bool) -> list[tuple[str, tuple[str, str]]]:
+        """Pasa a seguir 'archivo'. Devuelve los eventos de la parte ya escrita, en silencio.
+
+        La parte anterior al offset se relee siempre, pero solo para reconstruir el mapa
+        steamid -> nombre. Si el estado guardado tiene un offset para este mismo archivo se
+        retoma desde ahi, y si no, desde el final: en ninguno de los dos casos se republica
+        historia.
+
+        En la primera vuelta no se devuelve nada: de quien esta adentro ya se encargo
+        sembrar(), que ademas le pregunto a RCON. Devolver eventos aca duplicaria esa lista.
+        """
+        st = archivo.stat()
+        guardado = self.estado.get("user_log") or {}
+        retomar = (
+            primera_vez
+            and guardado.get("path") == str(archivo)
+            and guardado.get("inode") == st.st_ino
+            and 0 <= int(guardado.get("offset", 0)) <= st.st_size
+        )
+        hasta = int(guardado["offset"]) if retomar else st.st_size
+
+        eventos = self._leer(archivo, 0, hasta)
+        self.actual = archivo
+        self.inode = st.st_ino
+        self.offset = hasta
+        self._guardar()
+        log(f"archivo de usuarios: {archivo.name} (desde el byte {hasta})")
+        return [] if (primera_vez or retomar) else eventos
+
+    def _guardar(self) -> None:
+        self.estado.set("user_log", {
+            "path": str(self.actual), "inode": self.inode, "offset": self.offset,
+        })
+
+    # --- lectura ------------------------------------------------------------------------
+    def _leer(self, archivo: Path, desde: int, hasta: int, interpretar=None) -> list[tuple]:
+        interpretar = interpretar or self.lector.interpretar
+        if hasta <= desde:
+            return []
+        try:
+            with archivo.open("rb") as fh:
+                fh.seek(desde)
+                crudo = fh.read(hasta - desde)
+        except OSError as e:
+            log(f"ADVERTENCIA: no se pudo leer {archivo}: {e}")
+            return []
+        eventos = []
+        for linea in crudo.decode("utf-8", "replace").splitlines():
+            ev = interpretar(linea)
+            if ev:
+                eventos.append(ev)
+        return eventos
 
     # --- PerkLog ------------------------------------------------------------------------
     def paso_perk(self) -> None:
@@ -699,7 +733,7 @@ class SeguidorDeUsuarios(Fuente):
         if st.st_size < self.perk_offset:
             self.perk_offset = 0
         if st.st_size > self.perk_offset:
-            for ev in self._leer(archivo, self.perk_offset, st.st_size, self.interpretar_perk):
+            for ev in self._leer(archivo, self.perk_offset, st.st_size, self.lector.interpretar_perk):
                 self.cola.put(ev)
             self.perk_offset = st.st_size
             self._guardar_perk()
@@ -726,7 +760,7 @@ class SeguidorDeUsuarios(Fuente):
             if self.actual is None or st.st_ino != self.inode:
                 # Archivo nuevo (arranque nuevo del server): nadie sigue adentro del anterior.
                 if self.actual is not None:
-                    self.nombres.clear()
+                    self.lector.nombres.clear()
                     self.cola.put(("usuarios-reset", None))
                 for ev in self.adoptar(archivo, primera_vez):
                     self.cola.put(("silencioso", ev))
@@ -924,6 +958,46 @@ class Notificador:
 # =============================================================================================
 
 
+def sembrar(n: "Notificador") -> None:
+    """Deja la lista de conectados igual a la realidad, SIN publicar nada.
+
+    Sin esto, un reinicio del servicio arranca creyendo que no hay nadie: dos pasadas de la
+    reconciliacion despues, RCON dice que hay cuatro y se publica un 'Movimiento de jugadores'
+    que no ocurrio. La siembra es sincronica y va antes de arrancar los hilos, asi que ni los
+    avisos de entrada y salida ni la reconciliacion pueden correr antes.
+
+    RCON es la fuente autoritativa; se insiste hasta ESPERA_SIEMBRA segundos porque despues de
+    un arranque del server puede tardar en responder. Las claves se toman igual del *_user.txt
+    (el steamid), que es lo que despues permite reconocer un 'Connection disconnect'.
+    """
+    archivo = None
+    try:
+        candidatos = [p for p in LOGS_DIR.glob("*_user.txt") if p.is_file()]
+        archivo = max(candidatos, key=lambda p: (p.stat().st_mtime, p.name)) if candidatos else None
+    except OSError:
+        archivo = None
+    del_archivo = LectorDeUsuarios().presentes(archivo) if archivo else {}
+    por_nombre = {nombre: sid for sid, nombre in del_archivo.items()}
+
+    limite = time.monotonic() + ESPERA_SIEMBRA
+    while True:
+        r = rcon_players()
+        if r is not None:
+            n.conectados = r[0]
+            # La clave real (el steamid) cuando el archivo la sabe; si no, uno sintetico.
+            n.presentes = {por_nombre.get(nom, f"rcon:{nom}"): nom for nom in r[1]}
+            log(f"siembra por RCON: {n.conectados} conectados ({', '.join(sorted(r[1])) or '-'})")
+            return
+        if time.monotonic() >= limite:
+            break
+        time.sleep(2)
+
+    n.presentes = del_archivo
+    n.conectados = len(del_archivo)
+    log(f"RCON no contesto: siembra por {archivo.name if archivo else 'nada'}, "
+        f"{n.conectados} conectados ({', '.join(sorted(del_archivo.values())) or '-'})")
+
+
 def arrancar(una_vez: bool) -> int:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     estado = Estado(STATE_DIR / "estado.json")
@@ -938,18 +1012,17 @@ def arrancar(una_vez: bool) -> int:
 
     n = Notificador(estado, publicador)
 
-    # Foto del estado actual: si el server ya estaba arriba antes de instalar el notifier, se
-    # avisa una sola vez (la clave es el StartedAt del contenedor, asi que un reinicio del
-    # servicio no lo repite).
-    if contenedor_arrancado_en() and ya_arranco():
-        # Solo el conteo: la lista de quien esta adentro la reconstruye SeguidorDeUsuarios
-        # releyendo el user.txt del arranque en curso, que ademas trae el steamid de cada uno.
-        r = rcon_players()
-        if r is not None:
-            n.conectados = r[0]
-        n.arranco(version_del_juego(), ya_estaba=True)
+    # Con el server arriba, primero se siembra la lista de conectados (en silencio) y recien
+    # despues se avisa el estado. La clave del aviso es el StartedAt del contenedor, asi que
+    # un reinicio del servicio no lo repite.
+    if contenedor_arrancado_en():
+        sembrar(n)
+        if ya_arranco():
+            n.arranco(version_del_juego(), ya_estaba=True)
+        else:
+            log("el contenedor esta arriba pero todavia no llego a SERVER STARTED")
     else:
-        log("el server no esta arriba (o todavia no llego a SERVER STARTED)")
+        log("el server no esta arriba")
 
     if una_vez:
         while not publicador.cola.empty():

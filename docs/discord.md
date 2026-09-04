@@ -162,6 +162,7 @@ Everything is read from the environment, which on the VM is the `.env` loaded by
 | `NOTIFIER_POST_INTERVAL` | `2` | Minimum seconds between two POSTs |
 | `NOTIFIER_RCON_INTERVAL` | `60` | How often the player list is reconciled against RCON |
 | `NOTIFIER_DEATH_WAIT` | `5` | How long a death waits for its `Hours Survived` line |
+| `NOTIFIER_SEED_TIMEOUT` | `20` | How long the startup seeding keeps asking RCON before falling back to the log file |
 | `NOTIFIER_DRY_RUN` | `0` | `1` logs the messages instead of posting them |
 
 The rate limit is self-imposed: at most one POST every two seconds, one message at a time. A
@@ -219,6 +220,13 @@ make notifier-status N=100
 `make notifier-install` runs `make sync` first, so it also updates the script itself. On a new VM
 cloud-init installs and enables the unit; there is nothing to do beyond putting the webhook URL
 in `.env`.
+
+On startup the daemon seeds its list of connected players before anything else and without
+posting: `scripts/rcon.sh players` first, retried for up to `NOTIFIER_SEED_TIMEOUT` seconds, and
+if RCON never answers, the current `_user.txt` read in full. Player messages and the RCON
+reconciliation only begin after that. Skipping this step is what made a restart with four people
+online post a "Movimiento de jugadores · 4 en línea" that had not happened: the daemon started
+believing the server was empty and the reconciliation dutifully reported the difference.
 
 State lives in `/var/tmp/zomboid-notifier/estado.json`:
 
