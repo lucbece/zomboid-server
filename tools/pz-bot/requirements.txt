@@ -1,0 +1,7 @@
+# Dependencias del bot de Discord. Se instalan en el venv /opt/pz-bot-venv de la instancia del
+# bot (ver infra/cloud-init-bot.yaml); NO se instalan en la VM del juego.
+#
+# Los rangos son de mayor menor: discord.py 3 y oci 3 pueden romper compatibilidad, y esta VM
+# se reprovisiona sola desde cloud-init.
+discord.py>=2.4,<3
+oci>=2.130,<3
