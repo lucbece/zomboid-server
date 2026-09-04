@@ -110,8 +110,13 @@ RE_RCON_N = re.compile(r"Players connected\s*\((\d+)\)")
 RE_MARKDOWN = re.compile(r"([\\`*_~|>\[\]()#-])")
 
 
+# print() no es atomico entre hilos: sin el candado, dos lineas del journal salen pegadas.
+_CANDADO_LOG = threading.Lock()
+
+
 def log(msg: str) -> None:
-    print(f"[{datetime.now(timezone.utc).isoformat(timespec='seconds')}] {msg}", flush=True)
+    with _CANDADO_LOG:
+        print(f"[{datetime.now(timezone.utc).isoformat(timespec='seconds')}] {msg}", flush=True)
 
 
 def ahora_iso() -> str:
