@@ -7,7 +7,7 @@ policy que crea OpenTofu, acotados a INSTANCE_INSPECT e INSTANCE_POWER_ACTIONS s
 instancia (la del juego). Aunque alguien se lleve la VM del bot, lo maximo que puede hacer es
 prender y apagar el server.
 
-    GetInstance        -> INSTANCE_INSPECT
+    GetInstance        -> INSTANCE_READ (INSTANCE_INSPECT solo alcanza para ListInstances)
     InstanceAction     -> INSTANCE_POWER_ACTIONS   (START, SOFTSTOP)
 
 SOFTSTOP y no STOP: SOFTSTOP le pide al SO que se apague, el shutdown dispara el ExecStop de

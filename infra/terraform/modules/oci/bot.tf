@@ -11,7 +11,7 @@
 # Lo que crea:
 #   - NSG propio (egress todo; ingress solo SSH desde admin_cidr: el bot no escucha nada)
 #   - instancia Always Free con IP publica EFIMERA (a nadie le importa la IP del bot)
-#   - dynamic group + policy acotada a INSTANCE_INSPECT e INSTANCE_POWER_ACTIONS sobre la
+#   - dynamic group + policy acotada a INSTANCE_INSPECT, INSTANCE_READ e INSTANCE_POWER_ACTIONS sobre la
 #     instancia del juego, y sobre ninguna otra
 # ---------------------------------------------------------------------------------------------
 
@@ -242,7 +242,7 @@ resource "oci_identity_policy" "bot" {
     join(" ", [
       "Allow dynamic-group id ${oci_identity_dynamic_group.bot[0].id}",
       "to use instances in compartment id ${oci_identity_compartment.this.id}",
-      "where any {request.permission = 'INSTANCE_INSPECT', request.permission = 'INSTANCE_POWER_ACTIONS'}",
+      "where any {request.permission = 'INSTANCE_INSPECT', request.permission = 'INSTANCE_READ', request.permission = 'INSTANCE_POWER_ACTIONS'}",
     ]),
   ]
 }
