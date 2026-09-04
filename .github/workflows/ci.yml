@@ -199,6 +199,22 @@ jobs:
           test -z "$(filtrar /tmp/log-ruido)" || { echo "falso positivo con ruido de mods"; exit 1; }
           echo "OK: patrones validos, atrapa la falla y descarta el ruido"
 
+  pz-bot:
+    name: pz-bot (tests del bot de Discord)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Los tests no necesitan discord.py ni el SDK de oci: la logica de los comandos recibe el
+      # cliente de OCI, la consulta A2S y el reloj por parametro, y las fixtures son dobles.
+      - name: unittest
+        run: |
+          cd tools/pz-bot && python3 -m unittest -v
+      # bot.py si importa discord.py, asi que solo se verifica que compile.
+      - name: py_compile
+        run: |
+          python3 -m py_compile tools/pz-bot/bot.py tools/pz-bot/a2s.py \
+            tools/pz-bot/power.py tools/pz-bot/logica.py
+
   tofu:
     name: opentofu fmt + validate
     runs-on: ubuntu-latest
@@ -228,12 +244,14 @@ jobs:
         run: |
           scripts/render-cloud-init.sh https /tmp/ci-https.yaml
           scripts/render-cloud-init.sh ssh   /tmp/ci-ssh.yaml
+          scripts/render-cloud-init.sh bot   /tmp/ci-bot.yaml
       - name: schema
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq cloud-init
           cloud-init schema --config-file /tmp/ci-https.yaml
           cloud-init schema --config-file /tmp/ci-ssh.yaml
+          cloud-init schema --config-file /tmp/ci-bot.yaml
 
   gitleaks:
     name: gitleaks

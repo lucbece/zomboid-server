@@ -325,6 +325,28 @@ make notifier-install    # install and enable the daemon on an existing VM
 make notifier-status     # unit state and the last 20 journal lines
 ```
 
+## On-demand start and stop
+
+The server does not have to run while nobody is playing. `scripts/idle-shutdown.sh` powers the
+VM off after 30 minutes with no players — saving the world and uploading a backup first — and a
+Discord bot on a separate always-on instance powers it back on. Oracle Cloud does not bill
+compute for a stopped instance, and the reserved IP survives the cycle, so the address the
+players keep in their favourites never changes.
+
+`/pz start` answers immediately and then edits its own message until the game answers an
+`A2S_INFO` query, ending in "En línea". `/pz status` reports what the server itself says: name,
+map, players, version. `/pz stop` refuses unless the server reports zero players, and refuses
+just as firmly when it cannot tell. The bot authenticates to the cloud API as an instance
+principal with permission to inspect and power-cycle exactly one instance — no credentials on
+disk. See [`docs/on-demand.md`](docs/on-demand.md) for the Discord application, the free-tier
+shapes and what the cycle costs.
+
+```bash
+make bot-install            # deploy or update the bot on its instance
+make bot-status             # unit state and the last journal lines
+make idle-shutdown-install  # enable the idle shutdown, once the bot works
+```
+
 ## Documentation
 
 | Document | Contents |
@@ -337,6 +359,7 @@ make notifier-status     # unit state and the last 20 journal lines
 | [`docs/panel.md`](docs/panel.md) | The moderator panel: tokens, cooldowns, security model |
 | [`docs/self-healing.md`](docs/self-healing.md) | The watchdog, the Discord alerts and the optional Claude Code auto-repair |
 | [`docs/discord.md`](docs/discord.md) | The two Discord integrations: the native chat bridge and the status notifier |
+| [`docs/on-demand.md`](docs/on-demand.md) | Idle shutdown and the Discord bot that starts the server on demand |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run before opening a pull request |
 | [`docs/history/`](docs/history/) | The original plan and research notes, in Spanish. Historical, not maintained |
 

@@ -45,7 +45,11 @@ Shutdown never goes through `docker stop`. `scripts/stop.sh` warns players over 
                                         ├─ reserved public IP  (survives stop/start)
                                         ├─ Object Storage bucket + lifecycle rule
                                         ├─ dynamic group + IAM policy  (instance principal)
-                                        └─ budget + alert rules  (email only)
+                                        ├─ budget + alert rules  (email only)
+                                        └─ when bot_enabled: a second compartment holding an
+                                           Always Free instance for the Discord bot, its own
+                                           NSG (SSH from admin_cidr only), and a policy scoped
+                                           to inspecting and power-cycling the game instance
                                         │
                                         v
                                    cloud-init, first boot
@@ -77,7 +81,21 @@ make remote-backup ─────ssh───> scripts/backup.sh ──rclone�
                                 cron, daily ──────────────────┘
 ./scripts/cloud-stop.sh ──oci──> clean shutdown + backup, then SOFTSTOP
 ./scripts/cloud-start.sh ─oci──> START; the reserved IP is unchanged
-scripts/idle-shutdown.sh (on the VM, written but not scheduled)
+
+on-demand                                  VM
+─────────                                  ──
+cron, every 5 min ──> scripts/idle-shutdown.sh
+                        ├─ RCON `players` == 0 for IDLE_MINUTES
+                        ├─ scripts/stop.sh + scripts/backup.sh
+                        └─ shutdown -h now ──> the instance reaches STOPPED
+
+Discord                     bot instance (separate, always on)
+───────                     ──────────────────────────────────
+/pz start|status|stop ──> tools/pz-bot/bot.py
+                            ├─ GetInstance / InstanceAction ──oci──> the game VM
+                            │     (instance principal, INSTANCE_INSPECT + POWER_ACTIONS)
+                            ├─ A2S_INFO on UDP 16261 ──────────────> the game server
+                            └─ edits its own reply until the game answers
 
 moderators                                 VM
 ──────────                                 ──
@@ -126,7 +144,10 @@ cloud-init from `terraform.tfvars` and is never synchronised or committed.
 | `repo_url` determines the clone mode | An `https://` URL is cloned anonymously and no key pair is created. An SSH URL causes OpenTofu to generate an ed25519 deploy key, which must be registered on GitHub before first boot. |
 | Budget alerts by email only | An automated spend cap that could delete a running world is worse than a late email. |
 | OpenTofu, one module per provider | The VM is disposable; what persists is the repository and the backup bucket. `preserve_boot_volume` is false for the same reason. |
-| Idle shutdown written but not scheduled | Powering the VM off automatically would leave players with no way to bring it back. The cron line stays commented until something can start it on demand. |
+| The idle shutdown is only enabled together with the bot | Powering the VM off automatically would leave players with no way to bring it back. The cron line ships commented out and `make idle-shutdown-install` turns it on once `/pz start` has been shown to work. The two halves are one feature. |
+| The bot runs on its own instance, in its own compartment | It cannot live on the game VM, which is off precisely when it is needed. The compartment is not cosmetic: OCI has no policy variable naming a specific instance — the general variables stop at `target.compartment.id`, and the Core Services table adds only `target.boot-volume.kms-key.id` and `target.image.id`. Keeping the bot out of the game's compartment is what makes "power-cycle instances in compartment `zomboid`" mean one machine, and not include the bot itself. See [`on-demand.md`](on-demand.md). |
+| The bot decides "is the server up" from A2S, not from the instance state | `RUNNING` means the VM booted, not that the game finished loading its mods — the three minutes between the two are the whole reason `/pz start` follows up instead of answering once. A2S also gives the player count that `/pz stop` refuses to act without, and the name, map and version that the messages quote, so nothing about the server is duplicated in the bot's configuration. |
+| `/pz stop` refuses when A2S does not answer | An unreachable server is not an empty one: it may be loading with people waiting to join. The failure mode of refusing is a message; the failure mode of guessing is somebody's progress. |
 | The watchdog only restarts and cleans up | It runs unattended every two minutes, so every action it can take has to be one that is safe to take at 3 a.m. with nobody watching. Restarting is idempotent and disk cleanup only removes what regenerates or is already in the bucket; wipe, restore and configuration changes are not, so they are not in the playbook. See [`self-healing.md`](self-healing.md). |
 | Fatal log patterns live in two files, one of them subtractive | A Project Zomboid log is full of `ERROR` and `SEVERE` lines from mods that mean nothing. A broad fatal list plus an explicit ignore list makes a false positive a one-line fix in the ignore file, instead of a progressively narrower regex nobody dares to touch. A false positive costs every player a two-minute restart. |
 | Escalation to Claude Code is opt-in and off by default | Layer 1 handles the failures that actually happen. Layer 2 gives an agent a shell on the machine that holds the world: the tool allowlist and the hard rules are mitigations, not a sandbox, so the decision to accept that trade belongs to whoever runs the server, not to the template. |

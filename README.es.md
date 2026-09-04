@@ -336,6 +336,28 @@ make notifier-install    # instala y habilita el daemon en una VM que ya existe
 make notifier-status     # estado de la unit y las últimas 20 líneas del journal
 ```
 
+## Encendido y apagado a pedido
+
+El servidor no tiene por qué estar prendido mientras no juega nadie. `scripts/idle-shutdown.sh`
+apaga la VM después de 30 minutos sin jugadores —guardando el mundo y subiendo un backup
+antes—, y un bot de Discord que corre en una instancia aparte, siempre encendida, la vuelve a
+prender. Oracle Cloud no cobra cómputo por una instancia detenida, y la IP reservada sobrevive
+el ciclo: la dirección que los amigos tienen en favoritos no cambia.
+
+`/pz start` contesta al instante y después edita su propio mensaje hasta que el juego responde
+una consulta `A2S_INFO`, terminando en "En línea". `/pz status` muestra lo que dice el propio
+servidor: nombre, mapa, jugadores, versión. `/pz stop` se niega si hay alguien conectado, y se
+niega igual cuando no puede saberlo. El bot se autentica contra la API de la nube por instance
+principal, con permiso para inspeccionar y prender/apagar exactamente una instancia y ninguna
+credencial en disco. Ver [`docs/on-demand.md`](docs/on-demand.md) (en inglés) para la aplicación
+de Discord, los shapes del nivel gratuito y lo que cuesta el ciclo.
+
+```bash
+make bot-install            # instala o actualiza el bot en su instancia
+make bot-status             # estado de la unit y las últimas líneas del log
+make idle-shutdown-install  # activa el apagado por inactividad, una vez que el bot anda
+```
+
 ## Documentación
 
 | Documento | Contenido |
@@ -348,6 +370,7 @@ make notifier-status     # estado de la unit y las últimas 20 líneas del journ
 | [`docs/panel.md`](docs/panel.md) | El panel de moderadores: tokens, cooldowns, modelo de seguridad (en inglés) |
 | [`docs/self-healing.md`](docs/self-healing.md) | El watchdog, los avisos de Discord y el auto-arreglo opcional con Claude Code (en inglés) |
 | [`docs/discord.md`](docs/discord.md) | Las dos integraciones con Discord: el puente de chat nativo y los avisos de estado (en inglés) |
+| [`docs/on-demand.md`](docs/on-demand.md) | El apagado por inactividad y el bot de Discord que prende el servidor a pedido (en inglés) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Qué verificar antes de abrir un pull request |
 | [`docs/history/`](docs/history/) | El plan original y las notas de investigación, en castellano. Material histórico, sin mantenimiento |
 
