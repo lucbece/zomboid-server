@@ -9,18 +9,20 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
 # shellcheck source=scripts/lib/oci-instance.sh
 source "${REPO_DIR}/scripts/lib/oci-instance.sh"
 
 require_oci_cli
 ocid="$(oci_instance_ocid)"
-echo "cloud-start: START sobre ${ocid}"
+printf '%s\n' "$(t cloudstart.starting "${ocid}")"
 oci compute instance action --action START --instance-id "${ocid}" --wait-for-state RUNNING
 
 ip="$(tofu_output public_ip || true)"
 if [[ -n "${ip}" ]]; then
-  echo "cloud-start: VM prendida. El server tarda ~1 min mas en levantar."
-  echo "cloud-start: los amigos se conectan a ${ip}:16261"
+  printf '%s\n' "$(t cloudstart.up_hint)"
+  printf '%s\n' "$(t cloudstart.connect "${ip}")"
 else
-  echo "cloud-start: VM prendida."
+  printf '%s\n' "$(t cloudstart.up)"
 fi

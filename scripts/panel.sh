@@ -32,17 +32,7 @@ IP=""  # la completa main() antes de llamar a cualquier cmd_* que use la VM
 DATOS_VM="${VM_DIR}/data/panel"
 
 uso() {
-  cat <<MSG
-uso: scripts/panel.sh <comando>
-
-  up                      sincroniza el repo, instala la unit, abre el puerto y arranca el panel
-  down                    para el panel y cierra el puerto en ufw (los tokens quedan en la VM)
-  estado                  estado de la unit, /salud y moderadores cargados
-  token add <nombre>      crea un token y imprime la URL completa para ese moderador
-  token list              lista los moderadores (no imprime los tokens enteros)
-  token revoke <nombre>   desactiva el token de un moderador
-  log [N]                 ultimas N acciones registradas (default 20)
-MSG
+  printf '%s\n' "$(t panel.usage)"
 }
 
 # IP de la VM: la del entorno o la del output de OpenTofu.
@@ -54,7 +44,7 @@ resolver_ip() {
   local ip
   ip="$(tofu_output public_ip "${TF_RE_IP}")" || true
   if [[ -z "${ip}" ]]; then
-    ui_die "no hay IP de la VM. Probar: scripts/panel.sh $1 con VM_IP=203.0.113.10"
+    ui_die "$(t panel.no_ip "$1")"
   fi
   echo "${ip}"
 }
@@ -70,10 +60,10 @@ tokens_py() {
 }
 
 cmd_up() {
-  ui_step "Sincronizando el repo a la VM (${VM_USER}@${IP})"
+  ui_step "$(t panel.step.sync "${VM_USER}@${IP}")"
   make sync "VM_IP=${IP}" >/dev/null
 
-  ui_step "Instalando y arrancando el panel"
+  ui_step "$(t panel.step.install)"
   remoto "sudo install -m 644 -o root -g root \
             '${VM_DIR}/infra/systemd/${UNIT}' '/etc/systemd/system/${UNIT}' &&
           sudo install -d -m 700 -o ${VM_USER} -g ${VM_USER} '${DATOS_VM}' &&
@@ -83,27 +73,29 @@ cmd_up() {
           sudo systemctl restart '${UNIT}' &&
           sudo ufw allow '${PUERTO}/tcp' comment 'Panel de moderadores' >/dev/null"
 
-  ui_ok "Panel arriba en http://${IP}:${PUERTO}"
-  ui_hint "Sin token no se ve nada: cada moderador necesita el suyo."
-  ui_hint "  make panel-token NAME=Fulano   -> imprime la URL para pasarle por privado"
-  ui_hint "Si no abre desde afuera, falta el puerto en el NSG:"
-  ui_hint "  panel_port = ${PUERTO} en infra/terraform/envs/prod/terraform.tfvars + make infra-apply"
+  ui_ok "$(t panel.up "${IP}" "${PUERTO}")"
+  ui_hint "$(t panel.up_hint1)"
+  ui_hint "$(t panel.up_hint2)"
+  ui_hint "$(t panel.up_hint3)"
+  ui_hint "$(t panel.up_hint4 "${PUERTO}")"
 }
 
 cmd_down() {
-  ui_step "Parando el panel"
+  ui_step "$(t panel.step.down)"
   remoto "sudo systemctl disable --now '${UNIT}';
           sudo ufw delete allow '${PUERTO}/tcp' >/dev/null 2>&1 || true"
-  ui_ok "Panel apagado. Los tokens siguen en ${DATOS_VM}/moderadores.json"
-  ui_hint "El puerto sigue abierto en el NSG hasta que pongas panel_port = 0 y apliques."
+  ui_ok "$(t panel.down_ok "${DATOS_VM}")"
+  ui_hint "$(t panel.down_hint)"
 }
 
 cmd_estado() {
-  ui_step "Estado del panel en ${IP}"
+  local nota
+  nota="$(t panel.status.nores "${PUERTO}")"
+  ui_step "$(t panel.step.status "${IP}")"
   remoto "systemctl status --no-pager --lines=3 '${UNIT}' || true"
   echo
   remoto "curl -fsS 'http://127.0.0.1:${PUERTO}/salud' 2>/dev/null ||
-          echo '{\"ok\": false, \"nota\": \"el panel no responde en el puerto ${PUERTO}\"}'"
+          echo '{\"ok\": false, \"nota\": \"${nota}\"}'"
   echo
   echo
   tokens_py list || true
@@ -115,38 +107,40 @@ cmd_token() {
   case "${sub}" in
     add)
       local nombre="${1:-}"
-      [[ -n "${nombre}" ]] || ui_die "uso: scripts/panel.sh token add <nombre>"
+      [[ -n "${nombre}" ]] || ui_die "$(t panel.token.usage_add)"
       local token
-      token="$(tokens_py "add $(printf '%q' "${nombre}")")" || ui_die "no se pudo crear el token"
-      [[ -n "${token}" ]] || ui_die "el token salio vacio"
-      ui_ok "Token creado para ${nombre}"
+      token="$(tokens_py "add $(printf '%q' "${nombre}")")" || ui_die "$(t panel.token.create_fail)"
+      [[ -n "${token}" ]] || ui_die "$(t panel.token.empty)"
+      ui_ok "$(t panel.token.created "${nombre}")"
       echo
       echo "  http://${IP}:${PUERTO}/m/${token}"
       echo
-      ui_hint "Pasaselo por mensaje privado. Ese link ES la credencial: quien lo tenga puede"
-      ui_hint "reiniciar el server. Para darlo de baja: make panel-revoke NAME=${nombre}"
+      ui_hint "$(t panel.token.hint1)"
+      ui_hint "$(t panel.token.hint2 "${nombre}")"
       ;;
     list)
       tokens_py list
       ;;
     revoke)
       local nombre="${1:-}"
-      [[ -n "${nombre}" ]] || ui_die "uso: scripts/panel.sh token revoke <nombre>"
+      [[ -n "${nombre}" ]] || ui_die "$(t panel.token.usage_revoke)"
       tokens_py "revoke $(printf '%q' "${nombre}")"
-      ui_ok "Token revocado. El panel lo toma solo, sin reiniciar el servicio."
+      ui_ok "$(t panel.token.revoked)"
       ;;
     *)
       uso >&2
-      ui_die "uso: scripts/panel.sh token add|list|revoke"
+      ui_die "$(t panel.token.usage)"
       ;;
   esac
 }
 
 cmd_log() {
   local n="${1:-20}"
-  ui_step "Ultimas ${n} acciones del panel"
+  local sin_acciones
+  sin_acciones="$(t panel.log.none)"
+  ui_step "$(t panel.log.title "${n}")"
   remoto "tail -n '${n}' '${DATOS_VM}/acciones.jsonl' 2>/dev/null ||
-          echo '(todavia no hay acciones registradas)'"
+          echo '${sin_acciones}'"
 }
 
 main() {
@@ -160,7 +154,7 @@ main() {
       ;;
     *)
       uso >&2
-      ui_die "comando desconocido: ${comando}"
+      ui_die "$(t panel.unknown_cmd "${comando}")"
       ;;
   esac
 

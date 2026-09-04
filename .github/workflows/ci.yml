@@ -20,7 +20,11 @@ jobs:
       - name: shellcheck
         run: |
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable \
-            -x setup.sh scripts/*.sh scripts/lib/*.sh
+            -x setup.sh scripts/*.sh scripts/lib/*.sh scripts/lib/i18n/*.sh
+      # Los dos catalogos del CLI tienen que definir las mismas claves, y toda clave usada
+      # con `t` tiene que existir: si no, un mensaje sale como la clave pelada.
+      - name: i18n
+        run: scripts/i18n-check.sh
 
   python:
     name: python (tools/encuesta, tools/panel, tools/discord-notifier, tools/mod-updater)

@@ -17,6 +17,7 @@
 # respuesta por defecto y solo cambia lo que cambies.
 #
 # Modo --no-preguntar (lo usan las pruebas y el CI). Variables aceptadas:
+#   ZS_LANG         idioma del CLI: es o en (ver scripts/lib/i18n.sh)
 #   ZS_PUBLIC_NAME  ZS_MAX_PLAYERS  ZS_OCPUS  ZS_MEMORY_GB  ZS_ALERT_EMAIL  ZS_BUDGET_USD
 #   ZS_REGION
 #   ZS_TENANCY_OCID  ZS_ADMIN_CIDR  ZS_SSH_PUBLIC_KEY  ZS_REPO_URL  ZS_BUCKET_NAME
@@ -43,10 +44,10 @@ for arg in "$@"; do
   case "${arg}" in
     --no-preguntar | --non-interactive | -n) PREGUNTAR=0 ;;
     --ayuda | --help | -h)
-      sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+      printf '%s\n' "$(t setup.help)"
       exit 0
       ;;
-    *) ui_die "opción desconocida: ${arg} (probá ./setup.sh --ayuda)" ;;
+    *) ui_die "$(t setup.unknown_option "${arg}")" ;;
   esac
 done
 
@@ -72,7 +73,7 @@ preguntar() {
 
 pausa() {
   [[ "${PREGUNTAR}" -eq 1 ]] || return 0
-  read -r -p "  ${1:-Cuando termines apretá Enter para seguir} " _ || true
+  read -r -p "  ${1:-$(t setup.pause.default)} " _ || true
 }
 
 # Numero aleatorio en [0, n). Usa /dev/urandom; si no se puede leer, cae a $RANDOM.
@@ -133,35 +134,33 @@ elegir() {
 }
 
 # =============================================================================================
+# Idioma
+# =============================================================================================
+# Va antes que todo lo demas: define en que idioma sale el resto del asistente. La pregunta
+# es bilingue a proposito, porque todavia no se sabe que idioma habla quien la lee. El valor
+# por defecto es el que resolvio scripts/lib/i18n.sh (entorno, .env de una corrida anterior o
+# el locale del sistema).
+
+zs_lang="$(preguntar "$(t setup.q.lang) [es/en]" "${ZS_LANG}")"
+case "${zs_lang}" in
+  es | en) ;;
+  *) zs_lang="en" ;;
+esac
+i18n_load "${zs_lang}"
+
+# =============================================================================================
 # 0. Bienvenida
 # =============================================================================================
 
-cat <<'BIENVENIDA'
+printf '%s\n\n' "$(t setup.welcome)"
 
-  ============================================================
-   Servidor de Project Zomboid: asistente de configuración
-  ============================================================
-
-  Esto NO crea nada en la nube todavía y NO gasta plata. Solo prepara los archivos de
-  configuración. Después, cuando quieras, corrés  make deploy  y ahí sí se crea el servidor.
-
-  Vas a necesitar:
-    - una cuenta de Oracle Cloud ya creada y con tarjeta cargada (el README explica cómo)
-    - un mail donde recibir los avisos de gasto
-    - unos 5 minutos
-
-  Si algo no lo entendés, apretá Enter para aceptar el valor entre corchetes: son valores
-  razonables para empezar.
-
-BIENVENIDA
-
-pausa "Enter para empezar."
+pausa "$(t setup.pause.start)"
 
 # =============================================================================================
 # 1. Herramientas
 # =============================================================================================
 
-ui_title "1. Herramientas en esta computadora"
+ui_title "$(t setup.tools.title)"
 
 faltan_bloqueantes=0
 
@@ -170,7 +169,7 @@ for cmd in git curl make ssh rsync; do
     ui_ok "${cmd}"
   else
     ui_miss "${cmd}"
-    ui_hint "Instalalo con:  sudo apt install ${cmd}   (o el gestor de paquetes de tu sistema)"
+    ui_hint "$(t setup.tools.install_hint "${cmd}")"
     faltan_bloqueantes=1
   fi
 done
@@ -178,12 +177,12 @@ done
 if ((BASH_VERSINFO[0] >= 4)); then
   ui_ok "bash ${BASH_VERSION%%(*}"
 else
-  ui_miss "bash ${BASH_VERSION%%(*}: hace falta bash 4 o más nuevo"
-  ui_hint "En macOS:  brew install bash  y volvé a correr ./setup.sh con el bash nuevo"
+  ui_miss "$(t setup.bash.old "${BASH_VERSION%%(*}")"
+  ui_hint "$(t setup.bash.macos)"
   faltan_bloqueantes=1
 fi
 
-[[ "${faltan_bloqueantes}" -eq 0 ]] || ui_die "instalá lo que falta y volvé a correr ./setup.sh"
+[[ "${faltan_bloqueantes}" -eq 0 ]] || ui_die "$(t setup.tools.missing)"
 
 # --- OpenTofu ---------------------------------------------------------------------------------
 # Es el programa que crea la máquina en la nube leyendo la carpeta infra/.
@@ -192,11 +191,11 @@ export PATH="${HOME}/.local/bin:${PATH}"
 instalar_tofu() {
   local tmp
   command -v unzip >/dev/null 2>&1 || {
-    ui_hint "hace falta 'unzip':  sudo apt install unzip"
+    ui_hint "$(t setup.tofu.unzip)"
     return 1
   }
   tmp="$(mktemp -d)"
-  ui_say "  Bajando OpenTofu ${TOFU_VERSION}..."
+  ui_say "$(t setup.tofu.downloading "${TOFU_VERSION}")"
   (
     cd "${tmp}"
     curl -fsSLO "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip"
@@ -210,18 +209,18 @@ instalar_tofu() {
 }
 
 if command -v tofu >/dev/null 2>&1; then
-  ui_ok "OpenTofu $(tofu version | head -1 | awk '{print $2}')"
+  ui_ok "$(t setup.tofu.ok "$(tofu version | head -1 | awk '{print $2}')")"
 else
-  ui_miss "OpenTofu: es el programa que crea la máquina en la nube"
-  if [[ "${PREGUNTAR}" -eq 1 ]] && ui_confirm "Lo instalo en ~/.local/bin (no hace falta sudo)?" s; then
+  ui_miss "$(t setup.tofu.missing)"
+  if [[ "${PREGUNTAR}" -eq 1 ]] && ui_confirm "$(t setup.tofu.confirm)" s; then
     if instalar_tofu; then
-      ui_ok "OpenTofu instalado en ~/.local/bin/tofu"
+      ui_ok "$(t setup.tofu.installed)"
     else
-      ui_die "no se pudo instalar OpenTofu. Instrucciones manuales: docs/runbook.md §1.5"
+      ui_die "$(t setup.tofu.install_failed)"
     fi
   else
-    ui_hint "Instrucciones manuales: docs/runbook.md §1.5"
-    ui_die "sin OpenTofu no se puede desplegar"
+    ui_hint "$(t setup.tofu.manual)"
+    ui_die "$(t setup.tofu.required)"
   fi
 fi
 
@@ -240,17 +239,17 @@ elegir_clave_ssh() {
 
 ssh_pub_file=""
 if [[ -n "${ZS_SSH_PUBLIC_KEY:-}" ]]; then
-  ui_ok "clave SSH tomada de ZS_SSH_PUBLIC_KEY"
+  ui_ok "$(t setup.ssh.from_env)"
 elif ssh_pub_file="$(elegir_clave_ssh)"; then
-  ui_ok "clave SSH: ${ssh_pub_file}"
+  ui_ok "$(t setup.ssh.found "${ssh_pub_file}")"
 else
-  ui_miss "no tenés una clave SSH (es lo que te deja entrar a la máquina de la nube)"
-  if [[ "${PREGUNTAR}" -eq 1 ]] && ui_confirm "La creo ahora? (no te va a pedir contraseña)" s; then
+  ui_miss "$(t setup.ssh.missing)"
+  if [[ "${PREGUNTAR}" -eq 1 ]] && ui_confirm "$(t setup.ssh.confirm)" s; then
     ssh-keygen -t ed25519 -N '' -C "zomboid-server" -f "${HOME}/.ssh/id_ed25519"
     ssh_pub_file="${HOME}/.ssh/id_ed25519.pub"
-    ui_ok "clave creada en ${ssh_pub_file}"
+    ui_ok "$(t setup.ssh.created "${ssh_pub_file}")"
   else
-    ui_die "hace falta una clave SSH. Creala con:  ssh-keygen -t ed25519"
+    ui_die "$(t setup.ssh.required)"
   fi
 fi
 
@@ -259,24 +258,24 @@ if [[ -z "${ssh_public_key}" && -n "${ssh_pub_file}" ]]; then
   ssh_public_key="$(tr -d '\n' <"${ssh_pub_file}")"
 fi
 [[ "${ssh_public_key}" =~ $RE_SSH_PUB ]] ||
-  ui_die "la clave pública SSH no tiene la forma esperada (tiene que empezar con ssh-ed25519)"
+  ui_die "$(t setup.ssh.bad_format)"
 
 # --- gh (opcional) ----------------------------------------------------------------------------
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-  ui_ok "GitHub CLI conectado (se usa solo si tu repo es privado)"
+  ui_ok "$(t setup.gh.ok)"
 else
-  ui_warn "GitHub CLI (gh) no está o no está conectado: no pasa nada, es opcional"
+  ui_warn "$(t setup.gh.missing)"
 fi
 
 # =============================================================================================
 # 2. Cuenta de Oracle Cloud
 # =============================================================================================
 
-ui_title "2. Cuenta de Oracle Cloud"
+ui_title "$(t setup.oci.title)"
 
 instalar_oci_cli() {
   command -v python3 >/dev/null 2>&1 || {
-    ui_hint "hace falta python3"
+    ui_hint "$(t setup.oci.python)"
     return 1
   }
   python3 -m venv "${HOME}/.venvs/oci"
@@ -286,73 +285,46 @@ instalar_oci_cli() {
 }
 
 if [[ -n "${ZS_SKIP_OCI:-}" ]]; then
-  ui_warn "ZS_SKIP_OCI=1: me salteo la verificación de la cuenta de Oracle Cloud"
+  ui_warn "$(t setup.oci.skipped)"
 else
   if [[ ! -f "${OCI_CONFIG}" ]]; then
-    cat <<'APIKEY'
-
-  Falta conectar tu cuenta de Oracle Cloud con esta computadora. Es un archivo con una clave
-  que Oracle te genera. Hacelo así (5 minutos):
-
-   1. Entrá a https://cloud.oracle.com e iniciá sesión.
-   2. Arriba a la derecha, ícono de la persona -> "My profile".
-   3. En el menú de la izquierda, "API keys" -> botón "Add API key".
-   4. Dejá marcado "Generate API key pair" y apretá "Download private key".
-      Se te baja un archivo .pem: guardalo, es tu llave.
-   5. Apretá "Add". Oracle te muestra un cuadro de texto con varias líneas
-      (user=..., fingerprint=..., tenancy=..., region=...). Copialo entero.
-   6. En esta computadora, ejecutá en otra terminal:
-
-        mkdir -p ~/.oci && chmod 700 ~/.oci
-        mv ~/Descargas/*.pem ~/.oci/oci_api_key.pem     (o ~/Downloads)
-        chmod 600 ~/.oci/oci_api_key.pem
-        nano ~/.oci/config
-
-      Pegá el cuadro que copiaste y agregá al final la línea:
-
-        key_file=/home/TU_USUARIO/.oci/oci_api_key.pem
-
-      Guardá con Ctrl+O, Enter, Ctrl+X. Después:
-
-        chmod 600 ~/.oci/config
-
-APIKEY
-    pausa "Cuando lo tengas listo, apretá Enter."
+    printf '%s\n\n' "$(t setup.oci.apikey)"
+    pausa "$(t setup.oci.pause)"
   fi
 
   if [[ -f "${OCI_CONFIG}" ]]; then
-    ui_ok "archivo de la cuenta: ${OCI_CONFIG}"
+    ui_ok "$(t setup.oci.config_ok "${OCI_CONFIG}")"
     key_file="$(oci_config_valor key_file)"
     if [[ -n "${key_file}" && -f "${key_file/#\~/${HOME}}" ]]; then
-      ui_ok "clave privada de la API: ${key_file}"
+      ui_ok "$(t setup.oci.key_ok "${key_file}")"
     else
-      ui_warn "la línea key_file= de ${OCI_CONFIG} apunta a un archivo que no existe"
-      ui_hint "Corregila con la ruta completa del .pem que bajaste de Oracle."
+      ui_warn "$(t setup.oci.key_bad "${OCI_CONFIG}")"
+      ui_hint "$(t setup.oci.key_hint)"
     fi
   else
-    ui_warn "sigue sin haber ${OCI_CONFIG}: podés seguir, pero 'make deploy' va a fallar"
+    ui_warn "$(t setup.oci.config_missing "${OCI_CONFIG}")"
   fi
 
   if command -v oci >/dev/null 2>&1; then
-    ui_ok "CLI oci instalado"
+    ui_ok "$(t setup.oci.cli_ok)"
   else
-    ui_warn "el programa 'oci' no está (sirve para prender y apagar el server, y para chequeos)"
-    if [[ "${PREGUNTAR}" -eq 1 ]] && ui_confirm "Lo instalo en ~/.venvs/oci (sin sudo)?" s; then
+    ui_warn "$(t setup.oci.cli_missing)"
+    if [[ "${PREGUNTAR}" -eq 1 ]] && ui_confirm "$(t setup.oci.cli_confirm)" s; then
       if instalar_oci_cli; then
-        ui_ok "oci instalado (~/.local/bin/oci)"
+        ui_ok "$(t setup.oci.cli_installed)"
       else
-        ui_warn "no se pudo instalar el CLI oci; seguimos sin él"
+        ui_warn "$(t setup.oci.cli_failed)"
       fi
     fi
   fi
 
   if command -v oci >/dev/null 2>&1 && [[ -f "${OCI_CONFIG}" ]]; then
     if oci iam region list --query 'data[0]' >/dev/null 2>&1; then
-      ui_ok "la cuenta de Oracle Cloud responde: la clave está bien configurada"
+      ui_ok "$(t setup.oci.auth_ok)"
     else
-      ui_warn "Oracle no acepta la clave todavía"
-      ui_hint "Revisá user=, fingerprint=, tenancy= y key_file= en ${OCI_CONFIG}."
-      ui_hint "Para ver el error completo:  oci iam region list"
+      ui_warn "$(t setup.oci.auth_fail)"
+      ui_hint "$(t setup.oci.auth_hint1 "${OCI_CONFIG}")"
+      ui_hint "$(t setup.oci.auth_hint2)"
     fi
   fi
 fi
@@ -361,16 +333,16 @@ fi
 # 3. Preguntas
 # =============================================================================================
 
-ui_title "3. Cómo querés tu server"
+ui_title "$(t setup.server.title)"
 
-public_name="$(preguntar "Nombre del server (lo ven tus amigos)" \
-  "$(elegir ZS_PUBLIC_NAME public_name "Mi server de Zomboid")")"
+public_name="$(preguntar "$(t setup.q.public_name)" \
+  "$(elegir ZS_PUBLIC_NAME public_name "$(t setup.default.public_name)")")"
 [[ "${public_name}" =~ $RE_NOMBRE ]] ||
-  ui_die "el nombre no puede tener comillas dobles, barra invertida, signo pesos ni acento grave"
+  ui_die "$(t setup.err.public_name)"
 
-max_players="$(preguntar "Cuántos jugadores como máximo" \
+max_players="$(preguntar "$(t setup.q.max_players)" \
   "$(elegir ZS_MAX_PLAYERS max_players 8)")"
-[[ "${max_players}" =~ ^[0-9]{1,3}$ ]] || ui_die "la cantidad de jugadores tiene que ser un número"
+[[ "${max_players}" =~ ^[0-9]{1,3}$ ]] || ui_die "$(t setup.err.max_players)"
 
 # Tamaño de la máquina y heap de la JVM, según cuántos jugadores va a haber. Una máquina más
 # chica cuesta menos por hora, así que no tiene sentido pagar 4 OCPU para 6 amigos.
@@ -391,52 +363,47 @@ fi
 ocpus="${ZS_OCPUS:-${ocpus}}"
 memory_gb="${ZS_MEMORY_GB:-${memory_gb}}"
 if [[ ! "${ocpus}" =~ ^[0-9]{1,3}$ ]] || ((ocpus < 1)); then
-  ui_die "ZS_OCPUS tiene que ser un número entero de 1 o más"
+  ui_die "$(t setup.err.ocpus)"
 fi
 if [[ ! "${memory_gb}" =~ ^[0-9]{1,4}$ ]] || ((memory_gb < 6)); then
-  ui_die "ZS_MEMORY_GB tiene que ser un número entero de 6 o más (el heap de la JVM son memory_gb - 4)"
+  ui_die "$(t setup.err.memory)"
 fi
 
 max_memory="$((memory_gb - 4))g"
 
-alert_email="$(preguntar "Mail donde recibir los avisos de gasto de Oracle" \
+alert_email="$(preguntar "$(t setup.q.alert_email)" \
   "$(elegir ZS_ALERT_EMAIL alert_email "")")"
-[[ "${alert_email}" == *@*.* ]] || ui_die "hace falta un mail válido para las alertas de gasto"
+[[ "${alert_email}" == *@*.* ]] || ui_die "$(t setup.err.alert_email)"
 
-budget_usd="$(preguntar "Aviso de gasto cuando el mes pase de (USD)" \
+budget_usd="$(preguntar "$(t setup.q.budget)" \
   "$(elegir ZS_BUDGET_USD budget_usd 25)")"
-[[ "${budget_usd}" =~ ^[0-9]+$ ]] || ui_die "el presupuesto tiene que ser un número entero"
+[[ "${budget_usd}" =~ ^[0-9]+$ ]] || ui_die "$(t setup.err.budget)"
 
 # --- Región -----------------------------------------------------------------------------------
+# "codigo|clave del catalogo": la descripcion de cada region sale de scripts/lib/i18n/.
 REGIONES=(
-  "sa-saopaulo-1|São Paulo, Brasil        | ~30 ms desde Argentina  (recomendada acá)"
-  "sa-vinhedo-1|Vinhedo, Brasil          | ~30 ms desde Argentina"
-  "sa-santiago-1|Santiago, Chile          | ~25-35 ms desde Argentina"
-  "us-ashburn-1|Ashburn, EEUU (costa E)  | ~140 ms desde Argentina, ~20 ms desde EEUU este"
-  "us-phoenix-1|Phoenix, EEUU (oeste)    | ~180 ms desde Argentina, ~20 ms desde EEUU oeste"
-  "eu-frankfurt-1|Frankfurt, Alemania      | ~230 ms desde Argentina, ~20 ms desde Europa"
-  "eu-madrid-1|Madrid, España           | ~210 ms desde Argentina, ~20 ms desde España"
-  "uk-london-1|Londres, Reino Unido     | ~220 ms desde Argentina, ~15 ms desde UK"
+  "sa-saopaulo-1|setup.region.saopaulo"
+  "sa-vinhedo-1|setup.region.vinhedo"
+  "sa-santiago-1|setup.region.santiago"
+  "us-ashburn-1|setup.region.ashburn"
+  "us-phoenix-1|setup.region.phoenix"
+  "eu-frankfurt-1|setup.region.frankfurt"
+  "eu-madrid-1|setup.region.madrid"
+  "uk-london-1|setup.region.london"
 )
 
 region_default="$(elegir ZS_REGION region "$(oci_config_valor region)")"
 [[ -n "${region_default}" ]] || region_default="sa-saopaulo-1"
 
 if [[ "${PREGUNTAR}" -eq 1 ]]; then
-  echo
-  echo "  Región (dónde va a estar la máquina). Elegí la más cercana a donde viven los jugadores:"
-  echo
+  printf '%s\n\n' "$(t setup.region.intro)"
   i=1
   for linea in "${REGIONES[@]}"; do
-    printf '    %d) %-16s %s\n' "${i}" "${linea%%|*}" "${linea#*|}"
+    printf '    %d) %-16s %s\n' "${i}" "${linea%%|*}" "$(t "${linea#*|}")"
     i=$((i + 1))
   done
-  echo
-  echo "  IMPORTANTE: tiene que ser la MISMA región que elegiste al crear la cuenta de Oracle"
-  echo "  (la \"home region\"). Si no coincide, el deploy falla. Si no te acordás, es la que"
-  echo "  aparece arriba a la derecha en la consola de Oracle."
-  echo
-  eleccion="$(preguntar "Número de región, o escribí el código a mano" "${region_default}")"
+  printf '%s\n\n' "$(t setup.region.warning)"
+  eleccion="$(preguntar "$(t setup.q.region)" "${region_default}")"
   if [[ "${eleccion}" =~ ^[0-9]+$ ]] && ((eleccion >= 1 && eleccion <= ${#REGIONES[@]})); then
     linea="${REGIONES[$((eleccion - 1))]}"
     region="${linea%%|*}"
@@ -446,18 +413,18 @@ if [[ "${PREGUNTAR}" -eq 1 ]]; then
 else
   region="${region_default}"
 fi
-[[ "${region}" =~ ^[a-z0-9-]+$ ]] || ui_die "el código de región no parece válido: ${region}"
+[[ "${region}" =~ ^[a-z0-9-]+$ ]] || ui_die "$(t setup.err.region "${region}")"
 
 if [[ -n "$(oci_config_valor region)" && "$(oci_config_valor region)" != "${region}" ]]; then
-  ui_warn "elegiste ${region} pero tu cuenta dice $(oci_config_valor region)"
-  ui_hint "Si el deploy falla con 'NotAuthorizedOrNotFound', usá la de tu cuenta."
+  ui_warn "$(t setup.region.mismatch "${region}" "$(oci_config_valor region)")"
+  ui_hint "$(t setup.region.mismatch_hint)"
 fi
 
 # --- Tenancy y acceso --------------------------------------------------------------------------
 tenancy_default="$(elegir ZS_TENANCY_OCID tenancy_ocid "$(oci_config_valor tenancy)")"
-tenancy_ocid="$(preguntar "ID de tu cuenta de Oracle (la línea 'tenancy=' de ~/.oci/config)" "${tenancy_default}")"
+tenancy_ocid="$(preguntar "$(t setup.q.tenancy)" "${tenancy_default}")"
 [[ "${tenancy_ocid}" == ocid1.tenancy.* ]] ||
-  ui_die "el ID de la cuenta tiene que empezar con ocid1.tenancy. Sacalo de ${OCI_CONFIG}"
+  ui_die "$(t setup.err.tenancy "${OCI_CONFIG}")"
 
 ip_publica=""
 if [[ -z "${ZS_ADMIN_CIDR:-}" ]]; then
@@ -470,21 +437,18 @@ admin_cidr_default="$(elegir ZS_ADMIN_CIDR admin_cidr "")"
 if [[ -z "${ZS_ADMIN_CIDR:-}" && "${ip_publica}" =~ $RE_IP ]]; then
   admin_cidr_default="${ip_publica}/32"
 fi
-[[ -n "${admin_cidr_default}" ]] || ui_die "no pude averiguar tu IP pública. Ponela a mano: curl https://ifconfig.me"
+[[ -n "${admin_cidr_default}" ]] || ui_die "$(t setup.err.no_ip)"
 
-echo
-echo "  Tu IP de internet es la única desde la que vas a poder administrar el server."
-echo "  (Tus amigos entran igual desde cualquier lado: esto es solo para administrar.)"
-echo "  Si tu conexión cambia de IP, más adelante corrés ./setup.sh y make deploy de nuevo."
-admin_cidr="$(preguntar "Tu IP de admin" "${admin_cidr_default}")"
+printf '%s\n' "$(t setup.admin_cidr.intro)"
+admin_cidr="$(preguntar "$(t setup.q.admin_cidr)" "${admin_cidr_default}")"
 [[ "${admin_cidr}" =~ $RE_CIDR ]] ||
-  ui_die "la IP de admin tiene que tener la forma 1.2.3.4/32"
+  ui_die "$(t setup.err.admin_cidr)"
 
 # =============================================================================================
 # 4. Repo que va a clonar la máquina
 # =============================================================================================
 
-ui_title "4. De dónde baja la configuración la máquina"
+ui_title "$(t setup.repo.title)"
 
 repo_url="${ZS_REPO_URL:-}"
 if [[ -z "${repo_url}" ]]; then
@@ -497,27 +461,27 @@ if [[ -z "${repo_url}" ]]; then
     if GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
       git ls-remote "${origin_url}" HEAD >/dev/null 2>&1; then
       repo_url="${origin_url}"
-      ui_ok "tu repo es público: la máquina lo baja sola, no hay nada más que hacer"
+      ui_ok "$(t setup.repo.public)"
     else
-      ui_warn "tu repo es privado (o no existe todavía)"
+      ui_warn "$(t setup.repo.private)"
       # github.com/usuario/repo.git -> git@github.com:usuario/repo.git
       ssh_url="$(echo "${origin_url}" | sed -E 's#^https://([^/]+)/#git@\1:#')"
-      ui_hint "Voy a usar ${ssh_url} y una llave de solo lectura que se carga en GitHub."
-      ui_hint "Si preferís evitar ese paso, hacé el repo público en GitHub -> Settings -> General."
+      ui_hint "$(t setup.repo.private_hint1 "${ssh_url}")"
+      ui_hint "$(t setup.repo.private_hint2)"
       repo_url="${ssh_url}"
     fi
   else
     repo_url="${origin_url}"
-    ui_ok "tu repo se clona por SSH: se va a usar una llave de solo lectura"
+    ui_ok "$(t setup.repo.ssh)"
   fi
 fi
 
 if [[ "${repo_url}" == https://* ]]; then
-  usa_deploy_key="no"
+  usa_deploy_key="$(t setup.repo.key_no)"
 else
-  usa_deploy_key="sí"
+  usa_deploy_key="$(t setup.repo.key_yes)"
 fi
-ui_say "  Repo: ${repo_url}   (llave de solo lectura: ${usa_deploy_key})"
+ui_say "$(t setup.repo.summary "${repo_url}" "${usa_deploy_key}")"
 
 repo_branch="$(elegir '' repo_branch "")"
 if [[ -z "${repo_branch}" ]]; then
@@ -531,18 +495,9 @@ bucket_name="$(elegir ZS_BUCKET_NAME bucket_name "zomboid-backups")"
 # 5. Contraseñas
 # =============================================================================================
 
-ui_title "5. Contraseñas"
+ui_title "$(t setup.pass.title)"
 
-cat <<'PASS'
-  Se generan tres contraseñas distintas. No hace falta que las memorices: quedan guardadas
-  en los archivos de configuración y 'make deploy' te va a mostrar la que le tenés que pasar
-  a tus amigos.
-
-    - del server: la que ponen tus amigos para entrar
-    - de admin:   tu usuario administrador dentro del juego
-    - de RCON:    la usa el programa para hablar con el server, no la escribe nadie
-
-PASS
+printf '%s\n\n' "$(t setup.pass.intro)"
 
 definir_password() {
   local var="$1" clave="$2" etiqueta="$3" actual nueva
@@ -551,21 +506,21 @@ definir_password() {
   if [[ -z "${actual}" || "${actual}" == *CAMBIAME* ]]; then
     actual="$(generar_password)"
   fi
-  nueva="$(preguntar "Contraseña ${etiqueta} (Enter acepta la sugerida)" "${actual}")"
+  nueva="$(preguntar "$(t setup.q.password "${etiqueta}")" "${actual}")"
   password_valida "${nueva}" ||
-    ui_die "la contraseña ${etiqueta} tiene que tener entre 8 y 64 caracteres, sin espacios, comillas, barra invertida ni signo pesos"
+    ui_die "$(t setup.err.password "${etiqueta}")"
   echo "${nueva}"
 }
 
-server_password="$(definir_password ZS_SERVER_PASSWORD server_password "del server")"
-admin_password="$(definir_password ZS_ADMIN_PASSWORD admin_password "de admin")"
-rcon_password="$(definir_password ZS_RCON_PASSWORD rcon_password "de RCON")"
+server_password="$(definir_password ZS_SERVER_PASSWORD server_password "$(t setup.pass.label.server)")"
+admin_password="$(definir_password ZS_ADMIN_PASSWORD admin_password "$(t setup.pass.label.admin)")"
+rcon_password="$(definir_password ZS_RCON_PASSWORD rcon_password "$(t setup.pass.label.rcon)")"
 
 # =============================================================================================
 # 6. Escribir los archivos
 # =============================================================================================
 
-ui_title "6. Guardando la configuración"
+ui_title "$(t setup.write.title)"
 
 mkdir -p "$(dirname "${TFVARS}")"
 
@@ -602,6 +557,7 @@ admin_password  = "${admin_password}"
 rcon_password   = "${rcon_password}"
 server_password = "${server_password}"
 public_name     = "${public_name}"
+cli_lang        = "${zs_lang}"
 max_players     = ${max_players}
 max_memory      = "${max_memory}"
 
@@ -641,6 +597,9 @@ MAX_MEMORY=${max_memory}
 # --- Mods ---
 MOD_ID_PREFIX=
 
+# --- Red: UPnP solo sirve en una PC de casa; en la nube queda en false ---
+UPNP=false
+
 # --- Puente de Discord (opcional) ---
 DISCORD_ENABLE=false
 DISCORD_TOKEN=
@@ -655,6 +614,9 @@ BACKUP_KEEP_LOCAL_DAYS=3
 
 # --- Apagado por inactividad (todavía sin usar) ---
 IDLE_MINUTES=30
+
+# --- CLI ---
+ZS_LANG=${zs_lang}
 ENV_EOF
 chmod 600 "${ENV_FILE}"
 ui_ok ".env"
@@ -664,15 +626,26 @@ MODS_FILE="${REPO_DIR}/config/mods.txt"
 if [[ -f "${MODS_FILE}" ]]; then
   mods_n="$(grep -cE '^[[:space:]]*[0-9]+' "${MODS_FILE}" || true)"
   if [[ "${mods_n}" -gt 0 ]]; then
-    ui_ok "config/mods.txt (${mods_n} mods del Workshop)"
+    ui_ok "$(t setup.mods.count "${mods_n}")"
   else
-    ui_ok "config/mods.txt (sin mods activos: partida vanilla)"
+    ui_ok "$(t setup.mods.vanilla)"
   fi
 else
   cp "${REPO_DIR}/config/mods.example.txt" "${MODS_FILE}"
-  ui_ok "config/mods.txt creado (partida vanilla, sin mods)"
-  ui_hint "Para agregar mods editá config/mods.txt: una línea por item del Workshop, el formato"
-  ui_hint "está explicado adentro del archivo y en docs/mods.md. Se aplican con make deploy o make restart."
+  ui_ok "$(t setup.mods.created)"
+  ui_hint "$(t setup.mods.hint1)"
+  ui_hint "$(t setup.mods.hint2)"
+fi
+
+# --- Reglas del sandbox: tambien propias de cada partida, tampoco versionadas -------------------
+SANDBOX_FILE="${REPO_DIR}/config/servertest_SandboxVars.lua"
+if [[ -f "${SANDBOX_FILE}" ]]; then
+  ui_ok "config/servertest_SandboxVars.lua"
+else
+  cp "${REPO_DIR}/config/servertest_SandboxVars.example.lua" "${SANDBOX_FILE}"
+  ui_ok "$(t setup.sandbox.created)"
+  ui_hint "$(t setup.sandbox.hint1)"
+  ui_hint "$(t setup.sandbox.hint2)"
 fi
 
 umask 022
@@ -681,27 +654,12 @@ umask 022
 # 7. Qué sigue
 # =============================================================================================
 
-cat <<RESUMEN
+if [[ "${mods_n:-0}" -gt 0 ]]; then
+  resumen_mods="$(t setup.summary.mods_some "${mods_n}")"
+else
+  resumen_mods="$(t setup.summary.mods_none)"
+fi
 
-  ============================================================
-   Listo. Así te quedó configurado:
-  ============================================================
-
-    Nombre del server ...... ${public_name}
-    Jugadores máximo ....... ${max_players}
-    Máquina ................ ${ocpus} OCPU / ${memory_gb} GB (heap de la JVM: ${max_memory})
-    Región ................. ${region}
-    Avisos de gasto ........ ${alert_email} (a partir de ${budget_usd} USD/mes)
-    Administración desde ... ${admin_cidr}
-    Contraseña del server .. ${server_password}
-    Mods ................... $(if [[ "${mods_n:-0}" -gt 0 ]]; then echo "${mods_n} (config/mods.txt)"; else echo "ninguno, partida vanilla (config/mods.txt)"; fi)
-
-  Ahora:
-
-    make doctor     revisa que esté todo listo (opcional, 10 segundos)
-    make deploy     crea el servidor en la nube (tarda 20-40 minutos la primera vez)
-
-  A partir de acá SÍ se empieza a gastar plata: alrededor de 90 USD/mes si dejás la máquina
-  prendida todo el tiempo. Para dejar de pagar:  make destroy-all
-
-RESUMEN
+printf '%s\n\n' "$(t setup.summary \
+  "${public_name}" "${max_players}" "${ocpus}" "${memory_gb}" "${max_memory}" "${region}" \
+  "${alert_email}" "${budget_usd}" "${admin_cidr}" "${server_password}" "${resumen_mods}")"

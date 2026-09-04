@@ -36,6 +36,7 @@ module "zomboid" {
   public_name     = var.public_name
   max_players     = var.max_players
   max_memory      = var.max_memory
+  cli_lang        = var.cli_lang
   # config/mods.txt no se versiona: si existe en esta PC, viaja a la VM en el primer boot.
   mods_txt = fileexists("${path.module}/../../../../config/mods.txt") ? file("${path.module}/../../../../config/mods.txt") : ""
 

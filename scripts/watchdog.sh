@@ -65,6 +65,9 @@ trap limpiar EXIT
 # =============================================================================================
 # log() y notificar() salen de la lib compartida; aca solo se dice a que log escribir.
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 NOTIF_LOG="${LOG_FILE}"
 NOTIF_PREFIJO="watchdog"
 # shellcheck source=scripts/lib/notificar.sh
@@ -126,7 +129,7 @@ check_unit() {
   estado="$(systemctl is-active "${UNIT}" 2>/dev/null || true)"
   case "${estado}" in
     active | activating) return 0 ;;
-    "" | unknown) log "la unit ${UNIT} no esta instalada: se omite el chequeo"; return 0 ;;
+    "" | unknown) log "$(t watchdog.unit_not_installed "${UNIT}")"; return 0 ;;
     *) DETALLE="systemctl is-active ${UNIT} = ${estado}"; return 1 ;;
   esac
 }
@@ -177,7 +180,7 @@ rebasar_crash_loop() {
 check_rcon() {
   local desde fallos
   if desde="$(segundos_desde_arranque)" && (( desde < GRACIA_ARRANQUE )); then
-    log "el contenedor arranco hace ${desde}s (gracia ${GRACIA_ARRANQUE}s): no se chequea RCON"
+    log "$(t watchdog.rcon_grace "${desde}" "${GRACIA_ARRANQUE}")"
     escribir_estado rcon-fallos 0
     return 0
   fi
@@ -191,7 +194,7 @@ check_rcon() {
   [[ "${fallos}" =~ ^[0-9]+$ ]] || fallos=0
   fallos=$(( fallos + 1 ))
   escribir_estado rcon-fallos "${fallos}"
-  log "RCON no responde (${fallos}/${RCON_FALLOS_MAX})"
+  log "$(t watchdog.rcon_fail "${fallos}" "${RCON_FALLOS_MAX}")"
   (( fallos >= RCON_FALLOS_MAX )) || return 0
   DETALLE="RCON no responde a 'players' en ${fallos} chequeos seguidos y el contenedor esta vivo"
   return 1
@@ -251,7 +254,7 @@ libre_mb() {
 
 check_disco() {
   local mb
-  mb="$(libre_mb "${DATA_DIR}")" || { log "no se pudo leer df de ${DATA_DIR}"; return 0; }
+  mb="$(libre_mb "${DATA_DIR}")" || { log "$(t watchdog.df_fail "${DATA_DIR}")"; return 0; }
   (( mb >= DISCO_MIN_MB )) && return 0
   DETALLE="quedan ${mb} MB libres en la particion de data/ (minimo ${DISCO_MIN_MB} MB)"
   return 1
@@ -317,7 +320,7 @@ esperar_arranque() {
   local esperado=0
   while (( esperado < ESPERA_ARRANQUE )); do
     if dc logs --no-color --since 15m "${SERVICE}" 2>&1 | grep -q 'SERVER STARTED'; then
-      log "el server arranco despues de ${esperado}s"
+      log "$(t watchdog.started "${esperado}")"
       return 0
     fi
     sleep 10
@@ -337,7 +340,7 @@ playbook_rcon() {
 
   notificar warn "Reiniciando: RCON no responde" "${detalle}"
   if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY_RUN: aca correria WARN_SECONDS=0 scripts/restart.sh"
+    log "$(t watchdog.dryrun.restart)"
     return "${EXIT_OK}"
   fi
 
@@ -368,23 +371,23 @@ playbook_critico() {
 
   notificar error "Falla critica: ${motivo}" "${detalle}"
   if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY_RUN: aca pararia el server, armaria el bundle y volveria a levantarlo"
+    log "$(t watchdog.dryrun.critical)"
     return "${EXIT_OK}"
   fi
 
   # Apagado limpio primero: 'docker compose down' es el ultimo recurso y solo si stop.sh no
   # pudo (el mundo se guarda por RCON, no por SIGKILL).
-  log "parando el server"
+  log "$(t watchdog.stopping)"
   if ! WARN_SECONDS=0 "${REPO_DIR}/scripts/stop.sh" >> "${LOG_FILE}" 2>&1; then
-    log "ADVERTENCIA: stop.sh fallo, se cae a 'docker compose down'"
+    log "$(t watchdog.stop_failed)"
     dc down --remove-orphans >> "${LOG_FILE}" 2>&1 || true
   fi
 
   bundle="$(armar_bundle "${motivo}" "${detalle}")"
-  log "diagnostico en ${bundle}"
+  log "$(t watchdog.diagnostic "${bundle}")"
 
   marcar reinicios "${motivo}"
-  log "arrancando"
+  log "$(t watchdog.starting)"
   if ! make up >> "${LOG_FILE}" 2>&1; then
     escalar "${motivo}" "${detalle}" "${bundle}" "'make up' salio con error"
     return "${EXIT_ESCALADO}"
@@ -410,7 +413,7 @@ playbook_disco() {
   notificar warn "Poco espacio en disco" "${detalle}"
 
   if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY_RUN: aca borraria backups locales viejos, logs de mas de 7 dias y capas de Docker"
+    log "$(t watchdog.dryrun.disk)"
     return "${EXIT_OK}"
   fi
 
@@ -423,7 +426,7 @@ playbook_disco() {
   docker system prune -f >> "${LOG_FILE}" 2>&1 || true
 
   despues="$(libre_mb "${DATA_DIR}")" || despues=0
-  log "espacio libre: ${antes} MB -> ${despues} MB"
+  log "$(t watchdog.disk_freed "${antes}" "${despues}")"
 
   if (( despues >= DISCO_MIN_MB )); then
     notificar info "Disco liberado" "Quedan ${despues} MB libres (habia ${antes} MB)."
@@ -458,7 +461,7 @@ escalar() {
   motivo_previo="${previa##*	}"
   if [[ "${motivo_previo}" == "${motivo}" && "${ts_previa}" =~ ^[0-9]+$ ]] \
      && (( ahora - ts_previa < RENOTIFICAR )); then
-    log "[ESCALADO] ${motivo} (repetida, no se notifica de nuevo): ${nota}"
+    log "$(t watchdog.escalated "${motivo}" "${nota}")"
     printf '%s\n' "${cuerpo}" | sed 's/^/    /' >> "${LOG_FILE}" 2>/dev/null || true
   else
     notificar error "Necesita una mano: ${motivo}" "${cuerpo}"
@@ -466,26 +469,26 @@ escalar() {
   printf '%s\t%s\n' "${ahora}" "${motivo}" > "${STATE_DIR}/ultima-escalacion"
 
   if [[ "${CLAUDE_AUTOREPAIR:-0}" != "1" ]]; then
-    log "CLAUDE_AUTOREPAIR no esta en 1: no se llama a autorepair.sh"
+    log "$(t watchdog.autorepair_off)"
     return 0
   fi
   if [[ ! -x "${REPO_DIR}/scripts/autorepair.sh" ]]; then
-    log "ADVERTENCIA: CLAUDE_AUTOREPAIR=1 pero no existe scripts/autorepair.sh"
+    log "$(t watchdog.autorepair_missing)"
     return 0
   fi
 
   # Sin bundle no hay nada que darle a Claude: se arma uno ahora.
   [[ -n "${bundle}" ]] || bundle="$(armar_bundle "${motivo}" "${detalle}"$'\n'"${nota}")"
 
-  log "llamando a scripts/autorepair.sh (intento ${intentos} de hoy por '${motivo}')"
+  log "$(t watchdog.autorepair_call "${intentos}" "${motivo}")"
   if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY_RUN: aca correria scripts/autorepair.sh"
+    log "$(t watchdog.dryrun.autorepair)"
     return 0
   fi
   "${REPO_DIR}/scripts/autorepair.sh" \
     --bundle "${bundle}" --motivo "${motivo}" --intentos "${intentos}" \
     >> "${LOG_FILE}" 2>&1 \
-    || log "autorepair.sh salio con codigo $? (ver ${LOG_FILE})"
+    || log "$(t watchdog.autorepair_rc "$?" "${LOG_FILE}")"
   return 0
 }
 
@@ -502,12 +505,12 @@ main() {
   # mientras corre el mod-updater no tiene que meterse a reiniciar por su cuenta.
   # Se crea antes con `:` porque un `exec` con la redireccion fallida mata el shell entero.
   if ! : >> "${OPS_LOCK}" 2>/dev/null; then
-    log "ADVERTENCIA: no se puede escribir el lock ${OPS_LOCK}: se saltea esta pasada"
+    log "$(t watchdog.lock_unwritable "${OPS_LOCK}")"
     return "${EXIT_OK}"
   fi
   exec 9>"${OPS_LOCK}"
   if ! flock -n 9; then
-    log "ya hay una operacion en curso (watchdog o mod-updater), se saltea esta"
+    log "$(t watchdog.lock_busy)"
     return "${EXIT_OK}"
   fi
 
@@ -563,7 +566,7 @@ main() {
         notificar info "Todo en orden de nuevo" \
           "El chequeo vuelve a pasar limpio despues de '${anterior}'."
       else
-        log "sano: unit activa, contenedor arriba, RCON responde, log limpio"
+        log "$(t watchdog.healthy)"
       fi
       escribir_estado ultimo-problema ""
       ;;

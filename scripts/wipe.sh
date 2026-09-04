@@ -16,6 +16,9 @@ cd "${REPO_DIR}"
 DATA_DIR="${REPO_DIR}/data/zomboid"
 SAVE_DIR="${DATA_DIR}/Saves/Multiplayer/servertest"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 log() { echo "wipe: $*"; }
 die() {
   echo "wipe: ERROR: $*" >&2
@@ -26,56 +29,32 @@ assume_yes=0
 for arg in "$@"; do
   case "${arg}" in
     --yes | -y) assume_yes=1 ;;
-    *) die "opcion desconocida: ${arg}" ;;
+    *) die "$(t wipe.unknown_option "${arg}")" ;;
   esac
 done
 
 if [[ "${assume_yes}" -ne 1 ]]; then
-  cat <<MSG
-
-  WIPE de la partida.
-
-  Se borra:   ${SAVE_DIR}
-              ${DATA_DIR}/db
-              ${DATA_DIR}/backups (los backups nativos del server)
-
-  Se conserva: un backup final etiquetado 'pre-wipe' en backups/ y en el bucket, y toda la
-               config versionada de config/.
-
-  Los personajes de todos los jugadores desaparecen. No se puede deshacer salvo con
-  scripts/restore.sh sobre el backup 'pre-wipe'.
-
-MSG
-  read -r -p "Escribi 'wipe' para continuar: " answer
-  [[ "${answer}" == "wipe" ]] || die "cancelado"
+  printf '%s\n\n' "$(t wipe.warning "${SAVE_DIR}" "${DATA_DIR}" "${DATA_DIR}")"
+  read -r -p "$(t wipe.prompt)" answer
+  [[ "${answer}" == "wipe" ]] || die "$(t wipe.cancelled)"
 fi
 
 # --- apagado limpio y backup final ----------------------------------------------------------
 "${REPO_DIR}/scripts/stop.sh"
 
 if [[ -d "${DATA_DIR}" ]]; then
-  log "backup final etiquetado 'pre-wipe'"
-  "${REPO_DIR}/scripts/backup.sh" pre-wipe >/dev/null || die "el backup pre-wipe fallo; no se borra nada"
+  log "$(t wipe.backup)"
+  "${REPO_DIR}/scripts/backup.sh" pre-wipe >/dev/null || die "$(t wipe.backup_failed)"
 else
-  log "no hay ${DATA_DIR}: nada que respaldar"
+  log "$(t wipe.no_data "${DATA_DIR}")"
 fi
 
 # --- borrado ----------------------------------------------------------------------------------
 for path in "${SAVE_DIR}" "${DATA_DIR}/db" "${DATA_DIR}/backups"; do
   if [[ -e "${path}" ]]; then
-    log "borrando ${path#"${REPO_DIR}/"}"
+    log "$(t wipe.deleting "${path#"${REPO_DIR}/"}")"
     rm -rf "${path:?}"
   fi
 done
 
-cat <<'MSG'
-
-wipe: listo. Antes de arrancar la partida definitiva:
-
-  1. Editar config/servertest_SandboxVars.lua (varias opciones quedan fijadas al crear el mundo).
-  2. Editar config/mods.txt (los mods definitivos; sin el archivo la partida es vanilla).
-  3. Revisar config/servertest.ini.tpl (PVP, MaxPlayers, backups).
-  4. Desde la PC: make sync (mods.txt no esta en git; en la VM solo llega por rsync).
-  5. make up
-
-MSG
+printf '%s\n\n' "$(t wipe.done)"

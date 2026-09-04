@@ -9,6 +9,9 @@
 # El webhook es opcional: sin DISCORD_WEBHOOK_URL en el entorno solo escribe al log. La URL
 # del webhook ES una credencial (quien la tenga puede postear en el canal): nunca se imprime.
 
+# shellcheck source=scripts/lib/i18n.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/i18n.sh"
+
 NOTIF_LOG="${NOTIF_LOG:-/var/log/zomboid/notificaciones.log}"
 NOTIF_PREFIJO="${NOTIF_PREFIJO:-zomboid}"
 
@@ -72,12 +75,12 @@ notificar() {
 
   local json
   if ! json="$(notif_payload "${titulo}" "${descripcion}" "$(notif_color "${nivel}")")"; then
-    log "ADVERTENCIA: no se pudo armar el JSON del webhook (falta jq y python3?)"
+    log "$(t notif.json.fail)"
     return 0
   fi
   if ! printf '%s' "${json}" | curl -fsS -m 15 -X POST \
       -H 'Content-Type: application/json' --data-binary @- \
       "${DISCORD_WEBHOOK_URL}" >/dev/null; then
-    log "ADVERTENCIA: el POST al webhook de Discord fallo"
+    log "$(t notif.post.fail)"
   fi
 }

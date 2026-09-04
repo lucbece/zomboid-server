@@ -6,7 +6,10 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_DIR}"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 "${REPO_DIR}/scripts/stop.sh"
 "${REPO_DIR}/scripts/render-config.sh"
 docker compose up -d
-echo "restart: server arrancando. Seguir con 'make logs'."
+printf '%s\n' "$(t restart.done)"

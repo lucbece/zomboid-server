@@ -19,18 +19,21 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_DIR}"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 log() { echo "update: $*"; }
 
-log "backup antes de tocar nada"
-"${REPO_DIR}/scripts/backup.sh" pre-update >/dev/null || log "ADVERTENCIA: el backup fallo"
+log "$(t update.backup)"
+"${REPO_DIR}/scripts/backup.sh" pre-update >/dev/null || log "$(t update.backup_failed)"
 
-log "apagado limpio"
+log "$(t update.stopping)"
 "${REPO_DIR}/scripts/stop.sh"
 
-log "docker compose pull"
+log "$(t update.pulling)"
 docker compose pull
 
-log "arrancando con la imagen nueva"
+log "$(t update.starting)"
 make -C "${REPO_DIR}" up
 
-log "listo. Verificar la version del juego con: make logs | grep -i version"
+log "$(t update.done)"

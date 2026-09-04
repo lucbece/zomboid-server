@@ -20,6 +20,9 @@ TOFU="${TOFU:-tofu}"
 mode="${1:-https}"
 out="${2:-}"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 die() {
   echo "render-cloud-init: ERROR: $*" >&2
   exit 1
@@ -30,11 +33,11 @@ case "${mode}" in
   https) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="$(cat "${REPO_DIR}/config/mods.example.txt")" ;;
   ssh) use_deploy_key=true; repo_url="git@github.com:lucbece/zomboid-server.git"; mods_txt="" ;;
   bot) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="" ;;
-  *) die "modo desconocido '${mode}': usar 'https', 'ssh' o 'bot'" ;;
+  *) die "$(t cloudinit.unknown_mode "${mode}")" ;;
 esac
 
-[[ -n "${out}" ]] || die "falta el archivo de salida. Uso: $0 {https|ssh|bot} salida.yaml"
-command -v "${TOFU}" >/dev/null 2>&1 || die "falta 'tofu' en el PATH"
+[[ -n "${out}" ]] || die "$(t cloudinit.no_out "$0")"
+command -v "${TOFU}" >/dev/null 2>&1 || die "$(t cloudinit.no_tofu)"
 
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
@@ -74,7 +77,7 @@ TFBOT
     -var "template=${REPO_DIR}/infra/cloud-init-bot.yaml" >/dev/null
   "${TOFU}" -chdir="${work}" output -raw rendered >"${out}"
 
-  echo "render-cloud-init: modo 'bot' -> ${out}"
+  printf '%s\n' "$(t cloudinit.done "bot" "${out}")"
   exit 0
 fi
 
@@ -114,6 +117,7 @@ output "rendered" {
     public_name     = "Mi server de Zomboid"
     max_players     = 16
     max_memory      = "12g"
+    cli_lang        = "es"
     min_memory      = "2048m"
     mods_txt        = var.mods_txt
 
@@ -133,4 +137,4 @@ TF
   -var "mods_txt=${mods_txt}" >/dev/null
 "${TOFU}" -chdir="${work}" output -raw rendered >"${out}"
 
-echo "render-cloud-init: modo '${mode}' -> ${out}"
+printf '%s\n' "$(t cloudinit.done "${mode}" "${out}")"

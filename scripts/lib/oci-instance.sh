@@ -4,6 +4,9 @@
 # Resuelven el OCID de la instancia y su IP publica leyendo los outputs de OpenTofu, con
 # override por variable de entorno para no depender del .tfstate local.
 
+# shellcheck source=scripts/lib/i18n.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/i18n.sh"
+
 TF_ENV_DIR="${TF_ENV_DIR:-${REPO_DIR}/infra/terraform/envs/prod}"
 
 # tofu_output <nombre> [regex] -> imprime el output, o nada si todavia no hay state.
@@ -39,15 +42,13 @@ oci_instance_ocid() {
     echo "${ocid}"
     return 0
   fi
-  echo "oci-instance: ERROR: no se pudo obtener el OCID." >&2
-  echo "  Probar: cd infra/terraform/envs/prod && tofu output -raw instance_ocid" >&2
-  echo "  O exportar INSTANCE_OCID=ocid1.instance.oc1...." >&2
+  printf '%s\n' "$(t oci.ocid.fail)" >&2
   return 1
 }
 
 require_oci_cli() {
   command -v oci >/dev/null 2>&1 || {
-    echo "oci-instance: ERROR: falta el CLI 'oci'. Instalarlo en un venv (ver docs/runbook.md)." >&2
+    printf '%s\n' "$(t oci.cli.missing)" >&2
     return 1
   }
 }

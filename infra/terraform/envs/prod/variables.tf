@@ -131,6 +131,12 @@ variable "max_players" {
   default     = 16
 }
 
+variable "cli_lang" {
+  description = "Idioma de los mensajes de los scripts en la VM: es o en."
+  type        = string
+  default     = "en"
+}
+
 variable "max_memory" {
   description = "Heap maximo de la JVM (8g para 8 jugadores, 12g para 16)."
   type        = string

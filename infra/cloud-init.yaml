@@ -118,6 +118,7 @@ write_files:
       MAX_MEMORY=${max_memory}
 
       MOD_ID_PREFIX=
+      UPNP=false
 
       DISCORD_ENABLE=false
       DISCORD_TOKEN=
@@ -132,6 +133,9 @@ write_files:
 
       # --- Fase 3: apagado por inactividad (todavia sin cron) ---
       IDLE_MINUTES=30
+
+      # --- CLI ---
+      ZS_LANG=${cli_lang}
 
       # --- Watchdog y auto-arreglo (ver docs/self-healing.md) ---
       # El webhook y la credencial de Claude NO salen de terraform.tfvars: se cargan a mano en

@@ -32,15 +32,7 @@ DATOS_LOCAL="${REPO_DIR}/data/encuesta"
 VOTOS_LOCAL="${DATOS_LOCAL}/votos.jsonl"
 
 uso() {
-  cat <<MSG
-uso: scripts/encuesta.sh <comando>
-
-  up          sincroniza tools/ e infra/systemd/, instala la unit y arranca la encuesta
-  down        para y deshabilita la encuesta (los votos quedan en la VM)
-  estado      estado de la unit y cuantas personas votaron
-  resultados  baja votos.jsonl y muestra el conteo (no toca config/)
-  aplicar     el conteo + escribe los cambios en config/ y muestra el diff
-MSG
+  printf '%s\n' "$(t survey.usage)"
 }
 
 # IP de la VM: la del entorno o la del output de OpenTofu.
@@ -52,7 +44,7 @@ resolver_ip() {
   local ip
   ip="$(tofu_output public_ip "${TF_RE_IP}")" || true
   if [[ -z "${ip}" ]]; then
-    ui_die "no hay IP de la VM. Probar: scripts/encuesta.sh $1 con VM_IP=203.0.113.10"
+    ui_die "$(t survey.no_ip "$1")"
   fi
   echo "${ip}"
 }
@@ -62,10 +54,10 @@ remoto() {
 }
 
 cmd_up() {
-  ui_step "Sincronizando el repo a la VM (${VM_USER}@${IP})"
+  ui_step "$(t survey.step.sync "${VM_USER}@${IP}")"
   make sync "VM_IP=${IP}" >/dev/null
 
-  ui_step "Instalando y arrancando la encuesta"
+  ui_step "$(t survey.step.install)"
   remoto "sudo install -m 644 -o root -g root \
             '${VM_DIR}/infra/systemd/${UNIT}' '/etc/systemd/system/${UNIT}' &&
           sudo install -d -m 755 -o ${VM_USER} -g ${VM_USER} '${DATOS_VM}' &&
@@ -74,45 +66,49 @@ cmd_up() {
           sudo systemctl restart '${UNIT}' &&
           sudo ufw allow '${PUERTO}/tcp' comment 'Encuesta de reglas' >/dev/null"
 
-  ui_ok "Encuesta arriba en http://${IP}:${PUERTO}"
-  ui_hint "Pasales ese link a los amigos. Cierra sola cuando corras: make encuesta-down"
-  ui_hint "Si no abre desde afuera, falta el puerto en el NSG:"
-  ui_hint "  survey_port = ${PUERTO} en infra/terraform/envs/prod/terraform.tfvars + make infra-apply"
+  ui_ok "$(t survey.up "${IP}" "${PUERTO}")"
+  ui_hint "$(t survey.up_hint1)"
+  ui_hint "$(t survey.up_hint2)"
+  ui_hint "$(t survey.up_hint3 "${PUERTO}")"
 }
 
 cmd_down() {
-  ui_step "Parando la encuesta"
+  ui_step "$(t survey.step.down)"
   remoto "sudo systemctl disable --now '${UNIT}';
           sudo ufw delete allow '${PUERTO}/tcp' >/dev/null 2>&1 || true"
-  ui_ok "Encuesta apagada. Los votos siguen en ${DATOS_VM}/votos.jsonl"
-  ui_hint "Para contarlos: make encuesta-resultados"
+  ui_ok "$(t survey.down_ok "${DATOS_VM}")"
+  ui_hint "$(t survey.down_hint)"
 }
 
 cmd_estado() {
-  ui_step "Estado de la encuesta en ${IP}"
+  local nota etiqueta sin_votos
+  nota="$(t survey.status.nores "${PUERTO}")"
+  etiqueta="$(t survey.status.votes)"
+  sin_votos="$(t survey.status.novotes)"
+  ui_step "$(t survey.step.status "${IP}")"
   remoto "systemctl status --no-pager --lines=3 '${UNIT}' || true"
   echo
   remoto "curl -fsS 'http://127.0.0.1:${PUERTO}/salud' 2>/dev/null ||
-          echo '{\"ok\": false, \"nota\": \"la encuesta no responde en el puerto ${PUERTO}\"}'"
+          echo '{\"ok\": false, \"nota\": \"${nota}\"}'"
   echo
   remoto "wc -l < '${DATOS_VM}/votos.jsonl' 2>/dev/null |
-          xargs -I{} echo 'lineas en votos.jsonl: {}' ||
-          echo 'todavia no hay votos.jsonl'"
+          xargs -I{} echo '${etiqueta} {}' ||
+          echo '${sin_votos}'"
 }
 
 cmd_resultados() {
   mkdir -p "${DATOS_LOCAL}"
-  ui_step "Bajando los votos"
+  ui_step "$(t survey.step.results)"
   if ! scp -o ConnectTimeout=10 "${VM_USER}@${IP}:${DATOS_VM}/votos.jsonl" "${VOTOS_LOCAL}"; then
-    ui_die "no se pudo bajar ${DATOS_VM}/votos.jsonl (todavia no voto nadie?)"
+    ui_die "$(t survey.results_fail "${DATOS_VM}")"
   fi
-  ui_ok "Votos en ${VOTOS_LOCAL}"
+  ui_ok "$(t survey.results_ok "${VOTOS_LOCAL}")"
   echo
   python3 "${REPO_DIR}/tools/encuesta/tally.py" --votos "${VOTOS_LOCAL}"
 }
 
 cmd_aplicar() {
-  [[ -f "${VOTOS_LOCAL}" ]] || ui_die "no hay ${VOTOS_LOCAL}. Correr primero: make encuesta-resultados"
+  [[ -f "${VOTOS_LOCAL}" ]] || ui_die "$(t survey.no_votes "${VOTOS_LOCAL}")"
   python3 "${REPO_DIR}/tools/encuesta/tally.py" --votos "${VOTOS_LOCAL}" --aplicar
 }
 
@@ -131,7 +127,7 @@ main() {
       ;;
     *)
       uso >&2
-      ui_die "comando desconocido: ${comando}"
+      ui_die "$(t survey.unknown_cmd "${comando}")"
       ;;
   esac
 

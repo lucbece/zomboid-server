@@ -16,6 +16,9 @@ SERVICE="zomboid"
 DATA_DIR="${REPO_DIR}/data/zomboid"
 BACKUP_DIR="${REPO_DIR}/backups"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 log() { echo "backup: $*"; }
 die() {
   echo "backup: ERROR: $*" >&2
@@ -27,12 +30,12 @@ upload=1
 for arg in "$@"; do
   case "${arg}" in
     --no-upload) upload=0 ;;
-    -*) die "opcion desconocida: ${arg}" ;;
+    -*) die "$(t backup.unknown_option "${arg}")" ;;
     *) label="${arg}" ;;
   esac
 done
 # La etiqueta va en el nombre de archivo: nada de barras ni espacios.
-[[ -z "${label}" || "${label}" =~ ^[A-Za-z0-9_-]+$ ]] || die "etiqueta invalida: '${label}'"
+[[ -z "${label}" || "${label}" =~ ^[A-Za-z0-9_-]+$ ]] || die "$(t backup.bad_label "${label}")"
 
 if [[ -f "${REPO_DIR}/.env" ]]; then
   set -a
@@ -44,19 +47,19 @@ RCLONE_REMOTE="${RCLONE_REMOTE:-oci}"
 BACKUP_BUCKET="${BACKUP_BUCKET:-}"
 BACKUP_KEEP_LOCAL_DAYS="${BACKUP_KEEP_LOCAL_DAYS:-3}"
 
-[[ -d "${DATA_DIR}" ]] || die "no existe ${DATA_DIR}: no hay nada que respaldar"
+[[ -d "${DATA_DIR}" ]] || die "$(t backup.no_data "${DATA_DIR}")"
 
 # --- save por RCON si el server esta corriendo -----------------------------------------------
 if docker compose ps -q --status running "${SERVICE}" 2>/dev/null | grep -q .; then
-  log "el server esta arriba: pidiendo un save antes de copiar"
+  log "$(t backup.saving)"
   if "${REPO_DIR}/scripts/rcon.sh" save >/dev/null 2>&1; then
     # El save es asincronico: el server sigue escribiendo un rato despues de responder.
     sleep 5
   else
-    log "ADVERTENCIA: el save por RCON fallo; se copia igual (puede quedar inconsistente)"
+    log "$(t backup.save_failed)"
   fi
 else
-  log "el server no esta corriendo: se copia el estado en disco tal cual"
+  log "$(t backup.not_running)"
 fi
 
 # --- que se respalda -------------------------------------------------------------------------
@@ -67,10 +70,10 @@ for rel in "Saves/Multiplayer/servertest" "Server" "db"; do
   if [[ -e "${DATA_DIR}/${rel}" ]]; then
     targets+=("${rel}")
   else
-    log "aviso: ${rel} no existe todavia, se omite"
+    log "$(t backup.skip_missing "${rel}")"
   fi
 done
-[[ ${#targets[@]} -gt 0 ]] || die "no hay ninguno de Saves/Server/db en ${DATA_DIR}"
+[[ ${#targets[@]} -gt 0 ]] || die "$(t backup.no_targets "${DATA_DIR}")"
 
 # --- tar --------------------------------------------------------------------------------------
 mkdir -p "${BACKUP_DIR}"
@@ -86,26 +89,26 @@ else
   compress=(--gzip)
 fi
 
-log "creando ${archive#"${REPO_DIR}/"}"
+log "$(t backup.creating "${archive#"${REPO_DIR}/"}")"
 tar "${compress[@]}" -cf "${archive}.tmp" -C "${DATA_DIR}" "${targets[@]}"
 mv "${archive}.tmp" "${archive}"
-log "listo: $(du -h "${archive}" | cut -f1)"
+log "$(t backup.done "$(du -h "${archive}" | cut -f1)")"
 
 # --- upload -----------------------------------------------------------------------------------
 if [[ "${upload}" -eq 1 && -n "${BACKUP_BUCKET}" ]] && command -v rclone >/dev/null 2>&1; then
-  log "subiendo a ${RCLONE_REMOTE}:${BACKUP_BUCKET}"
+  log "$(t backup.uploading "${RCLONE_REMOTE}" "${BACKUP_BUCKET}")"
   if rclone copy "${archive}" "${RCLONE_REMOTE}:${BACKUP_BUCKET}/"; then
-    log "subido"
+    log "$(t backup.uploaded)"
   else
-    log "ADVERTENCIA: rclone fallo. El backup local quedo en ${archive}"
+    log "$(t backup.upload_failed "${archive}")"
   fi
 elif [[ "${upload}" -eq 1 ]]; then
-  log "sin BACKUP_BUCKET en .env o sin rclone instalado: solo backup local"
+  log "$(t backup.local_only)"
 fi
 
 # --- retencion local ---------------------------------------------------------------------------
 # En el bucket la retencion la maneja la lifecycle rule de OCI (30 dias por default).
-log "borrando backups locales de mas de ${BACKUP_KEEP_LOCAL_DAYS} dias"
+log "$(t backup.pruning "${BACKUP_KEEP_LOCAL_DAYS}")"
 find "${BACKUP_DIR}" -maxdepth 1 -type f -name 'zomboid-*.tar.*' \
   -mtime "+${BACKUP_KEEP_LOCAL_DAYS}" -print -delete
 

@@ -24,6 +24,9 @@ STATE_DIR="${WATCHDOG_STATE_DIR:-/var/tmp/zomboid-watchdog}"
 LOG_FILE="${WATCHDOG_LOG:-/var/log/zomboid/watchdog.log}"
 DRY_RUN="${DRY_RUN:-0}"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 NOTIF_LOG="${LOG_FILE}"
 NOTIF_PREFIJO="autorepair"
 # shellcheck source=scripts/lib/notificar.sh
@@ -42,13 +45,7 @@ MOTIVO="desconocido"
 INTENTOS=1
 
 uso() {
-  cat <<MSG
-uso: scripts/autorepair.sh --bundle <dir> --motivo <texto> [--intentos <n>]
-
-  --bundle    directorio del diagnostico que armo el watchdog (obligatorio)
-  --motivo    que detecto el watchdog: crash-loop, patron-fatal, oom, rcon, disco
-  --intentos  cuantas veces se escalo hoy por el mismo motivo (default 1)
-MSG
+  printf '%s\n' "$(t autorepair.usage)"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -57,7 +54,7 @@ while [[ $# -gt 0 ]]; do
     --motivo) MOTIVO="${2:-}"; shift 2 ;;
     --intentos) INTENTOS="${2:-1}"; shift 2 ;;
     -h | --help) uso; exit 0 ;;
-    *) uso >&2; echo "autorepair: opcion desconocida: $1" >&2; exit 2 ;;
+    *) uso >&2; printf '%s\n' "$(t autorepair.unknown_option "$1")" >&2; exit 2 ;;
   esac
 done
 
@@ -81,12 +78,12 @@ MODO_PERMISOS="${AUTOREPAIR_PERMISSION_MODE:-acceptEdits}"
 # --- Guardas ----------------------------------------------------------------------------------
 
 if [[ "${CLAUDE_AUTOREPAIR:-0}" != "1" ]]; then
-  log "CLAUDE_AUTOREPAIR no esta en 1 en .env: no se llama a Claude"
+  log "$(t autorepair.disabled)"
   exit "${EXIT_DESACTIVADO}"
 fi
 
 if [[ -z "${BUNDLE}" || ! -d "${BUNDLE}" ]]; then
-  echo "autorepair: ERROR: --bundle tiene que apuntar a un directorio existente" >&2
+  printf '%s\n' "$(t autorepair.bad_bundle)" >&2
   exit 2
 fi
 BUNDLE="$(cd "${BUNDLE}" && pwd)"
@@ -123,7 +120,7 @@ contar_desde() {
 en_hora="$(contar_desde 3600)"
 en_dia="$(contar_desde 86400)"
 if (( en_hora >= MAX_POR_HORA )) || (( en_dia >= MAX_POR_DIA )); then
-  log "sin cupo (${en_hora}/${MAX_POR_HORA} en la ultima hora, ${en_dia}/${MAX_POR_DIA} hoy)"
+  log "$(t autorepair.no_quota "${en_hora}" "${MAX_POR_HORA}" "${en_dia}" "${MAX_POR_DIA}")"
   notificar warn "Auto-arreglo en pausa" \
     "Ya se agoto el cupo de invocaciones (${en_hora}/${MAX_POR_HORA} por hora, ${en_dia}/${MAX_POR_DIA} por dia).
 El server sigue caido por '${MOTIVO}' y necesita a alguien.
@@ -135,8 +132,8 @@ fi
 
 PLANTILLA="${REPO_DIR}/tools/autorepair/prompt.md"
 REGLAS="${REPO_DIR}/tools/autorepair/CLAUDE.md"
-[[ -f "${PLANTILLA}" ]] || { echo "autorepair: falta ${PLANTILLA}" >&2; exit 2; }
-[[ -f "${REGLAS}" ]] || { echo "autorepair: falta ${REGLAS}" >&2; exit 2; }
+[[ -f "${PLANTILLA}" ]] || { printf '%s\n' "$(t autorepair.missing_file "${PLANTILLA}")" >&2; exit 2; }
+[[ -f "${REGLAS}" ]] || { printf '%s\n' "$(t autorepair.missing_file "${REGLAS}")" >&2; exit 2; }
 
 # Los placeholders se reemplazan con awk y no con sed: el valor puede traer barras.
 render() {
@@ -161,7 +158,7 @@ cmd=(timeout "${TIMEOUT}" claude -p "${PROMPT}"
 [[ -n "${MODELO}" ]] && cmd+=(--model "${MODELO}")
 
 if [[ "${DRY_RUN}" == "1" ]]; then
-  log "DRY_RUN: comando que se correria (el prompt va recortado)"
+  log "$(t autorepair.dryrun)"
   printf '  %q' "${cmd[@]:0:3}" | head -c 400
   echo " ... --output-format json --max-turns ${MAX_TURNS} --permission-mode ${MODO_PERMISOS}"
   exit "${EXIT_OK}"
@@ -175,7 +172,7 @@ notificar warn "Llamando al auto-arreglo" \
 Claude Code va a mirar ${BUNDLE#"${REPO_DIR}/"} y tiene hasta ${TIMEOUT} y ${MAX_TURNS} turnos.
 No puede hacer wipe, restore, ni borrar saves: solo reiniciar y corregir configuracion."
 
-log "corriendo claude (timeout ${TIMEOUT}, max-turns ${MAX_TURNS})"
+log "$(t autorepair.running "${TIMEOUT}" "${MAX_TURNS}")"
 rc=0
 "${cmd[@]}" > "${SALIDA}" 2> "${BUNDLE}/autorepair.err" || rc=$?
 chmod go-rwx "${SALIDA}" 2>/dev/null || true
@@ -199,12 +196,12 @@ print(sys.argv[3] if v is None else v)' "${SALIDA}" "${campo}" "${defecto}"
   fi
 }
 
-texto="$(leer_json result '(sin texto: revisar autorepair.json y autorepair.err)')"
+texto="$(leer_json result "$(t autorepair.no_text)")"
 costo="$(leer_json total_cost_usd '?')"
 turnos="$(leer_json num_turns '?')"
 es_error="$(leer_json is_error 'true')"
 
-log "claude salio con ${rc} (is_error=${es_error}, turnos=${turnos}, costo USD ${costo})"
+log "$(t autorepair.exit "${rc}" "${es_error}" "${turnos}" "${costo}")"
 
 if [[ "${rc}" -eq 124 ]]; then
   notificar error "Auto-arreglo cortado por tiempo" \

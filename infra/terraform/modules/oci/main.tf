@@ -372,6 +372,7 @@ resource "oci_core_instance" "this" {
       public_name     = var.public_name
       max_players     = var.max_players
       max_memory      = var.max_memory
+      cli_lang        = var.cli_lang
       min_memory      = var.min_memory
       mods_txt        = var.mods_txt
 

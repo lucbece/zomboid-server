@@ -8,18 +8,21 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${REPO_DIR}/.env"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 die() {
   echo "rcon: ERROR: $*" >&2
   exit 1
 }
 
-[[ -f "${ENV_FILE}" ]] || die "no existe ${ENV_FILE}"
+[[ -f "${ENV_FILE}" ]] || die "$(t rcon.no_env "${ENV_FILE}")"
 set -a
 # shellcheck source=/dev/null
 source "${ENV_FILE}"
 set +a
 
-: "${RCONPASSWORD:?falta RCONPASSWORD en .env}"
+[[ -n "${RCONPASSWORD:-}" ]] || die "$(t rcon.no_password)"
 RCON_HOST="${RCON_HOST:-127.0.0.1}"
 RCON_PORT="${RCON_PORT:-27015}"
 
@@ -29,10 +32,10 @@ if [[ -x "${REPO_DIR}/bin/mcrcon" ]]; then
 elif command -v mcrcon >/dev/null 2>&1; then
   MCRCON="$(command -v mcrcon)"
 else
-  die "no se encontro mcrcon. Correr 'make mcrcon' para compilarlo en ./bin/mcrcon."
+  die "$(t rcon.no_mcrcon)"
 fi
 
-[[ $# -gt 0 ]] || die "uso: $(basename "$0") <comando rcon> [comando...]"
+[[ $# -gt 0 ]] || die "$(t rcon.usage "$(basename "$0")")"
 
 # Quirk verificado en 42.20.4: el server responde un paquete "tarde" — mcrcon no ve la
 # respuesta del comando N hasta que manda el N+1, asi que en modo no interactivo un solo

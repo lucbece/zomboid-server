@@ -289,6 +289,17 @@ variable "min_memory" {
   default     = "2048m"
 }
 
+variable "cli_lang" {
+  description = "Idioma de los mensajes de los scripts en la VM (logs del watchdog, mod-updater, etc.): es o en."
+  type        = string
+  default     = "en"
+
+  validation {
+    condition     = contains(["es", "en"], var.cli_lang)
+    error_message = "cli_lang tiene que ser \"es\" o \"en\"."
+  }
+}
+
 variable "mods_txt" {
   description = <<-EOT
     Contenido de config/mods.txt (no versionado) para instalarlo en la VM en el primer boot,

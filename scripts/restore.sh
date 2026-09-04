@@ -14,6 +14,9 @@ cd "${REPO_DIR}"
 DATA_DIR="${REPO_DIR}/data/zomboid"
 BACKUP_DIR="${REPO_DIR}/backups"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 log() { echo "restore: $*"; }
 die() {
   echo "restore: ERROR: $*" >&2
@@ -25,49 +28,41 @@ source_arg=""
 for arg in "$@"; do
   case "${arg}" in
     --yes | -y) assume_yes=1 ;;
-    -*) die "opcion desconocida: ${arg}" ;;
+    -*) die "$(t restore.unknown_option "${arg}")" ;;
     *) source_arg="${arg}" ;;
   esac
 done
-[[ -n "${source_arg}" ]] || die "uso: $(basename "$0") [--yes] <archivo|remoto:bucket/nombre>"
+[[ -n "${source_arg}" ]] || die "$(t restore.usage "$(basename "$0")")"
 
 # --- resolver el origen -----------------------------------------------------------------------
 archive=""
 if [[ -f "${source_arg}" ]]; then
   archive="$(cd "$(dirname "${source_arg}")" && pwd)/$(basename "${source_arg}")"
 elif [[ "${source_arg}" == *:* ]]; then
-  command -v rclone >/dev/null 2>&1 || die "hace falta rclone para bajar '${source_arg}'"
+  command -v rclone >/dev/null 2>&1 || die "$(t restore.need_rclone "${source_arg}")"
   mkdir -p "${BACKUP_DIR}"
-  log "bajando ${source_arg}"
+  log "$(t restore.downloading "${source_arg}")"
   rclone copy "${source_arg}" "${BACKUP_DIR}/" --progress
   archive="${BACKUP_DIR}/$(basename "${source_arg}")"
-  [[ -f "${archive}" ]] || die "rclone no dejo ${archive}"
+  [[ -f "${archive}" ]] || die "$(t restore.rclone_failed "${archive}")"
 else
-  die "no existe '${source_arg}' y no parece un remoto de rclone (falta 'remoto:')"
+  die "$(t restore.not_found "${source_arg}")"
 fi
 
-tar -tf "${archive}" >/dev/null 2>&1 || die "${archive} no es un tar valido o falta el compresor"
+tar -tf "${archive}" >/dev/null 2>&1 || die "$(t restore.bad_tar "${archive}")"
 
 # --- confirmacion ------------------------------------------------------------------------------
 if [[ "${assume_yes}" -ne 1 ]]; then
-  cat <<MSG
-
-  Se va a RESTAURAR:  ${archive}
-  Sobre:              ${DATA_DIR}
-
-  Esto apaga el server, borra el mundo actual (Saves/Multiplayer/servertest y db/) y lo
-  reemplaza por el del backup. Antes se guarda un backup de seguridad etiquetado 'pre-restore'.
-
-MSG
-  read -r -p "Escribi 'restore' para continuar: " answer
-  [[ "${answer}" == "restore" ]] || die "cancelado"
+  printf '%s\n\n' "$(t restore.warning "${archive}" "${DATA_DIR}")"
+  read -r -p "$(t restore.prompt)" answer
+  [[ "${answer}" == "restore" ]] || die "$(t restore.cancelled)"
 fi
 
 # --- apagado limpio y backup de seguridad -------------------------------------------------------
 "${REPO_DIR}/scripts/stop.sh"
 if [[ -d "${DATA_DIR}" ]]; then
-  log "backup de seguridad del estado actual"
-  "${REPO_DIR}/scripts/backup.sh" pre-restore >/dev/null || log "ADVERTENCIA: el backup de seguridad fallo"
+  log "$(t restore.safety_backup)"
+  "${REPO_DIR}/scripts/backup.sh" pre-restore >/dev/null || log "$(t restore.safety_failed)"
 fi
 
 # --- extraccion ---------------------------------------------------------------------------------
@@ -76,15 +71,15 @@ fi
 mkdir -p "${DATA_DIR}"
 for rel in "Saves/Multiplayer/servertest" "db"; do
   if [[ -e "${DATA_DIR}/${rel}" ]] && tar -tf "${archive}" | grep -q "^${rel}"; then
-    log "borrando ${rel} actual"
+    log "$(t restore.removing "${rel}")"
     rm -rf "${DATA_DIR:?}/${rel}"
   fi
 done
 
-log "extrayendo"
+log "$(t restore.extracting)"
 tar -xf "${archive}" -C "${DATA_DIR}"
 
 # --- arranque ------------------------------------------------------------------------------------
-log "levantando el server"
+log "$(t restore.starting)"
 make -C "${REPO_DIR}" up
-log "listo. Seguir el arranque con 'make logs'."
+log "$(t restore.done)"

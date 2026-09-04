@@ -59,6 +59,9 @@ CURL_TIMEOUT="${MOD_UPDATE_CURL_TIMEOUT:-25}"
 # quiere; se deja pisable para poder probarlo sin depender de que corre en el host.
 OPS_PATRON="${MOD_UPDATER_OPS_PATTERN:-scripts/(restart|stop|wipe|update|backup)\.sh}"
 
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
+
 NOTIF_LOG="${LOG_FILE}"
 NOTIF_PREFIJO="mod-updater"
 # shellcheck source=scripts/lib/notificar.sh
@@ -102,7 +105,7 @@ limpiar_ciclo() {
 avisar() {
   local nivel="$1" titulo="$2" detalle="${3:-}"
   if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY_RUN: aca notificaria [${nivel}] ${titulo} -- ${detalle}"
+    log "$(t modupd.dryrun.notify "${nivel}" "${titulo}" "${detalle}")"
     return 0
   fi
   notificar "${nivel}" "${titulo}" "${detalle}"
@@ -112,11 +115,11 @@ avisar() {
 mensaje_en_juego() {
   local texto="$1"
   if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY_RUN: aca mandaria por RCON servermsg \"${texto}\""
+    log "$(t modupd.dryrun.servermsg "${texto}")"
     return 0
   fi
   "${REPO_DIR}/scripts/rcon.sh" "servermsg \"${texto}\"" >/dev/null 2>&1 \
-    || log "ADVERTENCIA: no se pudo mandar el servermsg"
+    || log "$(t modupd.servermsg_fail)"
 }
 
 # Jugadores conectados. Imprime el numero, o falla si RCON no responde.
@@ -162,11 +165,11 @@ consultar_api() {
 reiniciar() {
   local warn="$1" titulos="$2"
   if [[ "${DRY_RUN}" == "1" ]]; then
-    log "DRY_RUN: aca correria WARN_SECONDS=${warn} scripts/restart.sh (mods: ${titulos})"
+    log "$(t modupd.dryrun.restart "${warn}" "${titulos}")"
     return 0
   fi
 
-  log "reiniciando el server (WARN_SECONDS=${warn}) por: ${titulos}"
+  log "$(t modupd.restarting "${warn}" "${titulos}")"
   if ! WARN_SECONDS="${warn}" "${REPO_DIR}/scripts/restart.sh" >> "${LOG_FILE}" 2>&1; then
     avisar error "No se pudo reiniciar por la actualizacion de mods" \
       "scripts/restart.sh salio con error. Mods pendientes: ${titulos}"
@@ -194,20 +197,20 @@ comparar() {
   local -a ids
   mapfile -t ids < <(ids_declarados)
   if [[ ${#ids[@]} -eq 0 ]]; then
-    log "config/mods.txt no declara ningun mod: nada que chequear"
+    log "$(t modupd.no_mods)"
     return 1
   fi
 
   local api_json="${TMP_DIR}/api.json"
   if ! consultar_api "${api_json}" "${ids[@]}"; then
-    log "la API de Steam no respondio (curl fallo): no se hace nada en esta pasada"
+    log "$(t modupd.api_fail)"
     return 1
   fi
 
   local salida rc=0
   salida="$(python3 "${COMPARAR}" "${ACF}" "${api_json}" "${ids[@]}")" || rc=$?
   if (( rc != 0 )); then
-    log "la respuesta de la API no sirve (comparar.py salio con ${rc}): no se hace nada"
+    log "$(t modupd.compare_fail "${rc}")"
     return 1
   fi
   printf '%s\n' "${salida}"
@@ -217,10 +220,10 @@ modo_check() {
   TMP_DIR="$(mktemp -d)"
   local -a ids
   mapfile -t ids < <(ids_declarados)
-  [[ ${#ids[@]} -gt 0 ]] || { echo "mod-updater: config/mods.txt no declara ningun mod" >&2; return 1; }
+  [[ ${#ids[@]} -gt 0 ]] || { printf '%s\n' "$(t modupd.check.no_mods)" >&2; return 1; }
   local api_json="${TMP_DIR}/api.json"
   consultar_api "${api_json}" "${ids[@]}" \
-    || { echo "mod-updater: la API de Steam no respondio" >&2; return 1; }
+    || { printf '%s\n' "$(t modupd.check.api_fail)" >&2; return 1; }
   python3 "${COMPARAR}" --tabla "${ACF}" "${api_json}" "${ids[@]}"
 }
 
@@ -238,18 +241,18 @@ main() {
   # la vez. Tambien sirve de "una corrida a la vez" para cada uno.
   # Se crea antes con `:` porque un `exec` con la redireccion fallida mata el shell entero.
   if ! : >> "${OPS_LOCK}" 2>/dev/null; then
-    log "ADVERTENCIA: no se puede escribir el lock ${OPS_LOCK}: se saltea esta pasada"
+    log "$(t modupd.lock_unwritable "${OPS_LOCK}")"
     return 0
   fi
   exec 9>"${OPS_LOCK}"
   if ! flock -n 9; then
-    log "hay otra operacion en curso (watchdog o mod-updater), se saltea esta pasada"
+    log "$(t modupd.lock_busy)"
     return 0
   fi
 
   # El lock no cubre lo que se corre a mano por SSH ni lo que lanza el panel de moderadores.
   if pgrep -f "${OPS_PATRON}" >/dev/null 2>&1; then
-    log "hay un restart/stop/wipe/update/backup corriendo, se saltea esta pasada"
+    log "$(t modupd.ops_busy)"
     return 0
   fi
 
@@ -269,7 +272,7 @@ main() {
   local raros
   raros="$(awk -F'\t' '$5 == "sin-datos" || $5 == "no-instalado" { print $1" ("$5")" }' \
            <<<"${filas}" | juntar)"
-  [[ -n "${raros}" ]] && log "mods sin comparacion util: ${raros}"
+  [[ -n "${raros}" ]] && log "$(t modupd.weird "${raros}")"
 
   local pendientes fase
   pendientes="$(leer_estado pendientes "")"
@@ -277,7 +280,7 @@ main() {
 
   # --- Fase 2: ya reiniciamos, falta confirmar que bajo la version nueva --------------------
   if [[ "${fase}" == "esperando" && -z "${pendientes}" ]]; then
-    log "estado inconsistente (fase esperando sin pendientes): se cierra el ciclo"
+    log "$(t modupd.inconsistent)"
     limpiar_ciclo
     fase=""
   fi
@@ -306,17 +309,17 @@ main() {
       limpiar_ciclo
       return 0
     fi
-    log "esperando a que SteamCMD termine de bajar: ${titulos_pend}"
+    log "$(t modupd.waiting_steamcmd "${titulos_pend}")"
     return 0
   fi
 
   # --- Nada desactualizado ------------------------------------------------------------------
   if [[ -z "${desactualizados}" ]]; then
     if [[ -n "${pendientes}" ]]; then
-      log "los mods pendientes quedaron al dia sin que reiniciemos nosotros: se cierra el ciclo"
+      log "$(t modupd.closed_cycle)"
       limpiar_ciclo
     else
-      log "todos los mods declarados estan al dia"
+      log "$(t modupd.all_current)"
     fi
     return 0
   fi
@@ -344,7 +347,7 @@ main() {
       avisar warn "Mod actualizado: ${titulos_desact}" \
         "MOD_UPDATE_AUTO_RESTART=0: no se reinicia solo. Hasta que alguien haga 'make restart' los jugadores con el mod actualizado no van a poder entrar."
     else
-      log "sigue desactualizado ${titulos_desact} y MOD_UPDATE_AUTO_RESTART=0: solo se registra"
+      log "$(t modupd.only_log "${titulos_desact}")"
     fi
     return 0
   fi
@@ -352,7 +355,7 @@ main() {
   # --- Cuantos hay adentro ------------------------------------------------------------------
   local conectados
   if ! conectados="$(jugadores_conectados)"; then
-    log "RCON no responde: se pospone el reinicio por mods (de eso se ocupa el watchdog)"
+    log "$(t modupd.rcon_down)"
     return 0
   fi
 
@@ -405,7 +408,7 @@ main() {
     escribir_estado recordatorios "${ya}"
   done
 
-  log "reinicio pendiente en $(( (restante + 59) / 60 )) minuto(s) por: ${titulos_desact}"
+  log "$(t modupd.pending "$(( (restante + 59) / 60 ))" "${titulos_desact}")"
   return 0
 }
 

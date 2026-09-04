@@ -216,7 +216,7 @@ SteamScoreboard=false
 SteamVAC=true
 
 # Attempt to configure a UPnP-enabled internet gateway to automatically setup port forwarding rules. The server will fall back to default ports if this fails
-UPnP=false
+UPnP=${UPNP}
 
 # VOIP is enabled when checked
 VoiceEnable=true

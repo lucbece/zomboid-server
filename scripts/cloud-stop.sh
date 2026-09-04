@@ -11,6 +11,8 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/i18n.sh
+source "${REPO_DIR}/scripts/lib/i18n.sh"
 # shellcheck source=scripts/lib/oci-instance.sh
 source "${REPO_DIR}/scripts/lib/oci-instance.sh"
 
@@ -18,7 +20,7 @@ hard=0
 for arg in "$@"; do
   case "${arg}" in
     --hard) hard=1 ;;
-    *) echo "cloud-stop: opcion desconocida: ${arg}" >&2; exit 1 ;;
+    *) printf '%s\n' "$(t cloudstop.unknown_option "${arg}")" >&2; exit 1 ;;
   esac
 done
 
@@ -29,15 +31,15 @@ if [[ "${hard}" -eq 0 ]]; then
   ip="$(tofu_output public_ip || true)"
   user="${VM_USER:-pz}"
   if [[ -n "${ip}" ]]; then
-    echo "cloud-stop: apagado limpio del server en ${user}@${ip}"
+    printf '%s\n' "$(t cloudstop.clean "${user}@${ip}")"
     ssh -o ConnectTimeout=10 "${user}@${ip}" \
       'cd /opt/zomboid-server && ./scripts/stop.sh && ./scripts/backup.sh' \
-      || echo "cloud-stop: ADVERTENCIA: el apagado por SSH fallo; el SOFTSTOP igual dispara el ExecStop del systemd"
+      || printf '%s\n' "$(t cloudstop.ssh_failed)"
   else
-    echo "cloud-stop: ADVERTENCIA: no se pudo resolver la IP; se va derecho al SOFTSTOP"
+    printf '%s\n' "$(t cloudstop.no_ip)"
   fi
 fi
 
-echo "cloud-stop: SOFTSTOP sobre ${ocid}"
+printf '%s\n' "$(t cloudstop.softstop "${ocid}")"
 oci compute instance action --action SOFTSTOP --instance-id "${ocid}" --wait-for-state STOPPED
-echo "cloud-stop: VM detenida. OCI no cobra computo con la instancia en STOPPED."
+printf '%s\n' "$(t cloudstop.done)"
