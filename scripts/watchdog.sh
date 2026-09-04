@@ -17,6 +17,8 @@
 #   WATCHDOG_REPO_DIR    raiz del repo             (default: la que deduce del script)
 #   WATCHDOG_STATE_DIR   estado persistente        (default: /var/tmp/zomboid-watchdog)
 #   WATCHDOG_LOG         log propio                (default: /var/log/zomboid/watchdog.log)
+#   ZOMBOID_OPS_LOCK     lock compartido con scripts/mod-updater.sh
+#                                                  (default: /var/tmp/zomboid-ops.lock)
 # Todos los comandos externos (docker, systemctl, journalctl, df, free, curl, make) se buscan
 # por PATH a proposito, para poder sustituirlos por stubs.
 set -euo pipefail
@@ -26,6 +28,10 @@ cd "${REPO_DIR}"
 
 STATE_DIR="${WATCHDOG_STATE_DIR:-/var/tmp/zomboid-watchdog}"
 LOG_FILE="${WATCHDOG_LOG:-/var/log/zomboid/watchdog.log}"
+# Un solo lock para todo lo que puede reiniciar el server sin que haya nadie mirando: este
+# watchdog y scripts/mod-updater.sh. Ademas de excluirse entre si, le sirve a cada uno de
+# "una corrida a la vez".
+OPS_LOCK="${ZOMBOID_OPS_LOCK:-/var/tmp/zomboid-ops.lock}"
 SERVICE="zomboid"
 UNIT="zomboid.service"
 CONTENEDOR="${WATCHDOG_CONTAINER:-zomboid-server}"
@@ -492,10 +498,16 @@ main() {
   mkdir -p "$(dirname "${LOG_FILE}")" 2>/dev/null || true
   TMP_DIR="$(mktemp -d)"
 
-  # Una sola corrida a la vez: un playbook puede tardar mas que el intervalo del timer.
-  exec 9>"${STATE_DIR}/lock"
+  # Una sola operacion a la vez: un playbook puede tardar mas que el intervalo del timer, y
+  # mientras corre el mod-updater no tiene que meterse a reiniciar por su cuenta.
+  # Se crea antes con `:` porque un `exec` con la redireccion fallida mata el shell entero.
+  if ! : >> "${OPS_LOCK}" 2>/dev/null; then
+    log "ADVERTENCIA: no se puede escribir el lock ${OPS_LOCK}: se saltea esta pasada"
+    return "${EXIT_OK}"
+  fi
+  exec 9>"${OPS_LOCK}"
   if ! flock -n 9; then
-    log "ya hay una corrida en curso, se saltea esta"
+    log "ya hay una operacion en curso (watchdog o mod-updater), se saltea esta"
     return "${EXIT_OK}"
   fi
 
