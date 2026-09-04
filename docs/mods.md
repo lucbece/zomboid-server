@@ -162,10 +162,84 @@ mods whose items are in circulation. Take a backup first.
 
 ## 9. Mod updates
 
-Workshop mods are re-downloaded every time the server starts. If an author publishes an update
-while the server is running, clients end up with a different version from the server's and fail to
-connect with a mismatch error. The fix is always a restart, which makes the server pick up the new
-version.
+Workshop mods are downloaded **only when the server starts**, while Steam updates the same mods on
+the players' machines on its own. So when an author publishes a new version of a mod with the
+server already running, every client that has picked it up is a version ahead of the server and
+cannot get in: the server looks incompatible, or simply offline, until somebody restarts it. This
+is not a rare event — it happened on 2026-09-04 with item `3725311427`, updated at 08:20Z against
+a server that had started at 03:23Z.
+
+The fix is always a restart, which makes the server re-download the mod. `scripts/mod-updater.sh`
+does that restart on its own.
+
+### How it works
+
+A systemd timer (`zomboid-mod-updater.timer`) runs the script every five minutes on the VM. Each
+pass:
+
+1. Reads the Workshop IDs from `config/mods.txt` — the same parse `render-config.sh` does — and
+   asks the public Steam API for their `time_updated`. It is a single anonymous `POST` to
+   `ISteamRemoteStorage/GetPublishedFileDetails/v1/`; no API key is involved.
+2. Compares that against the `timeupdated` recorded for each item under `WorkshopItemsInstalled`
+   in `data/workshop/appworkshop_108600.acf`, which is what SteamCMD actually downloaded.
+3. Acts on whatever came out behind.
+
+`tools/mod-updater/comparar.py` does both parses and prints one line per mod with a state:
+`al-dia`, `desactualizado`, `no-instalado` or `sin-datos`. If the API does not answer, or answers
+something unusable, the script logs it and does nothing at all — the whole point is that it never
+restarts a server full of people on a guess. An item that was deleted or made private in the
+Workshop comes back as `sin-datos` and is logged, never acted on: no restart is going to fix it.
+
+### The restart policy
+
+| Situation | What happens |
+|---|---|
+| Nobody connected | Immediate restart, `WARN_SECONDS=0`. |
+| Players connected | `servermsg` in game naming the mod and the deadline, a Discord message, and a restart in `MOD_UPDATE_RESTART_DELAY_MIN` minutes (15 by default). |
+| Players drop to zero during the countdown | Restarts on the next pass, without waiting out the deadline. |
+| RCON does not answer | Nothing. A server whose RCON is down is the watchdog's problem, not this script's. |
+| `MOD_UPDATE_AUTO_RESTART=0` | Discord message and log entry only. The restart is left to a person. |
+
+The countdown is announced once, reminded at five minutes to go, and closed by
+`scripts/stop.sh`'s own sixty-second warning. That last warning is why the script does not send a
+one-minute reminder of its own: `stop.sh` already sends one, and it is exact, whereas a reminder
+driven by the timer would only be as precise as the timer's interval.
+
+The timer runs every five minutes rather than every ten for that middle reminder. The countdown
+lives in the state directory, not in a `sleep`, so what the interval sets is the worst-case error
+of an announcement: with five minutes, at least one pass always falls inside the last five minutes
+of the countdown. Sleeping through the wait inside one run would hold the shared lock and leave
+the watchdog unable to act for a quarter of an hour, which is the wrong trade.
+
+### After the restart
+
+`restart.sh` returns as soon as the container is up, well before SteamCMD has finished downloading
+anything, so the check that the update actually landed happens on the following passes: the script
+re-reads the `.acf` until the item's `timeupdated` catches up, and posts *Server reiniciado con los
+mods al dia*. If it has not caught up after `MOD_UPDATE_VERIFY_SECONDS` (15 minutes by default) it
+posts *No se pudo actualizar el mod* and stops, leaving it to a person.
+
+### Locking
+
+The script and the watchdog share `/var/tmp/zomboid-ops.lock` through `flock`. Both of them can
+restart the server unattended and neither may do it while the other is mid-action; the same lock
+also gives each of them its "one run at a time". Beyond the lock, the script also refuses to run
+while a `restart.sh`, `stop.sh`, `wipe.sh`, `update.sh` or `backup.sh` is running, which covers
+what somebody starts by hand over SSH and what the moderator panel starts.
+
+### Operating it
+
+```bash
+make mods-check            # read-only table: Workshop date vs installed date, per mod
+make mod-updater-install   # install and enable the timer on an existing VM
+make mod-updater-status    # next run, last result, tail of the log
+```
+
+`DRY_RUN=1 scripts/mod-updater.sh` prints what a pass would do without doing any of it — no
+restart, no RCON, no Discord, no state written. Configuration lives in `.env`
+(`MOD_UPDATE_AUTO_RESTART`, `MOD_UPDATE_RESTART_DELAY_MIN`, `MOD_UPDATE_REMINDERS`,
+`MOD_UPDATE_VERIFY_SECONDS`); the log is `/var/log/zomboid/mod-updater.log` and the state lives in
+`/var/tmp/zomboid-mod-updater/`.
 
 ## 10. Operational notes
 

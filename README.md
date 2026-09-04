@@ -18,7 +18,8 @@ a cloud provider is supported as one option, not as a requirement — see
   change it.
 - Game rules, spawn points, spawn regions and server settings versioned in `config/`; secrets
   kept out of git in `.env`.
-- Workshop mods declared in a single text file (`config/mods.txt`) that also defines load order.
+- Workshop mods declared in a single text file (`config/mods.txt`) that also defines load order,
+  kept in step with the Workshop automatically so a mod update does not lock players out.
 - Clean shutdown and restart: RCON `save` + `quit`, never a bare `docker stop`.
 - Backups: a `save`-then-archive script with optional upload to object storage, plus restore and
   wipe procedures.
@@ -144,6 +145,25 @@ Add a line to `config/mods.txt` with the Workshop ID and the Mod ID, then `make 
 Removing a mod from a world that already contains its items or map cells can corrupt saves. Take
 a backup first. Full procedure, including how to read a mod's `require=` dependencies and how to
 diagnose a mod that fails to load: [`docs/mods.md`](docs/mods.md).
+
+#### Keeping up with the Workshop
+
+The server downloads mods only when it starts, while Steam updates the same mods on the players'
+machines by itself. So when an author publishes a new version with the server already running,
+every player who has received it is a version ahead and cannot connect — the server reads as
+incompatible, or simply as offline — until somebody restarts it. On the cloud VM a systemd timer
+runs `scripts/mod-updater.sh` every five minutes to close that gap: it compares each mod's
+`time_updated` in the Steam API against what SteamCMD actually installed, and when something has
+fallen behind it restarts — immediately if nobody is connected, or after a fifteen-minute
+countdown announced in game and on Discord if there is. If the API does not answer it does
+nothing at all. `MOD_UPDATE_AUTO_RESTART=0` reduces it to a notification. See
+[`docs/mods.md`](docs/mods.md).
+
+```bash
+make mods-check            # per mod: Workshop date, installed date, verdict
+make mod-updater-install   # install and enable the timer on an existing VM
+make mod-updater-status    # next run, last result, tail of the log
+```
 
 ## Operations
 
@@ -312,7 +332,7 @@ make notifier-status     # unit state and the last 20 journal lines
 | [`docs/architecture.md`](docs/architecture.md) | How the pieces fit together and the design decisions in force |
 | [`docs/runbook.md`](docs/runbook.md) | Operations reference: deployment, backups, wipes, updates, troubleshooting |
 | [`docs/deploy-oracle.md`](docs/deploy-oracle.md) | Deploying to Oracle Cloud: account, API key, `setup.sh`, `make deploy`, costs |
-| [`docs/mods.md`](docs/mods.md) | Adding, removing and debugging Workshop mods |
+| [`docs/mods.md`](docs/mods.md) | Adding, removing and debugging Workshop mods, and keeping them in step with the Workshop |
 | [`docs/survey.md`](docs/survey.md) | The rules survey: running it, tallying it, closing it |
 | [`docs/panel.md`](docs/panel.md) | The moderator panel: tokens, cooldowns, security model |
 | [`docs/self-healing.md`](docs/self-healing.md) | The watchdog, the Discord alerts and the optional Claude Code auto-repair |

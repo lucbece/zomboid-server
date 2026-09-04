@@ -43,7 +43,11 @@ reinstalls, and `/tmp` is cleared on boot:
 | `ultima-escalacion` | The last one, so the same alert is not posted every two minutes |
 | `ultimo-problema` | What was wrong last time, so "recovered" can be announced |
 | `autorepair-invocaciones` | One line per Claude invocation, for the hourly and daily quotas |
-| `lock` | `flock`. A run that takes longer than the interval makes the next one skip |
+
+The lock is not in there: it is `/var/tmp/zomboid-ops.lock`, shared with
+`scripts/mod-updater.sh` (see [`mods.md`](mods.md)). Both restart the server unattended and on
+independent schedules, so they take the same `flock`: a run that takes longer than the interval
+makes the next one skip, and neither of them can restart while the other is mid-action.
 
 ## What it detects
 

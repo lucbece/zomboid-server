@@ -58,6 +58,7 @@ Shutdown never goes through `docker stop`. `scripts/stop.sh` warns players over 
                                         ├─ configure rclone by instance principal
                                         ├─ install /etc/cron.d/zomboid (daily backup)
                                         ├─ enable zomboid-watchdog.timer (every 2 min)
+                                        ├─ enable zomboid-mod-updater.timer (every 5 min)
                                         └─ enable zomboid.service
                                         │
                                         v
@@ -89,6 +90,13 @@ zomboid-watchdog.timer, every 2 min ──> scripts/watchdog.sh
                                           ├─ notify ──────────────────> Discord webhook
                                           └─ escalate ──> scripts/autorepair.sh (opt-in)
                                                             └─ claude -p, tools restricted
+
+zomboid-mod-updater.timer, every 5 min ──> scripts/mod-updater.sh
+                                          ├─ Steam API time_updated vs appworkshop_108600.acf
+                                          ├─ servermsg countdown ──> the players in game
+                                          ├─ scripts/restart.sh (shares /var/tmp/zomboid-ops.lock
+                                          │                      with the watchdog)
+                                          └─ notify ──────────────────> Discord webhook
 
 zomboid-notifier.service, always on ──> tools/discord-notifier/notifier.py
                                           ├─ docker compose logs -f   SERVER STARTED, version

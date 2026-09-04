@@ -20,7 +20,8 @@ El despliegue en un proveedor de nube es una opción soportada, no un requisito;
 - Reglas de la partida, puntos y regiones de aparición y configuración del servidor versionados
   en `config/`; los secretos quedan fuera de git, en `.env`.
 - Mods del Workshop declarados en un único archivo de texto (`config/mods.txt`) que además define
-  el orden de carga.
+  el orden de carga, y que se mantiene al día con el Workshop solo, para que la actualización de
+  un mod no deje a los jugadores afuera.
 - Apagado y reinicio limpios: `save` + `quit` por RCON, nunca un `docker stop` a secas.
 - Backups: un script que guarda el mundo y lo archiva, con subida opcional a almacenamiento de
   objetos, más procedimientos de restauración y de wipe.
@@ -149,6 +150,25 @@ Agregá una línea a `config/mods.txt` con el Workshop ID y el Mod ID, y despué
 Sacar un mod de un mundo que ya contiene sus objetos o sus celdas de mapa puede corromper el
 save. Hacé un backup antes. El procedimiento completo, incluido cómo leer las dependencias
 `require=` de un mod y cómo diagnosticar uno que no carga, está en [`docs/mods.md`](docs/mods.md).
+
+#### Seguirle el paso al Workshop
+
+El servidor baja los mods solo cuando arranca, mientras que Steam los actualiza solo en las
+máquinas de los jugadores. Así que cuando un autor publica una versión nueva con el servidor ya
+prendido, todo el que la recibió queda una versión adelante y no puede conectarse —el servidor se
+ve incompatible, o directamente apagado— hasta que alguien lo reinicie. En la VM de la nube hay un
+timer de systemd que corre `scripts/mod-updater.sh` cada cinco minutos para cerrar esa ventana:
+compara el `time_updated` de cada mod en la API de Steam contra lo que SteamCMD instaló de verdad,
+y cuando algo quedó atrás reinicia, en el momento si no hay nadie conectado, o después de una
+cuenta regresiva de quince minutos anunciada en el juego y por Discord si hay gente. Si la API no
+contesta, no hace nada. `MOD_UPDATE_AUTO_RESTART=0` lo deja en un simple aviso. Ver
+[`docs/mods.md`](docs/mods.md).
+
+```bash
+make mods-check            # por mod: fecha en el Workshop, fecha instalada, veredicto
+make mod-updater-install   # instala y habilita el timer en una VM que ya existe
+make mod-updater-status    # próxima corrida, último resultado, cola del log
+```
 
 ## Operación
 
@@ -323,7 +343,7 @@ make notifier-status     # estado de la unit y las últimas 20 líneas del journ
 | [`docs/architecture.md`](docs/architecture.md) | Cómo encajan las piezas y las decisiones vigentes |
 | [`docs/runbook.md`](docs/runbook.md) | Referencia de operación: despliegue, backups, wipes, actualizaciones, diagnóstico |
 | [`docs/deploy-oracle.md`](docs/deploy-oracle.md) | Despliegue en Oracle Cloud: cuenta, clave de API, `setup.sh`, `make deploy`, costos |
-| [`docs/mods.md`](docs/mods.md) | Agregar, quitar y diagnosticar mods del Workshop |
+| [`docs/mods.md`](docs/mods.md) | Agregar, quitar y diagnosticar mods del Workshop, y mantenerlos al día con el Workshop (en inglés) |
 | [`docs/survey.md`](docs/survey.md) | La encuesta de reglas: cómo levantarla, contarla y cerrarla |
 | [`docs/panel.md`](docs/panel.md) | El panel de moderadores: tokens, cooldowns, modelo de seguridad (en inglés) |
 | [`docs/self-healing.md`](docs/self-healing.md) | El watchdog, los avisos de Discord y el auto-arreglo opcional con Claude Code (en inglés) |
