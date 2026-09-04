@@ -70,7 +70,8 @@ cmd_up() {
             '${VM_DIR}/infra/systemd/${UNIT}' '/etc/systemd/system/${UNIT}' &&
           sudo install -d -m 755 -o ${VM_USER} -g ${VM_USER} '${DATOS_VM}' &&
           sudo systemctl daemon-reload &&
-          sudo systemctl enable --now '${UNIT}' &&
+          sudo systemctl enable '${UNIT}' >/dev/null 2>&1 &&
+          sudo systemctl restart '${UNIT}' &&
           sudo ufw allow '${PUERTO}/tcp' comment 'Encuesta de reglas' >/dev/null"
 
   ui_ok "Encuesta arriba en http://${IP}:${PUERTO}"

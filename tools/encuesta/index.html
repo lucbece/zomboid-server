@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="noindex, nofollow">
-<title>Encuesta de reglas</title>
+<title>{{SERVER_NAME}} · Encuesta de reglas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=Archivo:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
@@ -233,7 +233,9 @@ fieldset.pregunta {
 }
 fieldset.pregunta:first-of-type { border-top: 0; padding-top: .6rem; }
 
-legend { padding: 0; width: 100%; }
+/* Un <legend> se dibuja sobre el borde del fieldset y deja el padding superior entre el titulo y
+   las opciones. Flotarlo lo convierte en un bloque normal del flujo. */
+legend { float: left; width: 100%; padding: 0; }
 .pregunta .titulo-p {
   font-weight: 600;
   font-size: 1.12rem;
@@ -256,7 +258,7 @@ legend { padding: 0; width: 100%; }
   background: var(--ruta);
 }
 
-.opciones { display: grid; gap: 2px; }
+.opciones { display: grid; gap: 2px; clear: both; }
 
 .opcion {
   position: relative;
@@ -409,8 +411,8 @@ button.secundario:focus-visible { outline: 2px solid var(--niebla); outline-offs
 <header>
   <div class="envoltorio">
     <span class="chapa">Knox County · KY · 1993</span>
-    <h1>Encuesta de reglas</h1>
-    <p class="hito">Project Zomboid</p>
+    <h1>{{SERVER_NAME}}</h1>
+    <p class="hito">Encuesta de reglas · Project Zomboid</p>
     <p class="bajada">Antes de arrancar la partida definitiva votamos con qué reglas jugamos.
       <strong>Todo viene marcado con lo que trae el juego por default</strong>: cambiá solo lo que
       te importa y mandá. Gana lo más votado; si hay empate queda el default.</p>

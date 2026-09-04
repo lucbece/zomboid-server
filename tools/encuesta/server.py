@@ -20,6 +20,7 @@ votos.jsonl NO se sirve por HTTP: los votos se bajan por scp (scripts/encuesta.s
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
@@ -226,6 +227,9 @@ class Handler(BaseHTTPRequestHandler):
         if ruta in ("/", "/index.html"):
             try:
                 cuerpo = self.index_path.read_bytes()
+                # El nombre del server sale de PUBLIC_NAME (el .env lo carga la unit de systemd).
+                nombre = os.environ.get("PUBLIC_NAME", "").strip().strip('"').strip("'") or "Servidor de Zomboid"
+                cuerpo = cuerpo.replace(b"{{SERVER_NAME}}", html.escape(nombre).encode("utf-8"))
             except OSError:
                 self._error(HTTPStatus.INTERNAL_SERVER_ERROR, "no se pudo leer index.html")
                 return
