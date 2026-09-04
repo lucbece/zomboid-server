@@ -14,6 +14,7 @@
 #     deploy key de solo lectura si use_deploy_key = true)
 #   - ${repo_dir}/.env con los secretos que vienen de terraform.tfvars
 #   - mcrcon compilado, systemd unit habilitada (arranca el server en el boot)
+#   - watchdog habilitado (timer cada 2 minutos; ver docs/self-healing.md)
 #   - rclone contra Object Storage por instance principal (sin claves en disco)
 #   - cron de backup diario a las 0${backup_hour}:00 hora de ${timezone}
 #
@@ -126,6 +127,16 @@ write_files:
 
       # --- Fase 3: apagado por inactividad (todavia sin cron) ---
       IDLE_MINUTES=30
+
+      # --- Watchdog y auto-arreglo (ver docs/self-healing.md) ---
+      # El webhook y la credencial de Claude NO salen de terraform.tfvars: se cargan a mano en
+      # este archivo, en la VM, para que no queden en el state ni en el repo.
+      DISCORD_WEBHOOK_URL=
+      WATCHDOG_MAX_RESTARTS_HOUR=2
+      CLAUDE_AUTOREPAIR=0
+      AUTOREPAIR_MAX_PER_DAY=3
+      ANTHROPIC_API_KEY=
+      CLAUDE_CODE_OAUTH_TOKEN=
 
   # --- rclone contra Object Storage por instance principal --------------------------------
   # instance_principal_auth = la VM se autentica con su propio certificado de instancia.
@@ -247,5 +258,15 @@ runcmd:
   - install -m 0644 ${repo_dir}/infra/systemd/zomboid.service /etc/systemd/system/zomboid.service
   - systemctl daemon-reload
   - systemctl enable --now zomboid.service
+
+  # --- Watchdog ------------------------------------------------------------------------------
+  # Chequea el server cada 2 minutos y se recupera solo de las fallas comunes. El estado vive
+  # en /var/tmp (sobrevive al tmpfs de /tmp pero no hace falta que sobreviva un reinstall).
+  # Se habilita el timer, no el service: el service es la corrida de una sola pasada.
+  - install -m 0644 ${repo_dir}/infra/systemd/zomboid-watchdog.service /etc/systemd/system/zomboid-watchdog.service
+  - install -m 0644 ${repo_dir}/infra/systemd/zomboid-watchdog.timer /etc/systemd/system/zomboid-watchdog.timer
+  - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/tmp/zomboid-watchdog
+  - systemctl daemon-reload
+  - systemctl enable --now zomboid-watchdog.timer
 
 final_message: "zomboid: cloud-init termino en $UPTIME s. El server arranca solo; seguirlo con: cd /opt/zomboid-server && make logs (journalctl -u zomboid muestra solo el arranque de la unit)"

@@ -1,0 +1,35 @@
+# Watchdog del servidor de Project Zomboid. No se arranca sola: la dispara
+# zomboid-watchdog.timer cada 2 minutos. La instala cloud-init en las VMs nuevas y
+# `make watchdog-install` en las que ya existen.
+#
+# Type=oneshot: corre, hace lo que tenga que hacer y sale. El estado entre corridas vive en
+# /var/tmp/zomboid-watchdog/ (y no en /run, que se vacia en cada boot).
+[Unit]
+Description=Watchdog del servidor de Project Zomboid (chequeo + auto-arreglo)
+Documentation=https://github.com/lucbece/zomboid-server
+After=docker.service zomboid.service
+Wants=docker.service
+
+# Sin la unit del server instalada el watchdog no tiene nada que vigilar.
+ConditionPathExists=/opt/zomboid-server/scripts/watchdog.sh
+
+[Service]
+Type=oneshot
+User=pz
+Group=pz
+WorkingDirectory=/opt/zomboid-server
+ExecStart=/opt/zomboid-server/scripts/watchdog.sh
+
+# 20 = el watchdog escalo y hace falta una persona. Es un resultado esperado del chequeo, no
+# una falla de la unit: si fuera un fallo, `systemctl status` mentiria sobre el watchdog.
+SuccessExitStatus=20
+
+# El playbook critico para el server, arma el bundle, lo levanta y espera hasta 5 minutos.
+# Con CLAUDE_AUTOREPAIR=1 se suman los 40 minutos de timeout de la invocacion a Claude.
+TimeoutStartSec=55min
+
+# El escalado a Claude necesita $HOME para leer su configuracion y credenciales.
+Environment=HOME=/home/pz
+
+[Install]
+WantedBy=multi-user.target

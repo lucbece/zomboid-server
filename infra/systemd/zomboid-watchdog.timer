@@ -1,0 +1,23 @@
+# Dispara zomboid-watchdog.service cada 2 minutos.
+#
+# Dos minutos es el compromiso entre enterarse rapido y no gastar: tres chequeos de RCON
+# fallidos seguidos (lo que hace falta para declararlo caido) son 6 minutos, que es menos de lo
+# que tarda alguien en abrir Discord para avisar que el server no anda.
+#
+# El watchdog toma un flock: si una corrida se pasa de los 2 minutos (un reinicio tarda ~2, un
+# arreglo con Claude hasta 40), la siguiente se saltea sola en vez de encimarse.
+[Unit]
+Description=Chequeo periodico del servidor de Project Zomboid
+Documentation=https://github.com/lucbece/zomboid-server
+
+[Timer]
+# Cinco minutos despues del boot: le da tiempo al server a arrancar antes del primer chequeo.
+OnBootSec=5min
+OnUnitActiveSec=2min
+# Sin esto, todas las corridas caerian en el segundo 0 de cada minuto par.
+RandomizedDelaySec=15s
+AccuracySec=10s
+Unit=zomboid-watchdog.service
+
+[Install]
+WantedBy=timers.target
