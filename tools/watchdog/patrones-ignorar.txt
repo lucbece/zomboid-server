@@ -1,0 +1,15 @@
+# Ruido conocido: lineas que matchean patrones-fatales.txt pero NO son una falla del server.
+# Se aplican como segundo filtro (`grep -E -v`) sobre lo que encontro el primero.
+#
+# Mismo formato: un ERE por linea, '#' para comentarios.
+#
+# Casi todo lo de aca son quejas de mods del Workshop contra assets que no existen o que
+# cambiaron de nombre entre versiones de Build 42. El server carga igual y la partida anda.
+
+# Texturas y plantillas de mods que no estan. Cosmetico.
+template .* not found
+duplicate texture
+
+# Metadatos de habitaciones del mapa que un mod declara mal. El juego usa un default.
+IsoPropertyTypeNotFoundException
+invalid room metaID

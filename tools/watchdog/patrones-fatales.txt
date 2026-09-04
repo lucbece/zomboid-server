@@ -1,0 +1,27 @@
+# Patrones que scripts/watchdog.sh considera una falla critica del servidor.
+#
+# Formato: una expresion regular extendida (ERE, la de `grep -E`) por linea. Las lineas vacias
+# y todo lo que sigue a un '#' se ignoran. Se aplican sobre `docker compose logs --since 3m`.
+#
+# Antes de agregar un patron: tiene que ser algo de lo que el server NO se recupera solo.
+# Un ERROR aislado de un mod no lo es (para eso esta patrones-ignorar.txt); una JVM muerta si.
+# Un falso positivo aca cuesta un reinicio y dos minutos de partida a todos los jugadores.
+
+# La JVM se quedo sin heap. Casi siempre: MAX_MEMORY corto para la cantidad de mods.
+java\.lang\.OutOfMemoryError
+
+# El hilo principal murio con una excepcion sin atrapar: el server no llego a arrancar.
+Exception in thread "main"
+
+# La JVM no pudo reservar el heap que le pidieron (MAX_MEMORY mayor que la RAM libre).
+Could not reserve enough space
+
+# Otro proceso tiene el puerto: quedo un contenedor viejo, o el server esta duplicado.
+Address already in use
+
+# Disco lleno. El playbook de disco del watchdog es el que corresponde.
+No space left on device
+
+# Nivel SEVERE del logger de Java. Es el patron mas amplio de la lista: si empieza a dar
+# falsos positivos, lo primero a mirar es si conviene acotarlo a 'SEVERE.*zombie|SEVERE.*Network'.
+SEVERE
