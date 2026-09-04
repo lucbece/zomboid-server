@@ -75,6 +75,10 @@ trap limpiar_tmp EXIT
 
 leer_estado() { cat "${STATE_DIR}/$1" 2>/dev/null || echo "${2:-}"; }
 
+# Junta las lineas de stdin en una sola separada por ", ". No se usa `paste -sd', '`: ahi cada
+# caracter de la lista es un delimitador distinto y tres lineas salen como "a,b c".
+juntar() { awk 'NR > 1 { printf ", " } { printf "%s", $0 } END { if (NR) print "" }'; }
+
 escribir_estado() {
   [[ "${DRY_RUN}" == "1" ]] && return 0
   printf '%s\n' "$2" > "${STATE_DIR}/$1"
@@ -253,13 +257,13 @@ main() {
   # Mods que quedaron atras respecto del Workshop.
   local desactualizados titulos_desact
   desactualizados="$(awk -F'\t' '$5 == "desactualizado" { print $1 }' <<<"${filas}")"
-  titulos_desact="$(awk -F'\t' '$5 == "desactualizado" { print $2 }' <<<"${filas}" | paste -sd', ' -)"
+  titulos_desact="$(awk -F'\t' '$5 == "desactualizado" { print $2 }' <<<"${filas}" | juntar)"
 
   # sin-datos / no-instalado se registran pero no disparan nada: un item borrado del Workshop
   # no se arregla reiniciando.
   local raros
   raros="$(awk -F'\t' '$5 == "sin-datos" || $5 == "no-instalado" { print $1" ("$5")" }' \
-           <<<"${filas}" | paste -sd', ' -)"
+           <<<"${filas}" | juntar)"
   [[ -n "${raros}" ]] && log "mods sin comparacion util: ${raros}"
 
   local pendientes fase
@@ -267,9 +271,15 @@ main() {
   fase="$(leer_estado fase "")"
 
   # --- Fase 2: ya reiniciamos, falta confirmar que bajo la version nueva --------------------
+  if [[ "${fase}" == "esperando" && -z "${pendientes}" ]]; then
+    log "estado inconsistente (fase esperando sin pendientes): se cierra el ciclo"
+    limpiar_ciclo
+    fase=""
+  fi
+
   if [[ "${fase}" == "esperando" ]]; then
     local titulos_pend reinicio
-    titulos_pend="$(cut -f3 <<<"${pendientes}" | paste -sd', ' -)"
+    titulos_pend="$(cut -f3 <<<"${pendientes}" | juntar)"
     reinicio="$(leer_estado reinicio 0)"
     [[ "${reinicio}" =~ ^[0-9]+$ ]] || reinicio=0
 
