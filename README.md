@@ -22,6 +22,8 @@ a cloud provider is supported as one option, not as a requirement — see
 - Clean shutdown and restart: RCON `save` + `quit`, never a bare `docker stop`.
 - Backups: a `save`-then-archive script with optional upload to object storage, plus restore and
   wipe procedures.
+- Self-healing: a watchdog checks the server every two minutes, recovers from the common
+  failures on its own and reports to Discord.
 - Optional web survey for the group to vote on the sandbox rules before the world is created.
 - Optional one-command deployment to Oracle Cloud with OpenTofu, including a reserved public IP,
   daily off-machine backups and a monthly budget alert.
@@ -268,6 +270,24 @@ link, which is also their credential, and restarts are rate-limited and logged. 
 and off by default. See [`docs/panel.md`](docs/panel.md), including the security model of
 handing out an unauthenticated URL over plain HTTP.
 
+## Self-healing
+
+A systemd timer runs `scripts/watchdog.sh` every two minutes on the VM. It checks the unit, the
+container, RCON, the log and the free disk space; when something is wrong it applies a fixed
+playbook — a clean restart, or a stop, a diagnostic bundle and a fresh start, or a disk cleanup —
+and posts the outcome to a Discord channel if `DISCORD_WEBHOOK_URL` is set. It is capped at two
+automatic restarts per hour, and it never wipes, restores, deletes a save or edits `config/`.
+When the playbook is not enough it escalates: to a human by default, or optionally to Claude Code
+running headless on the machine with a deliberately narrow set of tools. See
+[`docs/self-healing.md`](docs/self-healing.md) for what it detects, what it never does, how to
+create the Discord webhook, and the risks of the optional second layer.
+
+```bash
+make watchdog-install    # install and enable the timer on an existing VM
+make watchdog-status     # next run, last result, tail of the log
+make remote-diff         # what the auto-repair changed on the VM, still uncommitted
+```
+
 ## Documentation
 
 | Document | Contents |
@@ -278,6 +298,7 @@ handing out an unauthenticated URL over plain HTTP.
 | [`docs/mods.md`](docs/mods.md) | Adding, removing and debugging Workshop mods |
 | [`docs/survey.md`](docs/survey.md) | The rules survey: running it, tallying it, closing it |
 | [`docs/panel.md`](docs/panel.md) | The moderator panel: tokens, cooldowns, security model |
+| [`docs/self-healing.md`](docs/self-healing.md) | The watchdog, the Discord alerts and the optional Claude Code auto-repair |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run before opening a pull request |
 | [`docs/history/`](docs/history/) | The original plan and research notes, in Spanish. Historical, not maintained |
 

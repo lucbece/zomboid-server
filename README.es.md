@@ -24,6 +24,8 @@ El despliegue en un proveedor de nube es una opción soportada, no un requisito;
 - Apagado y reinicio limpios: `save` + `quit` por RCON, nunca un `docker stop` a secas.
 - Backups: un script que guarda el mundo y lo archiva, con subida opcional a almacenamiento de
   objetos, más procedimientos de restauración y de wipe.
+- Auto-recuperación: un watchdog revisa el servidor cada dos minutos, se repone solo de las
+  fallas comunes y avisa por Discord.
 - Encuesta web opcional para que el grupo vote las reglas del sandbox antes de crear el mundo.
 - Despliegue opcional en Oracle Cloud con OpenTofu en un comando, con IP pública reservada,
   backups diarios fuera de la máquina y alerta mensual de presupuesto.
@@ -278,6 +280,24 @@ quedan registrados. Es opcional y está desactivado por defecto. Ver
 [`docs/panel.md`](docs/panel.md), incluido el modelo de seguridad de repartir una URL sin
 autenticación por HTTP sin cifrar.
 
+## Auto-recuperación
+
+Un timer de systemd corre `scripts/watchdog.sh` cada dos minutos en la VM. Revisa la unit, el
+contenedor, RCON, el log y el espacio libre en disco; cuando algo anda mal aplica un playbook
+fijo —un reinicio limpio, o un apagado con bundle de diagnóstico y arranque, o una limpieza de
+disco— y publica el resultado en un canal de Discord si `DISCORD_WEBHOOK_URL` está configurada.
+Tiene un tope de dos reinicios automáticos por hora, y nunca hace wipe ni restore, no borra
+partidas ni toca `config/`. Cuando el playbook no alcanza, escala: a una persona por defecto, o
+—opcionalmente— a Claude Code corriendo headless en la máquina con un conjunto de herramientas
+deliberadamente angosto. Ver [`docs/self-healing.md`](docs/self-healing.md): qué detecta, qué no
+hace nunca, cómo crear el webhook de Discord y los riesgos de la segunda capa.
+
+```bash
+make watchdog-install    # instala y habilita el timer en una VM que ya existe
+make watchdog-status     # próxima corrida, último resultado, final del log
+make remote-diff         # qué cambió el auto-arreglo en la VM y sigue sin commitear
+```
+
 ## Documentación
 
 | Documento | Contenido |
@@ -288,6 +308,7 @@ autenticación por HTTP sin cifrar.
 | [`docs/mods.md`](docs/mods.md) | Agregar, quitar y diagnosticar mods del Workshop |
 | [`docs/survey.md`](docs/survey.md) | La encuesta de reglas: cómo levantarla, contarla y cerrarla |
 | [`docs/panel.md`](docs/panel.md) | El panel de moderadores: tokens, cooldowns, modelo de seguridad (en inglés) |
+| [`docs/self-healing.md`](docs/self-healing.md) | El watchdog, los avisos de Discord y el auto-arreglo opcional con Claude Code (en inglés) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Qué verificar antes de abrir un pull request |
 | [`docs/history/`](docs/history/) | El plan original y las notas de investigación, en castellano. Material histórico, sin mantenimiento |
 
