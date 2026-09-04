@@ -18,3 +18,7 @@ backups/
 
 # binarios locales (mcrcon compilado)
 bin/
+
+# bytecode de python (tools/encuesta, tools/panel)
+__pycache__/
+*.pyc
