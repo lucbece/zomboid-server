@@ -16,7 +16,8 @@ DATA_GID := $(shell id -g)
 .PHONY: dirs mcrcon render up down restart logs rcon status
 .PHONY: backup restore wipe update
 .PHONY: infra-init infra-plan infra-apply infra-destroy
-.PHONY: require-ip remote-status remote-logs remote-restart remote-down remote-up remote-rcon remote-backup sync
+.PHONY: require-ip remote-status remote-logs remote-restart remote-down remote-up remote-rcon remote-backup remote-diff sync
+.PHONY: watchdog-install watchdog-status
 .PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
 .PHONY: panel-up panel-down panel-estado panel-token panel-tokens panel-revoke panel-log
 
@@ -151,6 +152,31 @@ remote-rcon: require-ip ## Comando RCON contra la VM. Uso: make remote-rcon CMD=
 
 remote-backup: require-ip ## Fuerza un backup en la VM (queda en el bucket)
 	@$(REMOTE) 'cd $(VM_DIR) && ./scripts/backup.sh'
+
+remote-diff: require-ip ## Muestra los cambios sin commitear que quedaron en la VM (los deja autorepair)
+	@$(REMOTE) 'git -C $(VM_DIR) status --short && echo "--- diff ---" && git -C $(VM_DIR) diff'
+	@echo "Si hay cambios, traerlos al repo a mano y commitearlos; la VM se re-clona en cada tofu apply."
+
+# =============================================================================================
+# Watchdog y auto-arreglo (docs/self-healing.md)
+# =============================================================================================
+
+watchdog-install: require-ip ## Instala y habilita el watchdog en la VM (timer cada 2 minutos)
+	@$(MAKE) sync VM_IP=$(VM_IP) >/dev/null
+	@$(REMOTE) "sudo install -m 644 -o root -g root \
+	              '$(VM_DIR)/infra/systemd/zomboid-watchdog.service' \
+	              '$(VM_DIR)/infra/systemd/zomboid-watchdog.timer' /etc/systemd/system/ && \
+	            sudo install -d -m 755 -o $(VM_USER) -g $(VM_USER) /var/log/zomboid /var/tmp/zomboid-watchdog && \
+	            sudo systemctl daemon-reload && \
+	            sudo systemctl enable --now zomboid-watchdog.timer"
+	@echo "watchdog: instalado. Primer chequeo en menos de 2 minutos; verlo con 'make watchdog-status'."
+	@echo "watchdog: para que avise por Discord, DISCORD_WEBHOOK_URL en el .env DE LA VM (ver docs/self-healing.md)."
+
+watchdog-status: require-ip ## Estado del watchdog en la VM y ultimas lineas de su log
+	@$(REMOTE) 'systemctl list-timers --no-pager zomboid-watchdog.timer; \
+	            systemctl status --no-pager --lines=5 zomboid-watchdog.service || true; \
+	            echo "--- /var/log/zomboid/watchdog.log ---"; \
+	            tail -n $${N:-20} /var/log/zomboid/watchdog.log 2>/dev/null || echo "(todavia no hay log)"'
 
 sync: require-ip ## rsync de config/, scripts/, tools/, infra/systemd/, Makefile y compose a la VM. Uso: make sync [RESTART=1]
 	@rsync -az --delete-after --chmod=D755,F644 \
