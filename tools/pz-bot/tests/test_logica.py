@@ -34,7 +34,7 @@ class TestStart(unittest.IsolatedAsyncioTestCase):
         pasos = await recolectar(accion_start(ctx))
 
         self.assertEqual(oci.arrancadas, 1)
-        self.assertIn("tarda ~3 minutos", pasos[0])
+        self.assertIn("Tarda ~3 minutos", pasos[0])
         self.assertTrue(any("Prendiendo el server…" in p for p in pasos[1:-1]))
         self.assertIn("En línea", pasos[-1])
         self.assertIn("PandaParkour", pasos[-1])
@@ -115,7 +115,7 @@ class TestStatus(unittest.IsolatedAsyncioTestCase):
         reloj = Reloj()
         pasos = await recolectar(accion_status(
             contexto(OCIFalso(["STOPPED"]), A2SFalso(reloj), reloj)))
-        self.assertIn("apagada", pasos[0])
+        self.assertIn("apagado", pasos[0])
         self.assertIn("/pz start", pasos[0])
 
     async def test_en_linea_muestra_lo_que_dice_el_server(self):

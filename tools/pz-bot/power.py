@@ -32,12 +32,12 @@ TERMINATED = "TERMINATED"
 
 # Como se le cuenta cada estado a la gente en Discord.
 ESTADOS_LEGIBLES = {
-    RUNNING: "encendida",
-    STOPPED: "apagada",
+    RUNNING: "encendido",
+    STOPPED: "apagado",
     STARTING: "prendiéndose",
     STOPPING: "apagándose",
     PROVISIONING: "creándose",
-    TERMINATED: "terminada",
+    TERMINATED: "terminado",
     "CREATING_IMAGE": "creando una imagen",
     "TERMINATING": "terminándose",
 }
