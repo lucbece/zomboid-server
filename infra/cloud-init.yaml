@@ -63,6 +63,7 @@ packages:
   - jq
   - unattended-upgrades
   - ufw
+  - python3-venv
 
 write_files:
 %{ if use_deploy_key ~}
@@ -277,6 +278,9 @@ runcmd:
 
   # --- mcrcon ------------------------------------------------------------------------------
   - su - ${vm_user} -c 'cd ${repo_dir} && make mcrcon'
+
+  # --- SDK de OCI para que la VM se apague por la API (tools/oci/self-stop.py) --------------
+  - su - ${vm_user} -c 'cd ${repo_dir} && make oci-venv'
 
   # --- systemd -----------------------------------------------------------------------------
   # La unit vive en el repo (infra/systemd/zomboid.service) para que un `make sync` la actualice.

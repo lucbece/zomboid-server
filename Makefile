@@ -33,7 +33,7 @@ DATA_GID := $(shell id -g)
 .PHONY: mod-updater-install mod-updater-status mods-check
 .PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
 .PHONY: panel-up panel-down panel-estado panel-token panel-tokens panel-revoke panel-log
-.PHONY: require-bot-ip bot-install bot-status bot-logs bot-tests idle-shutdown-install idle-shutdown-status
+.PHONY: require-bot-ip bot-install bot-status bot-logs bot-tests idle-shutdown-install idle-shutdown-status oci-venv
 
 # Cada descripcion trae los dos idiomas:  target: ## English ## es: Castellano
 help: ## Show this help ## es: Muestra esta ayuda
@@ -344,8 +344,17 @@ bot-logs: require-bot-ip ## Follow the bot log (Ctrl-C to exit) ## es: Sigue el 
 bot-tests: ## Run the bot tests (needs neither discord.py nor the oci SDK) ## es: Corre los tests del bot (no necesita discord.py ni el SDK de oci)
 	@cd tools/pz-bot && python3 -m unittest
 
+OCI_VENV ?= /opt/zomboid-oci-venv
+
+oci-venv: ## Create the venv with the OCI SDK used by tools/oci/self-stop.py (run on the VM) ## es: Crea el venv con el SDK de OCI que usa tools/oci/self-stop.py (correr en la VM)
+	@test -d $(OCI_VENV) || sudo install -d -m 755 -o $$(id -u) -g $$(id -g) $(OCI_VENV)
+	@test -x $(OCI_VENV)/bin/python || python3 -m venv $(OCI_VENV)
+	@$(OCI_VENV)/bin/pip install --quiet --upgrade pip "oci>=2.130,<3"
+	@$(OCI_VENV)/bin/python tools/oci/self-stop.py --help >/dev/null && echo "oci-venv: $(OCI_VENV)"
+
 idle-shutdown-install: require-ip ## Enable the idle shutdown on the game VM (cron every 5 minutes) ## es: Activa el apagado por inactividad en la VM del juego (cron cada 5 min)
 	@$(MAKE) sync VM_IP=$(VM_IP) >/dev/null
+	@$(REMOTE) "cd $(VM_DIR) && (test -x $(OCI_VENV)/bin/python || (sudo apt-get install -y -qq python3-venv >/dev/null && make oci-venv))"
 	@$(REMOTE) "sudo install -d -m 755 -o $(VM_USER) -g $(VM_USER) /var/log/zomboid && \
 	            sudo sed -i 's|^#\(\*/5 .*idle-shutdown.sh.*\)$$|\1|' /etc/cron.d/zomboid && \
 	            grep -q '^\*/5 .*idle-shutdown' /etc/cron.d/zomboid"

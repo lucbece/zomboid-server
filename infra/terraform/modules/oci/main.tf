@@ -313,6 +313,11 @@ resource "oci_identity_policy" "backups" {
     # Sin esto la lifecycle policy del bucket falla con 400-InsufficientServicePermissions:
     # el servicio de Object Storage de la region necesita permiso para borrar objetos viejos.
     "Allow service objectstorage-${var.region} to manage object-family in compartment ${oci_identity_compartment.this.name}",
+    # El apagado por inactividad se pide por la API (tools/oci/self-stop.py) y no con
+    # `shutdown -h` desde adentro: un apagado del huesped puede dejar la instancia en RUNNING
+    # (cobrando y sin que el bot la pueda prender). Mismo alcance que el bot: la unica
+    # instancia de este compartment es la del juego.
+    "Allow dynamic-group ${oci_identity_dynamic_group.vm.name} to use instances in compartment ${oci_identity_compartment.this.name} where request.permission = 'INSTANCE_POWER_ACTIONS'",
   ]
 }
 

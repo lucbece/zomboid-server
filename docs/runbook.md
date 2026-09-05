@@ -231,6 +231,22 @@ dependencies, manual-install mods, dependencies deleted from the Workshop — is
    16261-16262. Opening them requires a rule in the security group, a published port in
    `docker-compose.yml`, and a restart.
 
+### The instance shows RUNNING but nothing answers (no SSH, no game port)
+
+The guest operating system shut itself down but OCI kept the instance in `RUNNING`. It happens
+when the shutdown is started from inside the OS (`shutdown -h`); the bot then refuses to start
+the instance because it looks started, and compute is still billed. Confirm with the serial
+console (`oci compute console-history capture` and `get-content`: the log ends in
+`reboot: Power down` with no boot after it), then issue a hard reset:
+
+```bash
+oci compute instance action --action RESET --instance-id <instance ocid>
+```
+
+Since 2026-09-05 the idle shutdown stops the instance through the OCI API instead
+(`tools/oci/self-stop.py`, `SOFTSTOP` signed with the instance principal), which leaves the
+state consistent. The fallback to `shutdown -h` only runs if the API call fails.
+
 ### The world is corrupted
 
 Restore the most recent good archive (section 4). The game's own backups in

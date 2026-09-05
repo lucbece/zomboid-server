@@ -666,6 +666,7 @@ MSG[idle.dryrun]="DRY_RUN: aca apagaria el server y la VM"
 MSG[idle.stopping]="apagando el server"
 MSG[idle.backup]="backup"
 MSG[idle.backup_failed]="ADVERTENCIA: el backup fallo"
+MSG[idle.api_stop_failed]="el apagado por la API fallo (falta el venv o la policy?); se usa shutdown -h"
 MSG[idle.vm_off]="apagando la VM"
 
 # --- scripts/render-cloud-init.sh -------------------------------------------------------------------

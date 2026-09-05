@@ -84,4 +84,12 @@ log "$(t idle.backup)"
 "${REPO_DIR}/scripts/backup.sh" idle >/dev/null || log "$(t idle.backup_failed)"
 rm -f "${STATE_FILE}"
 log "$(t idle.vm_off)"
+# Por la API de OCI: un `shutdown -h` desde adentro puede dejar la instancia en RUNNING con
+# el huesped apagado (cobrando, y el bot no la prende porque la ve prendida). El venv lo
+# crea `make oci-venv` (cloud-init lo hace en el primer boot).
+OCI_VENV="${OCI_VENV:-/opt/zomboid-oci-venv}"
+if [[ -x "${OCI_VENV}/bin/python" ]] && "${OCI_VENV}/bin/python" "${REPO_DIR}/tools/oci/self-stop.py"; then
+  exit 0
+fi
+log "$(t idle.api_stop_failed)"
 sudo shutdown -h now

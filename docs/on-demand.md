@@ -17,7 +17,7 @@ scripts/idle-shutdown.sh (cron, every 5 min on the game VM)
       ├─ RCON `players` reports 0 for IDLE_MINUTES in a row
       ├─ scripts/stop.sh   (RCON save + quit)
       ├─ scripts/backup.sh (uploaded to the Object Storage bucket)
-      └─ shutdown -h now  ──> the instance reaches STOPPED, compute is no longer billed
+      └─ tools/oci/self-stop.py (SOFTSTOP over the OCI API) ──> STOPPED, compute no longer billed
       │
       v
    (nothing runs, nothing is charged except the boot volume)
