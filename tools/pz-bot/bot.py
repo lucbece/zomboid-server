@@ -88,24 +88,27 @@ def armar_contexto() -> Contexto:
 
 
 async def responder(interaction: discord.Interaction, pasos: AsyncIterator[str]) -> None:
-    """Primer texto = respuesta a la interaccion; los siguientes editan ese mismo mensaje.
+    """Acusa recibo enseguida y despues edita ese mismo mensaje con cada paso.
 
-    Se saltean los textos repetidos para no gastar rate limit editando lo mismo, y una falla
-    al editar (mensaje borrado, token de interaccion vencido a los 15 minutos) corta el
-    seguimiento sin tirar abajo el comando.
+    Discord exige una respuesta en 3 segundos o muestra "la aplicacion no responde". El primer
+    paso de cada accion consulta a OCI, que a veces tarda mas que eso (refresco del token del
+    instance principal, reintentos), asi que primero se manda el defer ("pensando...") y recien
+    despues se calcula el texto. Se saltean los textos repetidos para no gastar rate limit, y
+    una falla al editar (mensaje borrado, token vencido a los 15 minutos) corta el seguimiento
+    sin tirar abajo el comando.
     """
+    try:
+        await interaction.response.defer(thinking=True)
+    except discord.HTTPException as exc:
+        log.warning("no se pudo acusar recibo de la interaccion: %s", exc)
+        return
     anterior: Optional[str] = None
-    primero = True
     async for texto in pasos:
         if texto == anterior:
             continue
         anterior = texto
         try:
-            if primero:
-                await interaction.response.send_message(texto)
-                primero = False
-            else:
-                await interaction.edit_original_response(content=texto)
+            await interaction.edit_original_response(content=texto)
         except discord.HTTPException as exc:
             log.warning("no se pudo actualizar el mensaje: %s", exc)
             return
