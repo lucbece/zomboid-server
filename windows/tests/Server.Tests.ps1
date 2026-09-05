@@ -42,8 +42,14 @@ Describe 'Server: Get-ZsJavaCommand (StartServer64.bat fixture)' {
         $script:Command.Arguments | Should -Not -Contain '-Xmx16g'
     }
 
-    It 'drops the %* placeholder' {
+    It 'drops the %1..%9 and %* placeholders' {
         $script:Command.Arguments | Should -Not -Contain '%*'
+        $script:Command.Arguments | Should -Not -Contain '%1'
+        $script:Command.Arguments | Should -Not -Contain '%8'
+    }
+
+    It 'expands the classpath from the SET PZ_CLASSPATH line' {
+        $script:Command.Arguments | Should -Not -Contain '%PZ_CLASSPATH%'
     }
 
     It 'preserves the JVM flags, the classpath and the main class untouched' {
@@ -51,7 +57,8 @@ Describe 'Server: Get-ZsJavaCommand (StartServer64.bat fixture)' {
         $script:Command.Arguments | Should -Contain '-XX:+UseZGC'
         $script:Command.Arguments | Should -Contain '-Djava.library.path=natives/;natives/win64/;.'
         $script:Command.Arguments | Should -Contain '-cp'
-        $script:Command.Arguments | Should -Contain 'java/istack-commons-runtime.jar;java/jassimp.jar;java/javacord-2.0.17-shaded.jar;java/javax.activation-api.jar;java/jaxb-api.jar;java/jaxb-runtime.jar;java/lwjgl.jar;java/lwjgl-natives-windows.jar;java/sqlite-jdbc.jar;java/uncommons-maths-1.2.3.jar;java/zombie.jar'
+        $script:Command.Arguments | Should -Contain 'java/istack-commons-runtime.jar;java/jassimp.jar;java/javacord-2.0.17-shaded.jar;java/javax.activation-api.jar;java/jaxb-api.jar;java/jaxb-runtime.jar;java/lwjgl.jar;java/lwjgl-natives-windows.jar;java/sqlite-jdbc.jar;java/uncommons-maths-1.2.3.jar;java/'
+        $script:Command.Arguments | Should -Contain '-XX:-CreateCoredumpOnCrash'
         $script:Command.Arguments | Should -Contain 'zombie.network.GameServer'
         $script:Command.Arguments | Should -Contain '-statistic'
         $script:Command.Arguments | Should -Contain '0'
@@ -66,9 +73,16 @@ Describe 'Server: Get-ZsJavaCommand (StartServer64.bat fixture)' {
         $joined | Should -Match '-port 16261'
     }
 
-    It 'keeps the argument count consistent: 10 original tokens kept (drops the exe and %*) plus 9 appended' {
+    It 'keeps the argument count consistent: 14 original tokens kept (drops the exe and %1..%8) plus 9 appended' {
         # -servername x2, -adminusername x2, -adminpassword x2, -cachedir=... x1, -port x2 = 9
-        $script:Command.Arguments.Count | Should -Be 19
+        $script:Command.Arguments.Count | Should -Be 23
+    }
+
+    It 'expands %~dp0 and SET variables case-insensitively' {
+        $vars = Get-ZsBatVariable -Text "set Foo=bar`r`nSET `"BAZ=q u x`"`r`n"
+        $vars['FOO'] | Should -Be 'bar'
+        $vars['BAZ'] | Should -Be 'q u x'
+        Expand-ZsBatLine -Line 'cd %~dp0 -cp %foo% %NOPE%' -Variables $vars -BatDirectory 'C:\srv' | Should -Be 'cd C:\srv\ -cp bar %NOPE%'
     }
 }
 

@@ -124,6 +124,65 @@ function ConvertTo-ZsCommandLine {
     return ($parts -join ' ')
 }
 
+function Get-ZsBatVariable {
+    <#
+        .SYNOPSIS
+        Las variables que el .bat define con SET (StartServer64.bat pone el classpath en
+        PZ_CLASSPATH y la linea de java la usa como %PZ_CLASSPATH%). Acepta `set X=v` y
+        `set "X=v"`; la ultima definicion gana. Claves en mayusculas.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Text
+    )
+
+    $vars = @{}
+    foreach ($line in ($Text -split "\r?\n")) {
+        if ($line -match '^\s*(?i:set)\s+"?([A-Za-z_][A-Za-z0-9_]*)=([^"]*)"?\s*$') {
+            $vars[$Matches[1].ToUpperInvariant()] = $Matches[2]
+        }
+    }
+    return $vars
+}
+
+function Expand-ZsBatLine {
+    <#
+        .SYNOPSIS
+        Reemplaza %VAR% por su valor (de Get-ZsBatVariable) y %~dp0 por el directorio del .bat.
+        Las referencias sin definicion quedan como estan, salvo %1..%9 y %*, que se descartan
+        despues por token.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Line,
+
+        [Parameter(Mandatory)]
+        [hashtable]$Variables,
+
+        [Parameter(Mandatory)]
+        [string]$BatDirectory
+    )
+
+    $dir = $BatDirectory
+    if (-not $dir.EndsWith('\')) { $dir = $dir + '\' }
+    $expanded = $Line -replace '%~dp0', [System.Text.RegularExpressions.Regex]::Escape($dir).Replace('\\', '\')
+    # Copia local: el analizador no ve el uso del parametro adentro del MatchEvaluator.
+    $lookup = $Variables
+    $expanded = [regex]::Replace($expanded, '%([A-Za-z_][A-Za-z0-9_]*)%', {
+        param($m)
+        $name = $m.Groups[1].Value.ToUpperInvariant()
+        if ($lookup.ContainsKey($name)) { return [string]$lookup[$name] }
+        return $m.Value
+    })
+    return $expanded
+}
+
 function Find-ZsJavaLine {
     <#
         .SYNOPSIS
@@ -192,7 +251,9 @@ function Get-ZsJavaCommand {
     }
 
     $text = Read-ZsTextFile -Path $BatPath
+    $serverDir = Split-Path -Parent $BatPath
     $line = Find-ZsJavaLine -Text $text -SourceName $BatPath
+    $line = Expand-ZsBatLine -Line $line -Variables (Get-ZsBatVariable -Text $text) -BatDirectory $serverDir
     $tokens = Split-ZsCommandLine -Line $line
 
     if ($tokens.Count -lt 1) {
@@ -204,9 +265,9 @@ function Get-ZsJavaCommand {
 
     for ($i = 1; $i -lt $tokens.Count; $i++) {
         $token = $tokens[$i]
-        if ($token -eq '%*') {
-            # %* son los argumentos extra que StartServer64.bat le pasaria a mano: no aplica
-            # cuando el comando lo arma este script.
+        if ($token -match '^%(\*|[0-9])$') {
+            # %* y %1..%9 son los argumentos extra que StartServer64.bat le pasaria a mano: no
+            # aplica cuando el comando lo arma este script.
             continue
         }
         if ($token -match '^(?i)-Xms') {
@@ -230,7 +291,6 @@ function Get-ZsJavaCommand {
     $kept.Add('-port')
     $kept.Add([string]$Port)
 
-    $serverDir = Split-Path -Parent $BatPath
     $exeRelative = $exeToken -replace '^\.[\\/]', ''
     $exeRelative = $exeRelative -replace '/', '\'
     $exePath = Join-Path $serverDir $exeRelative

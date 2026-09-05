@@ -32,6 +32,13 @@ jobs:
           ZS_FIREWALL: '1'
         run: .\windows\setup.ps1 -NonInteractive
 
+      # El launcher se arma leyendo este archivo: dejar su contenido en el log es la unica
+      # forma de ver la forma real del .bat de la version instalada.
+      - name: installed StartServer64.bat
+        if: always()
+        shell: pwsh
+        run: Get-Content -LiteralPath server\StartServer64.bat -ErrorAction SilentlyContinue
+
       - name: zs status
         shell: pwsh
         run: .\windows\zs.ps1 status
