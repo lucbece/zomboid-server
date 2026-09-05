@@ -191,6 +191,12 @@ variable "bot_admin_user_ids" {
   default     = ""
 }
 
+variable "bot_reset_roles" {
+  description = "Nombres o IDs de rol (coma) que pueden usar /pz reset, ademas de los admins. Vacio = solo admins."
+  type        = string
+  default     = ""
+}
+
 variable "bot_allowed_role_ids" {
   description = "IDs de rol (coma) que pueden usar los comandos /pz. Vacio = todos."
   type        = string

@@ -17,6 +17,7 @@ class OCIFalso:
         self.llamadas_estado = 0
         self.arrancadas = 0
         self.apagadas = 0
+        self.reinicios = 0
         self.falla_en = falla_en or set()
 
     def estado(self):
@@ -35,6 +36,11 @@ class OCIFalso:
         if "apagar" in self.falla_en:
             raise RuntimeError("OCI devolvio un error.")
         self.apagadas += 1
+
+    def reiniciar(self):
+        if "reiniciar" in self.falla_en:
+            raise RuntimeError("OCI devolvio un error.")
+        self.reinicios += 1
 
 
 class A2SFalso:

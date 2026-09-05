@@ -64,6 +64,7 @@ output "rendered" {
     bot_guild_id         = "000000000000000000"
     bot_admin_user_ids   = ""
     bot_allowed_role_ids = ""
+    bot_reset_roles      = ""
 
     game_instance_ocid = "ocid1.instance.oc1..aaaaaaaaCAMBIAME"
     game_ip            = "203.0.113.10"

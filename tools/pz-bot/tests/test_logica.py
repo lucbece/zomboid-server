@@ -12,13 +12,16 @@ from pathlib import Path
 
 from logica import (
     EstadoBot,
+    accion_reset,
     accion_start,
     accion_status,
     accion_stop,
     duracion_legible,
     ids_desde_env,
     puede_apagar,
+    puede_resetear,
     puede_usar,
+    roles_desde_env,
 )
 from tests.dobles import A2SFalso, OCIFalso, Reloj, contexto, recolectar
 
@@ -258,3 +261,53 @@ class TestDuracion(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReset(unittest.IsolatedAsyncioTestCase):
+    async def test_sin_autorizacion_no_toca_nada(self):
+        reloj = Reloj()
+        oci = OCIFalso(["RUNNING"])
+        pasos = await recolectar(accion_reset(contexto(oci, A2SFalso(reloj), reloj), autorizado=False))
+        self.assertIn("Solo los admins", pasos[0])
+        self.assertEqual(oci.reinicios, 0)
+
+    async def test_vm_fantasma_se_reinicia_y_sigue_el_arranque(self):
+        reloj = Reloj()
+        oci = OCIFalso(["RUNNING"])
+        # RUNNING pero el juego no contesta hasta 100 s despues del reset: la VM fantasma.
+        sonda = A2SFalso(reloj, responde_desde=100)
+        ctx = contexto(oci, sonda, reloj, intervalo=10, espera_maxima=420)
+        pasos = await recolectar(accion_reset(ctx))
+        self.assertIn("reiniciando el server a la fuerza", pasos[0])
+        self.assertEqual(oci.reinicios, 1)
+        self.assertIn("En línea", pasos[-1])
+
+    async def test_con_jugadores_no_reinicia(self):
+        reloj = Reloj()
+        oci = OCIFalso(["RUNNING"])
+        pasos = await recolectar(accion_reset(contexto(oci, A2SFalso(reloj, responde_desde=0, jugadores=2), reloj)))
+        self.assertIn("no se reinicia", pasos[0])
+        self.assertEqual(oci.reinicios, 0)
+
+    async def test_sin_jugadores_reinicia(self):
+        reloj = Reloj()
+        oci = OCIFalso(["RUNNING"])
+        pasos = await recolectar(accion_reset(contexto(oci, A2SFalso(reloj, responde_desde=0, jugadores=0), reloj, intervalo=10)))
+        self.assertIn("Sin jugadores. Reiniciando", pasos[0])
+        self.assertEqual(oci.reinicios, 1)
+
+    async def test_apagada_manda_a_start(self):
+        reloj = Reloj()
+        oci = OCIFalso(["STOPPED"])
+        pasos = await recolectar(accion_reset(contexto(oci, A2SFalso(reloj), reloj)))
+        self.assertIn("/pz start", pasos[0])
+        self.assertEqual(oci.reinicios, 0)
+
+    def test_autorizacion_por_rol_o_admin(self):
+        roles = [(10, "Los Kpos"), (20, "Jugador")]
+        self.assertTrue(puede_resetear(1, roles, [], ["los kpos"]))
+        self.assertTrue(puede_resetear(1, roles, [], ["10"]))
+        self.assertTrue(puede_resetear(7, [], [7], []))
+        self.assertFalse(puede_resetear(1, roles, [], ["Mods"]))
+        self.assertFalse(puede_resetear(1, roles, [], []))
+        self.assertEqual(roles_desde_env(" Los Kpos ,1234;"), ["Los Kpos", "1234"])

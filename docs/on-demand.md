@@ -76,6 +76,7 @@ they appear immediately. Global registration takes up to an hour.
 | `/pz start` | any member (or `PZ_BOT_ALLOWED_ROLE_IDS`) | Starts the VM if it is `STOPPED`, answers "Prendiendo el server, tarda ~3 minutos" immediately, then edits that message every few seconds until A2S answers, ending in "En línea · IP:puerto". If the VM is already running it reports the player count instead. |
 | `/pz status` | same | Lifecycle state of the VM. If it is running, the name, map, player count and version reported by the server itself over A2S, plus how long it has been up. |
 | `/pz stop` | `PZ_BOT_ADMIN_USER_IDS`, or anyone if that is empty | Refuses unless A2S reports zero players, and refuses if A2S does not answer at all — an unreachable server is not the same as an empty one. Otherwise issues `SOFTSTOP`. |
+| `/pz reset` | `PZ_BOT_ADMIN_USER_IDS` or a role in `PZ_BOT_RESET_ROLES`; nobody if both are empty | Hard power cycle (`RESET`) for an instance that OCI reports `RUNNING` while the game does not answer. Refuses while A2S reports players, sends you to `/pz start` when the VM is `STOPPED`, then follows the boot like `/pz start`. |
 
 `SOFTSTOP` rather than `STOP`: it asks the operating system to shut down, which runs the
 `ExecStop` of `zomboid.service` — `scripts/stop.sh`, an RCON `save` followed by `quit` — before
@@ -103,6 +104,20 @@ To restrict who can use the commands, copy user or role IDs the same way into
 `bot_admin_user_ids` and `bot_allowed_role_ids`. Both are comma-separated and both default to
 empty, which means "everyone in the server". Note that an empty `bot_admin_user_ids` still does
 not let anyone shut down an occupied server: the zero-player check is unconditional.
+
+`/pz reset` is the exception: it is a hard power cycle, so it is never open to everyone. It is
+allowed to the users in `bot_admin_user_ids` and to members holding any role listed in
+`bot_reset_roles`, which takes role names (case-insensitive) or role IDs, comma-separated, for
+example `bot_reset_roles = "Moderators"`. With both empty, nobody can run it. The command refuses
+while A2S reports connected players; it is meant for the instance that OCI shows as `RUNNING`
+while nothing inside answers (see the runbook), and after the reset it follows the boot the same
+way `/pz start` does.
+
+Changing any of these on a bot that is already deployed: edit `terraform.tfvars` and run
+`make deploy`. The bot's settings travel in its cloud-init, so OpenTofu replaces the bot
+instance (a few minutes, during which the `/pz` commands are unavailable). The game VM is not
+touched: its instance ignores cloud-init changes precisely so that a world is never recreated
+by accident.
 
 ## Deploying
 

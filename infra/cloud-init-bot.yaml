@@ -73,6 +73,8 @@ write_files:
       # Vacio = cualquier miembro del server de Discord. Ver docs/on-demand.md.
       PZ_BOT_ADMIN_USER_IDS=${bot_admin_user_ids}
       PZ_BOT_ALLOWED_ROLE_IDS=${bot_allowed_role_ids}
+      # /pz reset: reinicio duro de la VM. Roles por nombre o id, ademas de los admins.
+      PZ_BOT_RESET_ROLES=${bot_reset_roles}
 
       # Instance principal: sin claves de API en el disco.
       PZ_BOT_OCI_AUTH=instance_principal

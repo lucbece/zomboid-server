@@ -133,6 +133,12 @@ class ClienteInstancia:
         self._con_reintentos(
             lambda: self._compute.instance_action(self.instance_ocid, "SOFTSTOP"))
 
+    def reiniciar(self) -> None:
+        """RESET: corte de energia y arranque. Es la unica salida cuando OCI dice RUNNING pero
+        el sistema operativo de adentro esta apagado (la VM 'fantasma')."""
+        self._con_reintentos(
+            lambda: self._compute.instance_action(self.instance_ocid, "RESET"))
+
 
 def estado_legible(estado: str) -> str:
     return ESTADOS_LEGIBLES.get(estado, estado.lower().replace("_", " "))

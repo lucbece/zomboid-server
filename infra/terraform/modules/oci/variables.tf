@@ -438,6 +438,15 @@ variable "bot_admin_user_ids" {
   default     = ""
 }
 
+variable "bot_reset_roles" {
+  description = <<-EOT
+    Nombres o IDs de rol de Discord, separados por coma, que pueden usar /pz reset (reinicio
+    duro de la VM) ademas de bot_admin_user_ids. Vacio = solo los admins; sin admins, nadie.
+  EOT
+  type        = string
+  default     = ""
+}
+
 variable "bot_allowed_role_ids" {
   description = <<-EOT
     IDs de rol separados por coma que pueden usar los comandos /pz. Vacio = cualquier miembro

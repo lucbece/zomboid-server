@@ -50,4 +50,5 @@ module "zomboid" {
   bot_guild_id         = var.bot_guild_id
   bot_admin_user_ids   = var.bot_admin_user_ids
   bot_allowed_role_ids = var.bot_allowed_role_ids
+  bot_reset_roles      = var.bot_reset_roles
 }

@@ -170,6 +170,7 @@ resource "oci_core_instance" "bot" {
       bot_guild_id         = var.bot_guild_id
       bot_admin_user_ids   = var.bot_admin_user_ids
       bot_allowed_role_ids = var.bot_allowed_role_ids
+      bot_reset_roles      = var.bot_reset_roles
 
       game_instance_ocid = oci_core_instance.this.id
       game_ip            = oci_core_public_ip.this.ip_address

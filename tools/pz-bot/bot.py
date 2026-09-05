@@ -19,6 +19,8 @@ Configuracion (variables de entorno; en la VM salen de /etc/pz-bot/env):
     PZ_GAME_PORT            16261 por default.
     PZ_BOT_ADMIN_USER_IDS   ids de Discord que pueden usar /pz stop. Vacio = cualquiera.
     PZ_BOT_ALLOWED_ROLE_IDS ids de rol que pueden usar los comandos. Vacio = todos.
+    PZ_BOT_RESET_ROLES      nombres o ids de rol que pueden usar /pz reset (ademas de los
+                            admins). Vacio = solo los admins; sin admins tampoco, nadie.
     PZ_BOT_OCI_AUTH         instance_principal (default) o config (para probar desde la PC).
     PZ_BOT_STATE            /var/tmp/pz-bot/estado.json
 
@@ -46,7 +48,10 @@ from logica import (  # noqa: E402
     accion_start,
     accion_status,
     accion_stop,
+    accion_reset,
     ids_desde_env,
+    puede_resetear,
+    roles_desde_env,
     puede_apagar,
     puede_usar,
 )
@@ -59,6 +64,7 @@ GAME_IP = os.environ.get("PZ_GAME_IP", "").strip()
 GAME_PORT = int(os.environ.get("PZ_GAME_PORT", "16261") or 16261)
 ADMINS = ids_desde_env(os.environ.get("PZ_BOT_ADMIN_USER_IDS", ""))
 ROLES = ids_desde_env(os.environ.get("PZ_BOT_ALLOWED_ROLE_IDS", ""))
+RESET_ROLES = roles_desde_env(os.environ.get("PZ_BOT_RESET_ROLES", ""))
 AUTH = os.environ.get("PZ_BOT_OCI_AUTH", "instance_principal").strip()
 PERFIL = os.environ.get("PZ_BOT_OCI_PROFILE", "DEFAULT").strip()
 REGION = os.environ.get("PZ_BOT_OCI_REGION", "").strip() or None
@@ -144,6 +150,10 @@ def _roles_de(interaction: discord.Interaction) -> list[int]:
     return [r.id for r in getattr(interaction.user, "roles", [])]
 
 
+def _roles_con_nombre(interaction: discord.Interaction) -> list[tuple[int, str]]:
+    return [(r.id, r.name) for r in getattr(interaction.user, "roles", [])]
+
+
 async def _rechazar_si_no_puede(interaction: discord.Interaction) -> bool:
     if puede_usar(_roles_de(interaction), ROLES):
         return False
@@ -178,6 +188,16 @@ async def cmd_stop(interaction: discord.Interaction) -> None:
     await responder(interaction, accion_stop(cliente.ctx, autorizado=autorizado))
 
 
+@pz.command(name="reset", description="Reinicia el server a la fuerza si quedó colgado")
+async def cmd_reset(interaction: discord.Interaction) -> None:
+    if await _rechazar_si_no_puede(interaction):
+        return
+    autorizado = puede_resetear(interaction.user.id, _roles_con_nombre(interaction), ADMINS, RESET_ROLES)
+    log.info("/pz reset pedido por %s (%s), autorizado=%s",
+             interaction.user, interaction.user.id, autorizado)
+    await responder(interaction, accion_reset(cliente.ctx, autorizado=autorizado))
+
+
 cliente.tree.add_command(pz)
 
 
@@ -190,8 +210,8 @@ def main() -> int:
     if faltan:
         log.error("faltan variables de entorno: %s", ", ".join(faltan))
         return 1
-    log.info("arrancando: juego en %s:%s, admins=%s, roles=%s, auth=%s",
-             GAME_IP, GAME_PORT, ADMINS or "todos", ROLES or "todos", AUTH)
+    log.info("arrancando: juego en %s:%s, admins=%s, roles=%s, reset=%s, auth=%s",
+             GAME_IP, GAME_PORT, ADMINS or "todos", ROLES or "todos", RESET_ROLES or "solo admins", AUTH)
     cliente.run(TOKEN, log_handler=None)
     return 0
 

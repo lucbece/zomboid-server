@@ -160,6 +160,12 @@ async def accion_start(ctx: Contexto) -> AsyncIterator[str]:
         yield f"El server está {estado_legible(estado)}. No se puede prender desde acá."
         return
 
+    async for paso in _seguir_arranque(ctx, "Prendiendo"):
+        yield paso
+
+
+async def _seguir_arranque(ctx: Contexto, verbo: str) -> AsyncIterator[str]:
+    """Edita el mensaje cada intervalo hasta que el juego contesta por A2S o vence la espera."""
     inicio = ctx.ahora()
     limite = inicio + ctx.espera_maxima
     while ctx.ahora() < limite:
@@ -170,10 +176,55 @@ async def accion_start(ctx: Contexto) -> AsyncIterator[str]:
             yield texto_en_linea(info, ctx.direccion)
             return
         transcurrido = ctx.ahora() - inicio
-        yield f"Prendiendo el server… {duracion_legible(transcurrido)}"
+        yield f"{verbo} el server… {duracion_legible(transcurrido)}"
 
     yield ("El server no respondió después de "
            f"{duracion_legible(ctx.espera_maxima)}. Probá `/pz status` en unos minutos.")
+
+
+async def accion_reset(ctx: Contexto, autorizado: bool = True) -> AsyncIterator[str]:
+    """Reinicio duro de la VM (RESET). Para la VM 'fantasma': OCI la muestra RUNNING pero el
+    sistema de adentro esta apagado, asi que ni /pz start ni /pz stop la sacan de ahi."""
+    if not autorizado:
+        yield "Solo los admins o el rol autorizado pueden reiniciar el server."
+        return
+
+    try:
+        estado = await ctx.estado_vm()
+    except Exception as exc:
+        yield f"No se pudo consultar el estado del server. {exc}"
+        return
+
+    if estado == STOPPED:
+        yield "El server está apagado. Para prenderlo: `/pz start`."
+        return
+    if estado in (STARTING, PROVISIONING):
+        yield "El server se está prendiendo. Esperá un minuto y probá de nuevo."
+        return
+    if estado == STOPPING:
+        yield "El server se está apagando. Esperá un minuto y probá de nuevo."
+        return
+    if estado != RUNNING:
+        yield f"El server está {estado_legible(estado)}. No se puede reiniciar desde acá."
+        return
+
+    info = await ctx.info_juego()
+    if info is not None and info.jugadores > 0:
+        yield f"Hay {texto_jugadores(info)} conectados: no se reinicia."
+        return
+    if info is None:
+        yield "El juego no responde: reiniciando el server a la fuerza. Tarda ~3 minutos."
+    else:
+        yield "Sin jugadores. Reiniciando el server. Tarda ~3 minutos."
+
+    try:
+        await ctx.ejecutar(ctx.oci.reiniciar)
+    except Exception as exc:
+        yield f"No se pudo reiniciar el server. {exc}"
+        return
+
+    async for paso in _seguir_arranque(ctx, "Reiniciando"):
+        yield paso
 
 
 async def accion_status(ctx: Contexto) -> AsyncIterator[str]:
@@ -257,6 +308,22 @@ def puede_apagar(user_id: int, admins: Sequence[int]) -> bool:
 def puede_usar(roles: Sequence[int], permitidos: Sequence[int]) -> bool:
     """Sin roles configurados, cualquier miembro del server puede usar los comandos."""
     return not permitidos or any(r in permitidos for r in roles)
+
+
+def puede_resetear(user_id: int, roles: Sequence[tuple[int, str]], admins: Sequence[int],
+                   permitidos: Sequence[str]) -> bool:
+    """/pz reset es un corte de energia: nunca abierto a todos. Lo pueden usar los admins de
+    PZ_BOT_ADMIN_USER_IDS y quien tenga alguno de los roles de PZ_BOT_RESET_ROLES (por nombre,
+    sin distinguir mayusculas, o por id). Con las dos listas vacias, nadie."""
+    if user_id in admins:
+        return True
+    claves = {p.casefold() for p in permitidos}
+    return any(str(rid) in claves or nombre.casefold() in claves for rid, nombre in roles)
+
+
+def roles_desde_env(valor: str) -> list[str]:
+    """'Los Kpos, 1234' -> ['Los Kpos', '1234']: nombres o ids de rol, separados por coma."""
+    return [p.strip() for p in (valor or "").replace(";", ",").split(",") if p.strip()]
 
 
 def ids_desde_env(valor: str) -> list[int]:
