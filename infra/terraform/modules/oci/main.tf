@@ -317,7 +317,9 @@ resource "oci_identity_policy" "backups" {
     # `shutdown -h` desde adentro: un apagado del huesped puede dejar la instancia en RUNNING
     # (cobrando y sin que el bot la pueda prender). Mismo alcance que el bot: la unica
     # instancia de este compartment es la del juego.
-    "Allow dynamic-group ${oci_identity_dynamic_group.vm.name} to use instances in compartment ${oci_identity_compartment.this.name} where request.permission = 'INSTANCE_POWER_ACTIONS'",
+    # INSTANCE_READ ademas de POWER_ACTIONS: self-stop.py consulta el estado antes de apagar
+    # (mismo trio que la policy del bot; sin READ, GetInstance devuelve NotAuthorizedOrNotFound).
+    "Allow dynamic-group ${oci_identity_dynamic_group.vm.name} to use instances in compartment ${oci_identity_compartment.this.name} where any {request.permission = 'INSTANCE_INSPECT', request.permission = 'INSTANCE_READ', request.permission = 'INSTANCE_POWER_ACTIONS'}",
   ]
 }
 
