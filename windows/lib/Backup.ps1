@@ -230,5 +230,6 @@ function Remove-ZsOldBackup {
         }
     }
 
-    return ,$removed.ToArray()
+    # Sin el operador coma: los llamadores envuelven con @(), y coma + @() daria un array de un array.
+    return $removed.ToArray()
 }
