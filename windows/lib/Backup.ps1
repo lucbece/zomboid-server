@@ -117,13 +117,13 @@ function Compress-ZsDirectory {
                 $relative = $file.FullName.Substring($root.Length).TrimStart('\', '/').Replace('\', '/')
                 $entry = $archive.CreateEntry("$prefix/$relative", [System.IO.Compression.CompressionLevel]::Optimal)
                 $entry.LastWriteTime = $file.LastWriteTime
-                $input = New-Object System.IO.FileStream($file.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+                $reader = New-Object System.IO.FileStream($file.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
                 try {
-                    $output = $entry.Open()
-                    try { $input.CopyTo($output) } finally { $output.Dispose() }
+                    $writer = $entry.Open()
+                    try { $reader.CopyTo($writer) } finally { $writer.Dispose() }
                 }
                 finally {
-                    $input.Dispose()
+                    $reader.Dispose()
                 }
             }
         }
