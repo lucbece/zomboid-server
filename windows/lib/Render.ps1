@@ -249,7 +249,7 @@ function Invoke-ZsRender {
 
     # --- Validacion: toda variable ${VAR} del template tiene que estar definida ---------------
     $template = Read-ZsTextFile -Path $templatePath
-    $templateVars = Get-ZsTemplateVariable -Template $template
+    $templateVars = @(Get-ZsTemplateVariable -Template $template)
     if ($templateVars.Count -eq 0) {
         throw (Get-ZsText 'render.no_tpl_vars' $templatePath)
     }

@@ -164,7 +164,7 @@ function New-ZsBackup {
         }
     }
 
-    $sources = Get-ZsBackupSourceDir -RepoRoot $RepoRoot
+    $sources = @(Get-ZsBackupSourceDir -RepoRoot $RepoRoot)
     if ($sources.Count -eq 0) {
         throw (Get-ZsText 'backup.no_data')
     }
@@ -184,7 +184,8 @@ function New-ZsBackup {
     if ($EnvValues.Contains('BACKUP_KEEP_LOCAL_DAYS') -and -not [string]::IsNullOrEmpty([string]$EnvValues['BACKUP_KEEP_LOCAL_DAYS'])) {
         $keepDays = [int]$EnvValues['BACKUP_KEEP_LOCAL_DAYS']
     }
-    $removed = Remove-ZsOldBackup -RepoRoot $RepoRoot -KeepDays $keepDays
+    # @(): una funcion que devuelve un array vacio no emite nada, y .Count sobre $null falla en StrictMode.
+    $removed = @(Remove-ZsOldBackup -RepoRoot $RepoRoot -KeepDays $keepDays)
 
     Write-ZsOk (Get-ZsText 'backup.done' $zipPath)
     if ($removed.Count -gt 0) {
@@ -229,5 +230,5 @@ function Remove-ZsOldBackup {
         }
     }
 
-    return $removed.ToArray()
+    return ,$removed.ToArray()
 }

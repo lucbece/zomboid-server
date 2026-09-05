@@ -40,3 +40,27 @@ Describe 'Backup: Compress-ZsDirectory' {
         }
     }
 }
+
+Describe 'Backup: Remove-ZsOldBackup' {
+    It 'returns an empty array (not $null) when nothing is expired, and the expired paths otherwise' {
+        $root = Join-Path ([System.IO.Path]::GetTempPath()) ("zs-prune-{0}" -f [guid]::NewGuid())
+        $backupDir = Join-Path $root 'backups'
+        [void](New-Item -ItemType Directory -Path $backupDir -Force)
+        try {
+            $none = @(Remove-ZsOldBackup -RepoRoot $root -KeepDays 3)
+            $none.Count | Should -Be 0
+            $old = Join-Path $backupDir 'old.zip'
+            $new = Join-Path $backupDir 'new.zip'
+            Set-Content -LiteralPath $old -Value 'x'
+            Set-Content -LiteralPath $new -Value 'y'
+            (Get-Item -LiteralPath $old).LastWriteTime = (Get-Date).AddDays(-10)
+            $removed = @(Remove-ZsOldBackup -RepoRoot $root -KeepDays 3)
+            $removed.Count | Should -Be 1
+            Test-Path -LiteralPath $old | Should -BeFalse
+            Test-Path -LiteralPath $new | Should -BeTrue
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
