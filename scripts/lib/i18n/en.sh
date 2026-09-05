@@ -667,6 +667,10 @@ MSG[idle.dryrun]="DRY_RUN: this is where the server and the VM would be shut dow
 MSG[idle.stopping]="stopping the server"
 MSG[idle.backup]="backup"
 MSG[idle.backup_failed]="WARNING: the backup failed"
+MSG[rclone.already]="rclone %s is already installed"
+MSG[rclone.need_root]="run it with sudo: it installs a system package"
+MSG[rclone.downloading]="downloading %s"
+MSG[rclone.installed]="installed: %s"
 MSG[idle.api_stop_failed]="the API shutdown failed (venv or policy missing?); falling back to shutdown -h"
 MSG[idle.vm_off]="shutting down the VM"
 

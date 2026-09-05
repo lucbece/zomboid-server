@@ -33,7 +33,7 @@ DATA_GID := $(shell id -g)
 .PHONY: mod-updater-install mod-updater-status mods-check
 .PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
 .PHONY: panel-up panel-down panel-estado panel-token panel-tokens panel-revoke panel-log
-.PHONY: require-bot-ip bot-install bot-status bot-logs bot-tests idle-shutdown-install idle-shutdown-status oci-venv
+.PHONY: require-bot-ip bot-install bot-status bot-logs bot-tests idle-shutdown-install idle-shutdown-status oci-venv rclone-install
 
 # Cada descripcion trae los dos idiomas:  target: ## English ## es: Castellano
 help: ## Show this help ## es: Muestra esta ayuda
@@ -345,6 +345,11 @@ bot-tests: ## Run the bot tests (needs neither discord.py nor the oci SDK) ## es
 	@cd tools/pz-bot && python3 -m unittest
 
 OCI_VENV ?= /opt/zomboid-oci-venv
+
+rclone-install: require-ip ## Install the pinned rclone on the game VM (the apt one cannot talk to Object Storage) ## es: Instala el rclone pinneado en la VM del juego (el de apt no habla con Object Storage)
+	@$(MAKE) sync VM_IP=$(VM_IP) >/dev/null
+	@$(REMOTE) "cd $(VM_DIR) && sudo scripts/install-rclone.sh"
+
 
 oci-venv: ## Create the venv with the OCI SDK used by tools/oci/self-stop.py (run on the VM) ## es: Crea el venv con el SDK de OCI que usa tools/oci/self-stop.py (correr en la VM)
 	@test -d $(OCI_VENV) || sudo install -d -m 755 -o $$(id -u) -g $$(id -g) $(OCI_VENV)

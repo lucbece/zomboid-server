@@ -231,6 +231,13 @@ dependencies, manual-install mods, dependencies deleted from the Workshop — is
    16261-16262. Opening them requires a rule in the security group, a published port in
    `docker-compose.yml`, and a restart.
 
+### Backups never reach the bucket: "didn't find backend called oracleobjectstorage"
+
+The `rclone` package in Ubuntu 24.04 is 1.60 and predates the Object Storage backend. The VM
+needs the pinned build from rclone.org: cloud-init installs it on new VMs through
+`scripts/install-rclone.sh`; on an existing VM run `make rclone-install`, then
+`make remote-backup` and check the bucket.
+
 ### The instance shows RUNNING but nothing answers (no SSH, no game port)
 
 The guest operating system shut itself down but OCI kept the instance in `RUNNING`. It happens

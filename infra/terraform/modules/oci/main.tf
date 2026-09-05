@@ -381,9 +381,10 @@ resource "oci_core_instance" "this" {
       min_memory      = var.min_memory
       mods_txt        = var.mods_txt
 
-      os_namespace = data.oci_objectstorage_namespace.this.namespace
-      region       = var.region
-      bucket_name  = var.bucket_name
+      os_namespace     = data.oci_objectstorage_namespace.this.namespace
+      compartment_ocid = oci_identity_compartment.this.id
+      region           = var.region
+      bucket_name      = var.bucket_name
     }))
   }
 

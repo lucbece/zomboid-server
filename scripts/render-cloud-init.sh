@@ -122,6 +122,7 @@ output "rendered" {
     mods_txt        = var.mods_txt
 
     os_namespace = "grejemplo"
+    compartment_ocid = "ocid1.compartment.oc1..aaaaaaaaCAMBIAME"
     region       = "sa-saopaulo-1"
     bucket_name  = "zomboid-backups"
   })

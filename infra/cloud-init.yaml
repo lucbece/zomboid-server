@@ -58,7 +58,6 @@ packages:
   - make
   - gettext-base
   - build-essential
-  - rclone
   - zstd
   - jq
   - unattended-upgrades
@@ -174,7 +173,7 @@ write_files:
       type = oracleobjectstorage
       provider = instance_principal_auth
       namespace = ${os_namespace}
-      compartment =
+      compartment = ${compartment_ocid}
       region = ${region}
 
   # --- Backup diario ----------------------------------------------------------------------
@@ -278,6 +277,9 @@ runcmd:
 
   # --- mcrcon ------------------------------------------------------------------------------
   - su - ${vm_user} -c 'cd ${repo_dir} && make mcrcon'
+
+  # --- rclone pinneado (el de apt no tiene el backend de Object Storage) ----------------------
+  - ${repo_dir}/scripts/install-rclone.sh
 
   # --- SDK de OCI para que la VM se apague por la API (tools/oci/self-stop.py) --------------
   - su - ${vm_user} -c 'cd ${repo_dir} && make oci-venv'
