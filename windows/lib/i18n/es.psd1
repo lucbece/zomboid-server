@@ -35,6 +35,8 @@
     'steamcmd.missing_exe' = 'no se encontró steamcmd.exe después de descomprimir el archivo ({0})'
     'steamcmd.updating' = 'instalando/actualizando la app {0}. Esto baja varios GB; puede tardar.'
     'steamcmd.update_failed' = 'SteamCMD terminó con código {0}'
+    'steamcmd.warming_up' = 'primera corrida de SteamCMD (se actualiza a sí mismo)'
+    'steamcmd.retry' = 'SteamCMD terminó con código {0} en el intento {1}; se reintenta en 10 segundos'
     'steamcmd.no_startserver' = 'no se encontró StartServer64.bat en {0} después de correr SteamCMD'
     'steamcmd.update_ok' = 'server instalado/actualizado'
     'server.no_java_line' = 'no se encontró ninguna línea que invoque jre64\bin\java.exe en {0}'

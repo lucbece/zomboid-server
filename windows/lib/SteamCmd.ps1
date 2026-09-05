@@ -141,6 +141,11 @@ function Install-ZsSteamCmd {
         throw (Get-ZsText 'steamcmd.missing_exe' $exe)
     }
 
+    # Primera corrida solo para que SteamCMD se autoactualice: recien bajado, el primer
+    # app_update falla con "Missing configuration" mientras se instala a si mismo.
+    Write-ZsStep (Get-ZsText 'steamcmd.warming_up')
+    & $exe '+quit' 2>&1 | ForEach-Object { Write-ZsLine "  $_" }
+
     Write-ZsOk (Get-ZsText 'steamcmd.installed' $exe)
     return $exe
 }
@@ -174,8 +179,20 @@ function Install-ZsSteamApp {
 
     # El llamado directo (operador &) y no Start-Process: la salida de SteamCMD (progreso de
     # descarga) tiene que verse en la consola a medida que llega, no recien al terminar.
-    & $steamCmdExe @arguments 2>&1 | ForEach-Object { Write-ZsLine "  $_" }
-    $exitCode = $LASTEXITCODE
+    # Hasta 3 intentos: SteamCMD falla de forma transitoria ("Missing configuration" justo
+    # despues de autoactualizarse, cortes de la CDN) y la segunda corrida suele andar.
+    $exitCode = -1
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        & $steamCmdExe @arguments 2>&1 | ForEach-Object { Write-ZsLine "  $_" }
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -eq 0) {
+            break
+        }
+        if ($attempt -lt 3) {
+            Write-ZsWarn (Get-ZsText 'steamcmd.retry' $exitCode $attempt)
+            Start-Sleep -Seconds 10
+        }
+    }
 
     if ($exitCode -ne 0) {
         throw (Get-ZsText 'steamcmd.update_failed' $exitCode)

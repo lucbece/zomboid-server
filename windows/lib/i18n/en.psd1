@@ -35,6 +35,8 @@
     'steamcmd.missing_exe' = 'steamcmd.exe was not found after extracting the archive ({0})'
     'steamcmd.updating' = 'installing/updating app {0}. This downloads several GB; it can take a while.'
     'steamcmd.update_failed' = 'SteamCMD exited with code {0}'
+    'steamcmd.warming_up' = 'first SteamCMD run (it updates itself)'
+    'steamcmd.retry' = 'SteamCMD exited with code {0} on attempt {1}; retrying in 10 seconds'
     'steamcmd.no_startserver' = 'StartServer64.bat was not found in {0} after the SteamCMD run'
     'steamcmd.update_ok' = 'server installed/updated'
     'server.no_java_line' = 'no line invoking jre64\bin\java.exe was found in {0}'
