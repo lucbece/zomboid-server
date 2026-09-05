@@ -81,6 +81,59 @@ function Get-ZsBackupSourceDir {
     return $found.ToArray()
 }
 
+function Compress-ZsDirectory {
+    <#
+        .SYNOPSIS
+        Zip de uno o mas directorios, leyendo cada archivo con FileShare ReadWrite.
+        Compress-Archive abre los archivos sin compartir y falla con players.db y las demas
+        bases SQLite que el server tiene abiertas ("being used by another process"); SQLite
+        si permite lectores concurrentes, y el `save` por RCON que se hace antes deja el
+        contenido consistente. Las entradas se nombran <carpeta>/<ruta relativa> con '/'.
+    #>
+    [CmdletBinding()]
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Source,
+
+        [Parameter(Mandatory)]
+        [string]$Destination
+    )
+
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    if (Test-Path -LiteralPath $Destination) {
+        Remove-Item -LiteralPath $Destination -Force
+    }
+
+    $zipStream = New-Object System.IO.FileStream($Destination, [System.IO.FileMode]::CreateNew)
+    $archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($dir in $Source) {
+            $root = (Get-Item -LiteralPath $dir).FullName.TrimEnd('\', '/')
+            $prefix = Split-Path -Leaf $root
+            foreach ($file in (Get-ChildItem -LiteralPath $root -File -Recurse -Force)) {
+                $relative = $file.FullName.Substring($root.Length).TrimStart('\', '/').Replace('\', '/')
+                $entry = $archive.CreateEntry("$prefix/$relative", [System.IO.Compression.CompressionLevel]::Optimal)
+                $entry.LastWriteTime = $file.LastWriteTime
+                $input = New-Object System.IO.FileStream($file.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+                try {
+                    $output = $entry.Open()
+                    try { $input.CopyTo($output) } finally { $output.Dispose() }
+                }
+                finally {
+                    $input.Dispose()
+                }
+            }
+        }
+    }
+    finally {
+        $archive.Dispose()
+        $zipStream.Dispose()
+    }
+}
+
 function New-ZsBackup {
     <#
         .SYNOPSIS
@@ -125,7 +178,7 @@ function New-ZsBackup {
     $zipPath = Get-ZsBackupPath -RepoRoot $RepoRoot -Timestamp $timestamp
 
     Write-ZsStep (Get-ZsText 'backup.zipping' $zipPath)
-    Compress-Archive -Path $sources -DestinationPath $zipPath -Force
+    Compress-ZsDirectory -Source $sources -Destination $zipPath
 
     $keepDays = 3
     if ($EnvValues.Contains('BACKUP_KEEP_LOCAL_DAYS') -and -not [string]::IsNullOrEmpty([string]$EnvValues['BACKUP_KEEP_LOCAL_DAYS'])) {
