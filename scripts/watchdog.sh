@@ -37,6 +37,10 @@ UNIT="zomboid.service"
 CONTENEDOR="${WATCHDOG_CONTAINER:-zomboid-server}"
 DATA_DIR="${REPO_DIR}/data/zomboid"
 DRY_RUN="${DRY_RUN:-0}"
+# En observacion los avisos a Discord llevan prefijo: se reportan los chequeos, no se actua.
+if [[ "${DRY_RUN}" == "1" ]]; then
+  export NOTIF_TITULO_PREFIJO="[observación] "
+fi
 
 # Codigos de salida: 0 = sano o resuelto, 20 = escalado (lo mira SuccessExitStatus de la unit).
 EXIT_OK=0
@@ -563,8 +567,13 @@ main() {
   case "${problema}" in
     "")
       if [[ -n "${anterior}" ]]; then
-        notificar info "Todo en orden de nuevo" \
-          "El chequeo vuelve a pasar limpio despues de '${anterior}'."
+        if [[ "${DRY_RUN}" == "1" ]]; then
+          notificar info "Todo en orden de nuevo" \
+            "El chequeo vuelve a pasar limpio despues de '${anterior}'. En observacion no se hizo nada: el server siguio como estaba."
+        else
+          notificar info "Todo en orden de nuevo" \
+            "El chequeo vuelve a pasar limpio despues de '${anterior}'."
+        fi
       else
         log "$(t watchdog.healthy)"
       fi

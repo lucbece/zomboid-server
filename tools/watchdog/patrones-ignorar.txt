@@ -13,3 +13,4 @@ duplicate texture
 # Metadatos de habitaciones del mapa que un mod declara mal. El juego usa un default.
 IsoPropertyTypeNotFoundException
 invalid room metaID
+Missing tile definition

@@ -24,4 +24,6 @@ No space left on device
 
 # Nivel SEVERE del logger de Java. Es el patron mas amplio de la lista: si empieza a dar
 # falsos positivos, lo primero a mirar es si conviene acotarlo a 'SEVERE.*zombie|SEVERE.*Network'.
-SEVERE
+# "SEVERE" a secas NO va: el juego usa ese nivel de java.util.logging para cosas cosmeticas
+# (tiles de un lote que no existen, texturas). El 2026-09-06 un "SEVERE: Missing tile
+# definition" hubiera reiniciado el server con cuatro personas jugando.

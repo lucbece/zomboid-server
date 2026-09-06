@@ -68,11 +68,20 @@ The RCON check has a five-minute grace period after `State.StartedAt`: a server 
 
 Check 5 is the one that needs care. A Project Zomboid log is full of `ERROR` and `SEVERE` lines
 that mean nothing — a mod referencing a texture that was renamed, a map cell with bad room
-metadata. Every one of those that reaches the fatal list costs everybody a two-minute restart, so
-the two files work as a pair: `patrones-fatales.txt` is deliberately broad (it includes a bare
-`SEVERE`), and `patrones-ignorar.txt` subtracts the noise that is known to be harmless. When a
-false positive shows up, the fix is usually a new line in the second file, not a narrower first
-one.
+metadata, a building lot whose sign tiles are not defined (`SEVERE: Missing tile definition`).
+Every one of those that reaches the fatal list costs everybody a two-minute restart, so
+`patrones-fatales.txt` lists only signatures of a process that is not coming back (out of
+memory, a dead main thread, a port or disk that cannot be used), and `patrones-ignorar.txt`
+subtracts known noise on top of that. A bare `SEVERE` was in the fatal list until 2026-09-06,
+when the observation period showed it firing on cosmetic tile warnings while four people were
+playing; it is not there any more. Add to the fatal list only a line you have seen precede a
+server that stayed dead.
+
+A "fatal" match is evaluated on the last three minutes of the log, so a single burst of matching
+lines produces one `Falla critica` notification and, one or two checks later, a `Todo en orden
+de nuevo` once the burst has left the window. That second message means the check passed again,
+not that anything was repaired: in observation mode nothing is ever done, and outside it the
+message follows the playbook's own `Recuperado` notification.
 
 ## What it does
 
@@ -87,7 +96,9 @@ default). Beyond that it stops restarting and escalates: a server that needs thr
 hour has a problem that a fourth restart will not fix.
 
 When a check passes again after a failure, one `Todo en orden de nuevo` notification is posted,
-so the channel shows the end of an incident and not only its beginning.
+so the channel shows the end of an incident and not only its beginning. While the watchdog runs
+in observation mode (`DRY_RUN=1`), every notification title carries an `[observación]` prefix and
+the recovery message says explicitly that nothing was done.
 
 ## What it never does
 

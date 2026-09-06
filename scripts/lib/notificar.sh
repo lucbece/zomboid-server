@@ -54,8 +54,10 @@ print(json.dumps({"embeds": [{
 }
 
 # notificar <info|warn|error> <titulo> [detalle]
+# NOTIF_TITULO_PREFIJO: se antepone a cada titulo (el watchdog en observacion pone "[observacion] "
+# para que en Discord se note que no se hizo nada).
 notificar() {
-  local nivel="$1" titulo="$2" detalle="${3:-}"
+  local nivel="$1" titulo="${NOTIF_TITULO_PREFIJO:-}$2" detalle="${3:-}"
   log "[${nivel^^}] ${titulo}"
   if [[ -n "${detalle}" ]]; then
     printf '%s\n' "${detalle}" | sed 's/^/    /' >> "${NOTIF_LOG}" 2>/dev/null || true
