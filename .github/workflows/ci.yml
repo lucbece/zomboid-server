@@ -98,6 +98,27 @@ jobs:
           print("OK: los patrones del notifier siguen matcheando el log real")
           EOF
 
+      # Dos notifiers vivos publican cada entrada y cada salida dos veces: el estado en disco
+      # solo frena los avisos de arranque. El candado es lo unico que lo impide.
+      - name: candado de instancia unica
+        run: |
+          python3 - <<'EOF'
+          import importlib.util, tempfile
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location(
+              "notifier", "tools/discord-notifier/notifier.py")
+          n = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(n)
+
+          lock = Path(tempfile.mkdtemp()) / "notifier.lock"
+          primero = n.tomar_candado(lock)
+          assert primero is not None, "el primer notifier no pudo tomar el candado"
+          assert n.tomar_candado(lock) is None, "el segundo notifier tomo el candado igual"
+          primero.close()
+          assert n.tomar_candado(lock) is not None, "el candado no se libero"
+          print("OK: solo un notifier a la vez")
+          EOF
+
   mod-updater:
     name: mod-updater (comparacion Workshop vs instalado)
     runs-on: ubuntu-latest

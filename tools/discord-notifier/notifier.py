@@ -42,6 +42,8 @@ esta adentro se ignora, y la salida se toma de 'Connection disconnect'.
 
 El estado (offset del archivo de usuarios, ultimo arranque avisado) vive en
 /var/tmp/zomboid-notifier/estado.json para no repetir avisos cuando el servicio se reinicia.
+Al lado vive notifier.lock: un candado exclusivo que hace que una segunda copia salga en vez
+de publicar todo dos veces.
 
 DISCORD_WEBHOOK_URL y SERVER_PASSWORD son credenciales: no se imprimen nunca en el log.
 """
@@ -49,6 +51,7 @@ DISCORD_WEBHOOK_URL y SERVER_PASSWORD son credenciales: no se imprimen nunca en 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import queue
@@ -998,8 +1001,44 @@ def sembrar(n: "Notificador") -> None:
         f"{n.conectados} conectados ({', '.join(sorted(del_archivo.values())) or '-'})")
 
 
+def tomar_candado(path: Path):
+    """Candado exclusivo: un solo notifier por maquina. None si ya lo tiene otro proceso.
+
+    Dos copias vivas a la vez (la unit de systemd mas una prueba a mano que quedo corriendo)
+    publican cada evento dos veces. El estado en disco frena los avisos de arranque repetidos,
+    pero las entradas y salidas viven en memoria de cada proceso y no se comparten: el sintoma
+    es un aviso doble cada vez que alguien entra o sale.
+
+    El descriptor se devuelve y no se cierra a proposito: el candado dura lo que dure el
+    proceso, y el kernel lo suelta solo si se muere de cualquier manera.
+    """
+    try:
+        fh = path.open("w")
+    except OSError as e:
+        log(f"ADVERTENCIA: no se pudo abrir el candado {path}: {e}")
+        return None
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.close()
+        return None
+    try:
+        fh.write(f"{os.getpid()}\n")
+        fh.flush()
+    except OSError:
+        pass
+    return fh
+
+
 def arrancar(una_vez: bool) -> int:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    candado = tomar_candado(STATE_DIR / "notifier.lock")
+    if candado is None:
+        log(f"ya hay otro notifier con el candado {STATE_DIR / 'notifier.lock'}: "
+            "salgo para no publicar los avisos dos veces")
+        # 3 = 'ya hay uno corriendo'. La unit lo tiene en RestartPreventExitStatus para no
+        # entrar en un bucle de arranques contra el que ya esta vivo.
+        return 3
     estado = Estado(STATE_DIR / "estado.json")
     publicador = Publicador(WEBHOOK)
     publicador.start()

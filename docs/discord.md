@@ -228,6 +228,14 @@ reconciliation only begin after that. Skipping this step is what made a restart 
 online post a "Movimiento de jugadores · 4 en línea" that had not happened: the daemon started
 believing the server was empty and the reconciliation dutifully reported the difference.
 
+Only one notifier may run at a time. On startup it takes an exclusive lock on
+`/var/tmp/zomboid-notifier/notifier.lock` and, if another process already holds it, logs the fact
+and exits with status 3 (which the unit's `RestartPreventExitStatus` keeps from looping). Two live
+copies — the systemd unit plus a hand-started test that was never killed — would post **every join
+and leave twice**: the state file below stops the boot message from repeating, but the player list
+lives in each process's memory. If you see doubled player messages, that is the first thing to
+check: `pgrep -af notifier.py` on the VM should print exactly one line.
+
 State lives in `/var/tmp/zomboid-notifier/estado.json`:
 
 | Key | Contents |

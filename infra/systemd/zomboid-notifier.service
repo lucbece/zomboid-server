@@ -28,6 +28,9 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /opt/zomboid-server/tools/discord-notifier/notifier.py
 Restart=always
 RestartSec=10
+# Si otra copia ya tiene el candado de /var/tmp/zomboid-notifier, el notifier sale con 3
+# en vez de duplicar los avisos: reintentarlo no sirve de nada.
+RestartPreventExitStatus=3
 
 # El notifier habla con el socket de Docker y lee data/zomboid/Logs/. No escribe nada del
 # repo ni del sistema salvo su propio estado en /var/tmp.
