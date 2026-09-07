@@ -119,6 +119,64 @@ jobs:
           print("OK: solo un notifier a la vez")
           EOF
 
+      # El mismo jugador llega por dos caminos con dos claves distintas: RCON lo lista apenas
+      # se conecta y el log escribe su 'fully connected' minutos despues, ya cargado. Si las
+      # dos anotaciones conviven, cada entrada y cada salida se avisan dos veces.
+      - name: una entrada y una salida por jugador
+        run: |
+          python3 - <<'EOF'
+          import importlib.util, tempfile
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location(
+              "notifier", "tools/discord-notifier/notifier.py")
+          n = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(n)
+
+          class PubFalso:
+              def __init__(self): self.enviados = []
+              def enviar(self, payload): self.enviados.append(payload["embeds"][0]["title"])
+
+          def titulos():
+              n.rcon_players = lambda: None  # el conteo sale de la lista en memoria
+              pub = PubFalso()
+              noti = n.Notificador(n.Estado(Path(tempfile.mkdtemp()) / "estado.json"), pub)
+              return noti, pub
+
+          # RCON lista al jugador mientras carga: dos lecturas iguales y la reconciliacion lo anota.
+          noti, pub = titulos()
+          noti.reconciliar(1, {"rand1"})
+          noti.reconciliar(1, {"rand1"})
+          noti.vaciar()
+          # Minutos despues llega el 'fully connected' del log, con el steamid: es el mismo.
+          noti.entra("76561198000000000", "rand1")
+          noti.vaciar()
+          assert pub.enviados == ["rand1 entró · 1 en línea"], pub.enviados
+          assert list(noti.presentes) == ["76561198000000000"], noti.presentes
+
+          # La salida la avisa el log una sola vez; RCON ya no ve ninguna diferencia.
+          noti.sale("76561198000000000", "rand1")
+          noti.vaciar()
+          noti.reconciliar(0, set())
+          noti.reconciliar(0, set())
+          noti.vaciar()
+          assert pub.enviados == ["rand1 entró · 1 en línea", "rand1 salió · 0 en línea"], pub.enviados
+
+          # Y al reves: primero el log, despues RCON. Tampoco duplica.
+          noti, pub = titulos()
+          noti.entra("76561198000000001", "Totito")
+          noti.vaciar()
+          noti.reconciliar(1, {"Totito"})
+          noti.reconciliar(1, {"Totito"})
+          noti.vaciar()
+          assert pub.enviados == ["Totito entró · 1 en línea"], pub.enviados
+
+          # Se va mientras carga: nunca hubo 'fully connected', la salida se avisa igual.
+          noti.sale("76561198000000001", "Totito")
+          noti.vaciar()
+          assert pub.enviados[-1] == "Totito salió · 0 en línea", pub.enviados
+          print("OK: una entrada y una salida por jugador, venga del log o de RCON")
+          EOF
+
   mod-updater:
     name: mod-updater (comparacion Workshop vs instalado)
     runs-on: ubuntu-latest

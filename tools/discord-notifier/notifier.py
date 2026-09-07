@@ -818,10 +818,32 @@ class Notificador:
         self.conectados = 0
 
     # --- jugadores ----------------------------------------------------------------------
+    def clave_de(self, nombre: str) -> str | None:
+        """La clave con la que ya esta anotado ese nombre, si esta.
+
+        La identidad de un jugador es su nombre, no la clave: la misma persona llega por dos
+        caminos con dos claves distintas. RCON la lista apenas se conecta, mientras todavia
+        esta cargando el mundo, y la reconciliacion la anota como 'rcon:<nombre>'; uno o tres
+        minutos despues el juego escribe 'fully connected' y llega otra vez, ahora con su
+        steamid. Sin esto quedaban las dos anotadas y cada entrada y cada salida se avisaban
+        dos veces.
+        """
+        for clave, n in self.presentes.items():
+            if n == nombre:
+                return clave
+        return None
+
     def entra(self, sid: str, nombre: str, silencioso: bool = False) -> None:
         if sid in self.presentes:
             # Ya estaba adentro: es el 'fully connected' que sigue a un respawn, no una entrada.
             self.presentes[sid] = nombre
+            return
+        previa = self.clave_de(nombre)
+        if previa is not None:
+            # Ya estaba, con la otra clave: se le pone la definitiva y no se avisa de nuevo.
+            del self.presentes[previa]
+            self.presentes[sid] = nombre
+            log(f"{nombre} ya estaba anotado como {previa}: ahora es {sid}, no se avisa de nuevo")
             return
         self.presentes[sid] = nombre
         if not silencioso:
@@ -830,7 +852,12 @@ class Notificador:
 
     def sale(self, sid: str, nombre: str, silencioso: bool = False) -> None:
         if sid not in self.presentes:
-            return  # se desconecto sin haber llegado a entrar (cola de carga)
+            # Puede estar anotado con la clave de RCON: se fue mientras cargaba, antes de que
+            # el log escribiera su 'fully connected'.
+            previa = self.clave_de(nombre)
+            if previa is None:
+                return  # se desconecto sin haber llegado a entrar (cola de carga)
+            sid = previa
         nombre = self.presentes.pop(sid) or nombre
         if not silencioso:
             self.salidas.append(nombre)

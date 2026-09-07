@@ -197,8 +197,17 @@ writes it when a player dies and respawns, followed by a second `fully connected
 of a second later. That is why a `fully connected` for somebody already counted as present is
 ignored rather than announced, and why leaves are taken from `Connection disconnect`.
 
-A player who quits while still in the loading queue produces a `Connection disconnect` without
-ever having produced a `fully connected`; those are ignored, because they were never in.
+A player is identified by **name**, not by the key they arrive under. RCON lists somebody as
+soon as they connect, while they are still loading the world; the log's `fully connected` for the
+same person can be one to three minutes later. The reconciliation below therefore records them
+first as `rcon:<name>` and announces the join, and when the log line finally arrives with the
+Steam ID the notifier recognises the name, swaps the key and says nothing. Letting the two
+records coexist is what made every join and every leave post twice: the join announced once by
+RCON and once by the log, the leave once by the log and again a minute later, when the
+reconciliation noticed the orphaned `rcon:` entry.
+
+A `Connection disconnect` for somebody recorded under neither key — they quit while still in the
+loading queue and RCON never got to list them — is ignored, because they were never in.
 
 The count in each message comes from `scripts/rcon.sh players` (`Players connected (N)`), falling
 back to the notifier's own tally if RCON does not answer. Every 60 seconds that same command is
