@@ -395,7 +395,6 @@ make idle-shutdown-install  # activa el apagado por inactividad, una vez que el 
 | [`docs/discord.md`](docs/discord.md) | Las dos integraciones con Discord: el puente de chat nativo y los avisos de estado (en inglés) |
 | [`docs/on-demand.md`](docs/on-demand.md) | El apagado por inactividad y el bot de Discord que prende el servidor a pedido (en inglés) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Qué verificar antes de abrir un pull request |
-| [`docs/history/`](docs/history/) | El plan original y las notas de investigación, en castellano. Material histórico, sin mantenimiento |
 
 La documentación se escribe en inglés; este archivo es su traducción completa.
 

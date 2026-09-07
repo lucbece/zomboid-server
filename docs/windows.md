@@ -186,5 +186,4 @@ directory was created.
 
 A scheduled task to keep mods up to date, a Discord notifier, a watchdog, starting at boot,
 backups to cloud storage, a desktop shortcut and a graphical installer are not implemented yet.
-The design record in `docs/history/windows-plan.md` covers the reasoning; a native
-Linux engine without Docker would reuse the same approach.
+A native Linux engine without Docker would reuse the same approach.

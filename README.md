@@ -385,7 +385,6 @@ make idle-shutdown-install  # enable the idle shutdown, once the bot works
 | [`docs/discord.md`](docs/discord.md) | The two Discord integrations: the native chat bridge and the status notifier |
 | [`docs/on-demand.md`](docs/on-demand.md) | Idle shutdown and the Discord bot that starts the server on demand |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run before opening a pull request |
-| [`docs/history/`](docs/history/) | The original plan and research notes, in Spanish. Historical, not maintained |
 
 ## License
 

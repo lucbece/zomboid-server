@@ -67,8 +67,7 @@ Run the same checks CI runs.
 ## Conventions
 
 - **Documentation is written in English.** `README.es.md` is a full translation of `README.md`
-  and has to be updated alongside it. Everything under `docs/history/` is a historical record in
-  Spanish and is not maintained or translated.
+  and has to be updated alongside it.
 - **The CLI speaks Spanish and English.** See "CLI languages" below.
 - Every user-facing message states what to do next. An error that only reports a failure is not
   finished.

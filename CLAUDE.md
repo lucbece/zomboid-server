@@ -12,18 +12,14 @@ in git, optional deployment to a cloud VM with OpenTofu.
 - `docs/runbook.md` — provider-independent operations reference.
 - `docs/deploy-oracle.md` — everything specific to Oracle Cloud.
 - `docs/mods.md`, `docs/survey.md` — mods and the rules survey.
-- `docs/history/` — the original plan (`PLAN.es.md`) and the research notes, in Spanish. A record
-  of how the project got here, not a specification. Where they disagree with the documents above,
-  the documents above are correct.
 
 ## Fixed facts
 
 - Server App ID `380870`. The public Steam branch is Build 42; do not pass `-beta`. Build 41 is
   `-beta legacy41`.
 - Image `danixu86/project-zomboid-dedicated-server`, pinned by digest in `docker-compose.yml`,
-  with `SELF_MANAGED_MODS=1`. The entrypoint audit is in
-  `docs/history/research/02-docker-and-tooling.md` §7: with that variable set it only rewrites
-  `RCONPassword` and `UDPPort` from our configuration.
+  with `SELF_MANAGED_MODS=1`. The entrypoint was audited: with that variable set it only
+  rewrites `RCONPassword` and `UDPPort` from our configuration.
 - Container paths: server data at `/home/steam/Zomboid` (bind mount `./data/zomboid`), Workshop
   content at `/home/steam/pz-dedicated/steamapps/workshop` (bind mount `./data/workshop`).
 - Ports: `16261-16262/udp` game, `27015/tcp` RCON bound to `127.0.0.1`. `8766-8767/udp` optional.

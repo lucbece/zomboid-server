@@ -159,9 +159,3 @@ cloud-init from `terraform.tfvars` and is never synchronised or committed.
 | Every status message says the same five things | State, IP, port, password and version, with the server name in the title, whether the server just started or the daemon was installed against one that was already running. A message that qualified itself ("this is only the current state") made the reader work out what was being claimed; a message that always states the state does not. |
 | The moderator panel authenticates by URL token, over plain HTTP | There is no domain name, so there is no certificate and no login worth the name. A 32-byte token in the path is as strong as the channel allows, and the blast radius is deliberately one action: a clean restart, rate-limited and logged. See [`panel.md`](panel.md). |
 | The panel restarts the game, never the VM | It runs on the VM, so it cannot power one on; and a moderator who could stop the instance could strand everyone, including the administrator. Wipe and restore stay behind SSH for the same reason. |
-
-## History
-
-The original planning document and the research notes that led to these decisions are kept, in
-Spanish, under [`history/`](history/). They are a record, not a specification: where they disagree
-with this document, this document is correct.

@@ -33,3 +33,7 @@ config/mods.txt
 
 # reglas de cada partida: se versiona solo config/servertest_SandboxVars.example.lua
 config/servertest_SandboxVars.lua
+
+# El plan original y las notas de investigacion: material historico del autor, no del
+# template. Se conservan en el disco local, fuera del repo.
+docs/history/
