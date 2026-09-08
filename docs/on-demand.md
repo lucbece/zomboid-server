@@ -76,7 +76,7 @@ they appear immediately. Global registration takes up to an hour.
 | `/pz start` | any member (or `PZ_BOT_ALLOWED_ROLE_IDS`) | Starts the VM if it is `STOPPED`, answers "Prendiendo el server, tarda ~3 minutos" immediately, then edits that message every few seconds until A2S answers, ending in "En línea · IP:puerto". If the VM is already running it reports the player count instead. |
 | `/pz status` | same | Lifecycle state of the VM. If it is running, the name, map, player count and version reported by the server itself over A2S, plus how long it has been up. |
 | `/pz stop` | `PZ_BOT_ADMIN_USER_IDS`, or anyone if that is empty | Refuses unless A2S reports zero players, and refuses if A2S does not answer at all — an unreachable server is not the same as an empty one. Otherwise issues `SOFTSTOP`. |
-| `/pz reset` | `PZ_BOT_ADMIN_USER_IDS` or a role in `PZ_BOT_RESET_ROLES`; nobody if both are empty | Hard power cycle (`RESET`) for an instance that OCI reports `RUNNING` while the game does not answer. Refuses while A2S reports players, sends you to `/pz start` when the VM is `STOPPED`, then follows the boot like `/pz start`. |
+| `/pz reset [forzar]` | `PZ_BOT_ADMIN_USER_IDS` or a role in `PZ_BOT_RESET_ROLES`; nobody if both are empty | Hard power cycle (`RESET`) for an instance that OCI reports `RUNNING` while the game does not answer. Refuses while A2S reports players unless `forzar:True`, sends you to `/pz start` when the VM is `STOPPED`, then follows the boot like `/pz start`. |
 
 `SOFTSTOP` rather than `STOP`: it asks the operating system to shut down, which runs the
 `ExecStop` of `zomboid.service` — `scripts/stop.sh`, an RCON `save` followed by `quit` — before
@@ -112,6 +112,14 @@ example `bot_reset_roles = "Moderators"`. With both empty, nobody can run it. Th
 while A2S reports connected players; it is meant for the instance that OCI shows as `RUNNING`
 while nothing inside answers (see the runbook), and after the reset it follows the boot the same
 way `/pz start` does.
+
+The `forzar` option resets **despite** the reported players. It exists because a hung game server
+is worse than a silent one: when the main thread spins, the server keeps answering the A2S query
+with the last player list it knew, so the people listed are ghosts who cannot play and the
+zero-player check blocks the one command that would fix it. The refusal message says so and names
+the option, so nobody has to remember it under pressure. Use it only when the game is not
+responding: with players actually connected it cuts their session and loses everything since the
+last autosave (`SaveWorldEveryMinutes`).
 
 Changing any of these on a bot that is already deployed: edit `terraform.tfvars` and run
 `make deploy`. The bot's settings travel in its cloud-init, so OpenTofu replaces the bot

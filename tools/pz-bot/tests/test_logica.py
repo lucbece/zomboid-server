@@ -287,7 +287,18 @@ class TestReset(unittest.IsolatedAsyncioTestCase):
         oci = OCIFalso(["RUNNING"])
         pasos = await recolectar(accion_reset(contexto(oci, A2SFalso(reloj, responde_desde=0, jugadores=2), reloj)))
         self.assertIn("no se reinicia", pasos[0])
+        self.assertIn("forzar:True", pasos[0])  # la salida de emergencia, en el mismo mensaje
         self.assertEqual(oci.reinicios, 0)
+
+    async def test_con_jugadores_y_forzar_reinicia(self):
+        # El juego colgado sigue contestando con la ultima lista de jugadores: son fantasmas,
+        # y sin esto la proteccion de 'hay gente adentro' deja al server tildado para siempre.
+        reloj = Reloj()
+        oci = OCIFalso(["RUNNING"])
+        ctx = contexto(oci, A2SFalso(reloj, responde_desde=0, jugadores=2), reloj, intervalo=10)
+        pasos = await recolectar(accion_reset(ctx, forzar=True))
+        self.assertIn("me pediste forzar", pasos[0])
+        self.assertEqual(oci.reinicios, 1)
 
     async def test_sin_jugadores_reinicia(self):
         reloj = Reloj()

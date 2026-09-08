@@ -189,13 +189,15 @@ async def cmd_stop(interaction: discord.Interaction) -> None:
 
 
 @pz.command(name="reset", description="Reinicia el server a la fuerza si quedó colgado")
-async def cmd_reset(interaction: discord.Interaction) -> None:
+@app_commands.describe(
+    forzar="Reinicia aunque figuren jugadores conectados (cuando el juego está tildado)")
+async def cmd_reset(interaction: discord.Interaction, forzar: bool = False) -> None:
     if await _rechazar_si_no_puede(interaction):
         return
     autorizado = puede_resetear(interaction.user.id, _roles_con_nombre(interaction), ADMINS, RESET_ROLES)
-    log.info("/pz reset pedido por %s (%s), autorizado=%s",
-             interaction.user, interaction.user.id, autorizado)
-    await responder(interaction, accion_reset(cliente.ctx, autorizado=autorizado))
+    log.info("/pz reset pedido por %s (%s), autorizado=%s, forzar=%s",
+             interaction.user, interaction.user.id, autorizado, forzar)
+    await responder(interaction, accion_reset(cliente.ctx, autorizado=autorizado, forzar=forzar))
 
 
 cliente.tree.add_command(pz)

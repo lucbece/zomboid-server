@@ -182,9 +182,16 @@ async def _seguir_arranque(ctx: Contexto, verbo: str) -> AsyncIterator[str]:
            f"{duracion_legible(ctx.espera_maxima)}. Probá `/pz status` en unos minutos.")
 
 
-async def accion_reset(ctx: Contexto, autorizado: bool = True) -> AsyncIterator[str]:
+async def accion_reset(ctx: Contexto, autorizado: bool = True,
+                       forzar: bool = False) -> AsyncIterator[str]:
     """Reinicio duro de la VM (RESET). Para la VM 'fantasma': OCI la muestra RUNNING pero el
-    sistema de adentro esta apagado, asi que ni /pz start ni /pz stop la sacan de ahi."""
+    sistema de adentro esta apagado, asi que ni /pz start ni /pz stop la sacan de ahi.
+
+    'forzar' reinicia aunque figuren jugadores conectados. Existe porque cuando el juego se
+    cuelga (el hilo principal en un bucle infinito) sigue contestando la consulta de estado con
+    la ultima lista conocida: los que aparecen conectados son fantasmas, ya nadie puede jugar,
+    y la proteccion de 'hay gente adentro' deja sin herramienta justo cuando hace falta.
+    """
     if not autorizado:
         yield "Solo los admins o el rol autorizado pueden reiniciar el server."
         return
@@ -209,11 +216,16 @@ async def accion_reset(ctx: Contexto, autorizado: bool = True) -> AsyncIterator[
         return
 
     info = await ctx.info_juego()
-    if info is not None and info.jugadores > 0:
-        yield f"Hay {texto_jugadores(info)} conectados: no se reinicia."
+    if info is not None and info.jugadores > 0 and not forzar:
+        yield (f"Hay {texto_jugadores(info)} conectados: no se reinicia.\n"
+               "Si el server está tildado y esos jugadores son fantasmas, "
+               "usá `/pz reset forzar:True`.")
         return
     if info is None:
         yield "El juego no responde: reiniciando el server a la fuerza. Tarda ~3 minutos."
+    elif info.jugadores > 0:
+        yield (f"Hay {texto_jugadores(info)} conectados y me pediste forzar: "
+               "reinicio igual, se les corta la partida. Tarda ~3 minutos.")
     else:
         yield "Sin jugadores. Reiniciando el server. Tarda ~3 minutos."
 
