@@ -49,6 +49,12 @@ users:
     lock_passwd: true
     ssh_authorized_keys:
       - ${ssh_public_key}
+%{ if ask_ssh_line != "" ~}
+      # Puerta de preguntas habladas (scripts/ask.sh): la clave esta atada a un solo comando y
+      # en modo lectura, asi que no abre una shell. Si el bot cambia de maquina y hay un from=,
+      # deja de abrir: se actualiza ask_ssh_from en terraform.tfvars.
+      - ${ask_ssh_line}
+%{ endif ~}
 
 packages:
   - ca-certificates

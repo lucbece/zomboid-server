@@ -14,8 +14,12 @@ module "zomboid" {
 
   admin_cidr     = var.admin_cidr
   ssh_public_key = var.ssh_public_key
-  survey_port    = var.survey_port
-  panel_port     = var.panel_port
+
+  ask_ssh_public_key = var.ask_ssh_public_key
+  ask_ssh_from       = var.ask_ssh_from
+  ask_ssh_cidr       = var.ask_ssh_cidr
+  survey_port        = var.survey_port
+  panel_port         = var.panel_port
 
   repo_url    = var.repo_url
   repo_branch = var.repo_branch
