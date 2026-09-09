@@ -84,12 +84,27 @@ if [[ -z "${PREGUNTA//[[:space:]]/}" ]]; then
   exit 0
 fi
 
-if [[ -f "${REPO_DIR}/.env" ]]; then
-  set -a
-  # shellcheck source=/dev/null
-  source "${REPO_DIR}/.env"
-  set +a
-fi
+# Del .env se leen solo las claves que este script necesita, y se exportan una por una.
+# `set -a; source .env` metia el archivo entero — password de admin, de RCON, del server, token
+# de Discord, webhook — en el ambiente del proceso `claude`, donde queda alcanzable desde
+# cualquier comando que imprima el entorno. La credencial de Anthropic tiene que estar ahi; el
+# resto no tiene por que.
+while IFS='=' read -r clave valor; do
+  [[ -n "${clave}" ]] && export "${clave}=${valor}"
+done < <(
+  if [[ -f "${REPO_DIR}/.env" ]]; then
+    (
+      set -a
+      # shellcheck source=/dev/null
+      source "${REPO_DIR}/.env"
+      set +a
+      for clave in CLAUDE_ASK ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN \
+        ASK_MAX_PER_DAY ASK_MAX_PER_HOUR ASK_MAX_TURNS ASK_TIMEOUT ASK_MODEL ASK_PERMISSION_MODE; do
+        [[ -n "${!clave-}" ]] && printf '%s=%s\n' "${clave}" "${!clave}"
+      done
+    )
+  fi
+)
 
 MAX_POR_DIA="${ASK_MAX_PER_DAY:-40}"
 MAX_POR_HORA="${ASK_MAX_PER_HOUR:-15}"
@@ -132,6 +147,21 @@ contar_desde() {
   echo "${n}"
 }
 
+# Leer el contador y anexar la marca tienen que ser una sola cosa: con una sala preguntando a
+# la vez, dos invocaciones leen el contador antes de que cualquiera escriba, y el cupo no
+# cuenta nada. De paso se podan las marcas de mas de un dia, que si no crecen para siempre.
+exec 9>"${STATE_DIR}/cupo.lock"
+flock 9 2>/dev/null || true
+
+if [[ -s "${MARCAS}" ]]; then
+  corte_dia=$(( $(date +%s) - 86400 ))
+  if awk -F'\t' -v corte="${corte_dia}" '$1 ~ /^[0-9]+$/ && $1 >= corte' "${MARCAS}" > "${MARCAS}.tmp"; then
+    mv "${MARCAS}.tmp" "${MARCAS}"
+  else
+    rm -f "${MARCAS}.tmp"
+  fi
+fi
+
 en_hora="$(contar_desde 3600)"
 en_dia="$(contar_desde 86400)"
 if (( en_hora >= MAX_POR_HORA )) || (( en_dia >= MAX_POR_DIA )); then
@@ -158,8 +188,22 @@ PROMPT="$(render)"
 # En lectura no hay una sola herramienta que cambie nada: ni Edit, ni restart, ni stop, ni
 # backup, y de rcon solo `players`. Es la segunda cerradura de la misma puerta — el bot ya
 # decide segun el rol de quien pregunta, y esto no depende de que el bot lo haga bien.
-HERRAMIENTAS_LECTURA="${ASK_READ_TOOLS:-Bash(make status:*),Bash(make logs:*),Bash(docker compose logs:*),Bash(docker compose ps:*),Bash(./scripts/rcon.sh players),Bash(cat:*),Bash(grep:*),Bash(tail:*),Bash(head:*),Bash(ls:*),Bash(df:*),Bash(free:*),Read,Grep,Glob}"
+#
+# Y son comandos concretos, no `cat:*` ni `grep:*`. Una lista blanca no sabe decir "cat menos
+# el .env": `Bash(cat:*)` matchea `cat .env`, y el .env de esta VM tiene el password de admin,
+# el de RCON, el del server y el token de Discord. El destino de esta salida no es un log: es
+# una voz en una llamada y un mensaje en un canal. Para leer archivos estan Read/Grep/Glob, que
+# no salen del directorio de trabajo y que el deny de abajo acota.
+#
+# `docker compose logs` va con --tail obligatorio: `make logs` es `logs -f` y se colgaria hasta
+# el timeout, que del otro lado son cinco minutos de silencio esperando un error.
+HERRAMIENTAS_LECTURA="${ASK_READ_TOOLS:-Bash(make status:*),Bash(make doctor:*),Bash(docker compose ps:*),Bash(docker compose logs --tail:*),Bash(./scripts/rcon.sh players),Bash(df:*),Bash(free:*),Bash(uptime:*),Read,Grep,Glob}"
 HERRAMIENTAS_COMPLETO="${ASK_FULL_TOOLS:-${HERRAMIENTAS_LECTURA},Bash(make up:*),Bash(make down:*),Bash(make restart:*),Bash(make render:*),Bash(./scripts/rcon.sh:*),Bash(./scripts/restart.sh:*),Bash(./scripts/stop.sh:*),Bash(./scripts/backup.sh:*),Edit}"
+
+# Lo que no se puede tocar en ningun modo. Redundante con la lista blanca a proposito: la
+# blanca dice que se puede correr y esta dice que no se puede leer, y el .env es un archivo
+# adentro del repo, o sea adentro del directorio de trabajo.
+PROHIBIDO="${ASK_DENIED_TOOLS:-Read(./.env),Read(.env),Read(./.env.*),Bash(cat:*),Bash(grep:*),Bash(tail:*),Bash(head:*),Bash(env:*),Bash(printenv:*),Bash(sudo:*),Bash(docker exec:*),Bash(ssh:*),Bash(curl:*),Bash(wget:*)}"
 
 if [[ "${MODO}" == "completo" ]]; then
   HERRAMIENTAS="${HERRAMIENTAS_COMPLETO}"
@@ -177,6 +221,7 @@ cmd=(timeout "${TIMEOUT}" claude -p "${PROMPT}"
      --max-turns "${MAX_TURNS}"
      --permission-mode "${MODO_PERMISOS}"
      --allowedTools "${HERRAMIENTAS}"
+     --disallowedTools "${PROHIBIDO}"
      --append-system-prompt "$(cat "${REGLAS_BASE}"; printf '\n\n'; cat "${REGLAS_ASK}")")
 [[ -n "${MODELO}" ]] && cmd+=(--model "${MODELO}")
 
@@ -191,14 +236,21 @@ fi
 # --- Invocacion -------------------------------------------------------------------------------
 
 printf '%s\t%s\n' "$(date +%s)" "${MODO}" >> "${MARCAS}"
+# Contado ya, y el candado se suelta: la llamada tarda minutos y nadie mas puede esperarla.
+exec 9>&-
 registrar "preguntando (${MODO}): ${PREGUNTA:0:120}"
 
 rc=0
 "${cmd[@]}" > "${SALIDA}" 2>>"${LOG_FILE}" || rc=$?
 
 if (( rc != 0 )) || [[ ! -s "${SALIDA}" ]]; then
+  # La ultima linea del log va en el detalle: un flag que esta version del CLI no acepta y un
+  # modelo que fallo suenan igual desde afuera — "me quedé sin poder contestar" — y son
+  # problemas completamente distintos.
+  motivo="$(tail -n 1 "${LOG_FILE}" 2>/dev/null || true)"
   registrar "claude salio con codigo ${rc}"
-  responder 0 "Me quedé sin poder contestar eso." "El proceso terminó con código ${rc}." "$(printf '{"error":"claude rc %s"}' "${rc}")"
+  responder 0 "Me quedé sin poder contestar eso." "El proceso terminó con código ${rc}.
+${motivo}" "$(printf '{"error":"claude rc %s"}' "${rc}")"
   exit 0
 fi
 

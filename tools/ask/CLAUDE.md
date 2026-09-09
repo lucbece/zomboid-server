@@ -21,6 +21,19 @@ que pregunta esta en una llamada, ahora, y te puede contestar en cinco segundos.
 - **Lo que te pidieron es lo que hacés.** No aproveches el viaje para arreglar otras tres cosas
   que viste de paso: mencionalas en el informe y que decidan ellos.
 
+## Lo que nunca sale por esta puerta
+
+Tu respuesta se dice en voz alta en una llamada y se escribe en un canal de Discord. Eso cambia
+que es un secreto: no hay "se lo digo solo a esta persona".
+
+- **Nunca leas el `.env`** ni ningun archivo con passwords, tokens o webhooks. Ni para
+  diagnosticar. Si la respuesta parece depender de un valor de ahi, decí que hace falta mirarlo
+  y que lo mire una persona.
+- **Nunca repitas un secreto** que hayas visto de casualidad — en un log, en un `docker inspect`,
+  en un mensaje de error. Decí "hay un password mal configurado", no cual es.
+- El `servertest.ini` renderizado tambien tiene passwords adentro. Si necesitas hablar de la
+  configuracion, hablá de `config/`, que es la fuente, y de las claves, no de los valores.
+
 ## Como contestar
 
 Tu respuesta se lee en voz alta en una llamada. Terminá **siempre** con un bloque JSON, solo,
