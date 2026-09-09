@@ -23,10 +23,10 @@ locals {
   # La linea de authorized_keys del bot que pregunta, compuesta aca y no tomada escrita: asi el
   # command= forzado y el restrict no son opcionales para quien use el template. Vacia si no
   # hay clave configurada, y en ese caso cloud-init no escribe ninguna entrada.
-  bot_ssh_from_prefix = trimspace(var.bot_ssh_from) == "" ? "" : format("from=\"%s\",", trimspace(var.bot_ssh_from))
-  bot_ssh_line = trimspace(var.bot_ssh_public_key) == "" ? "" : format(
+  ask_ssh_from_prefix = trimspace(var.ask_ssh_from) == "" ? "" : format("from=\"%s\",", trimspace(var.ask_ssh_from))
+  ask_ssh_line = trimspace(var.ask_ssh_public_key) == "" ? "" : format(
     "%scommand=\"%s/scripts/ask.sh --read\",restrict %s",
-    local.bot_ssh_from_prefix, var.repo_dir, trimspace(var.bot_ssh_public_key)
+    local.ask_ssh_from_prefix, var.repo_dir, trimspace(var.ask_ssh_public_key)
   )
 }
 
@@ -162,6 +162,30 @@ resource "oci_core_network_security_group_security_rule" "ssh" {
   source                    = var.admin_cidr
   source_type               = "CIDR_BLOCK"
   description               = "SSH solo desde el admin"
+
+  tcp_options {
+    destination_port_range {
+      min = 22
+      max = 22
+    }
+  }
+}
+
+# SSH del bot que hace preguntas habladas: una regla aparte y no un admin_cidr mas ancho. Se
+# lee en el plan que se abrio y para quien, y se saca sin tocar el acceso de Luc. Solo existe
+# si hay un CIDR configurado, asi que el template publico no abre nada por defecto.
+#
+# Lo unico que hay del otro lado de este 22 es la clave del bot, atada con command= a
+# scripts/ask.sh --read: abrir el puerto no alcanza para entrar.
+resource "oci_core_network_security_group_security_rule" "ask_ssh" {
+  count = trimspace(var.ask_ssh_cidr) == "" ? 0 : 1
+
+  network_security_group_id = oci_core_network_security_group.this.id
+  direction                 = "INGRESS"
+  protocol                  = "6" # TCP
+  source                    = trimspace(var.ask_ssh_cidr)
+  source_type               = "CIDR_BLOCK"
+  description               = "SSH del bot que pregunta (scripts/ask.sh)"
 
   tcp_options {
     destination_port_range {
@@ -368,7 +392,7 @@ resource "oci_core_instance" "this" {
     user_data = base64encode(templatefile("${path.module}/../../../cloud-init.yaml", {
       vm_user            = var.vm_user
       ssh_public_key     = trimspace(var.ssh_public_key)
-      bot_ssh_line       = local.bot_ssh_line
+      ask_ssh_line       = local.ask_ssh_line
       use_deploy_key     = local.use_deploy_key
       deploy_private_key = local.use_deploy_key ? tls_private_key.deploy[0].private_key_openssh : ""
       repo_url           = var.repo_url

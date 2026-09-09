@@ -168,24 +168,37 @@ variable "ssh_public_key" {
 # La clave del bot que hace preguntas habladas (scripts/ask.sh). Se configura la clave pelada,
 # no la linea de authorized_keys: el modulo le agrega el command= forzado y el restrict, para
 # que no exista la forma de instalarla sin candado. Vacia (el default) no instala nada.
-variable "bot_ssh_public_key" {
+variable "ask_ssh_public_key" {
   description = "Clave publica del bot que pregunta por SSH (scripts/ask.sh). Vacia: no se instala."
   type        = string
   default     = ""
 
   validation {
-    condition     = var.bot_ssh_public_key == "" || can(regex("^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) ", trimspace(var.bot_ssh_public_key)))
-    error_message = "bot_ssh_public_key tiene que estar vacia o ser una clave publica OpenSSH completa."
+    condition     = var.ask_ssh_public_key == "" || can(regex("^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) ", trimspace(var.ask_ssh_public_key)))
+    error_message = "ask_ssh_public_key tiene que estar vacia o ser una clave publica OpenSSH completa."
   }
 }
 
 # IP desde la que se acepta esa clave (el from= de authorized_keys). Es un candado barato y
 # vale la pena cuando el bot vive en una maquina de IP fija; si esa IP cambia, la puerta deja
 # de abrir sin decir por que, asi que vacia (desde cualquier lado) es un default honesto.
-variable "bot_ssh_from" {
+variable "ask_ssh_from" {
   description = "IP del bot, para el from= de authorized_keys. Vacia: se acepta desde cualquier origen."
   type        = string
   default     = ""
+}
+
+# El otro lado de la misma puerta: la clave sola no sirve si el 22 esta cerrado para esa IP.
+# Va aparte de admin_cidr a proposito, para poder sacarla sin tocar el acceso del admin.
+variable "ask_ssh_cidr" {
+  description = "CIDR del bot para abrirle el 22 (ej: 203.0.113.10/32). Vacio: no se abre nada."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.ask_ssh_cidr == "" || can(cidrhost(var.ask_ssh_cidr, 0))
+    error_message = "ask_ssh_cidr tiene que estar vacio o ser un CIDR valido (203.0.113.10/32)."
+  }
 }
 
 variable "vm_user" {
