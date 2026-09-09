@@ -81,7 +81,11 @@ fi
 log "$(t idle.stopping)"
 WARN_SECONDS=0 "${REPO_DIR}/scripts/stop.sh"
 log "$(t idle.backup)"
-"${REPO_DIR}/scripts/backup.sh" idle >/dev/null || log "$(t idle.backup_failed)"
+# El mismo lock que toma el backup diario (zomboid-backup.service). Se espera en vez de
+# saltearlo: este es el ultimo backup antes de apagar la maquina, y apagarla en medio del otro
+# dejaria el tar a la mitad. Si el otro no termina en 15 minutos, se sigue igual y se apaga.
+flock -w 900 /var/tmp/zomboid-backup.lock \
+  "${REPO_DIR}/scripts/backup.sh" idle >/dev/null || log "$(t idle.backup_failed)"
 rm -f "${STATE_FILE}"
 log "$(t idle.vm_off)"
 # Por la API de OCI: un `shutdown -h` desde adentro puede dejar la instancia en RUNNING con

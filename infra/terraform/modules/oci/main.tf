@@ -400,7 +400,7 @@ resource "oci_core_instance" "this" {
       repo_branch        = var.repo_branch
       repo_dir           = var.repo_dir
       timezone           = var.timezone
-      backup_hour        = var.backup_hour
+      backup_hour        = format("%02d", var.backup_hour)
 
       admin_cidr    = var.admin_cidr
       game_port     = var.game_port

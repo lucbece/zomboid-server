@@ -88,8 +88,22 @@ Three independent layers:
    the archive to object storage with `rclone`. Local archives older than
    `BACKUP_KEEP_LOCAL_DAYS` (3 by default) are deleted. It works with the server stopped, in
    which case the `save` step is skipped, and `--no-upload` keeps it local.
-3. **A daily cron job** on the VM, at the hour set by `backup_hour`, guarded by `flock` and
-   logged to `/var/log/zomboid/backup.log`.
+3. **A daily systemd timer** on the VM (`zomboid-backup.timer`), at the hour set by
+   `backup_hour`, guarded by `flock` and logged to `/var/log/zomboid/backup.log`. Install it on
+   an existing VM with `make backup-install`; check it with `make backup-status`.
+
+   It is a timer and not a cron job for one reason, and the reason is the whole point: this VM
+   is powered on demand and spends the night off, which is exactly when a daily job is
+   scheduled. Cron does not catch up — if the machine is not running at that hour, that day has
+   no backup and nothing says so. `Persistent=true` makes systemd record the last run on disk
+   and fire the missed one shortly after the next boot. The failure this fixes was silent and
+   real: three days with no archive at all, discovered only because a corrupted player file
+   needed restoring and the newest backup was from before the corruption.
+
+   The idle shutdown takes its own backup before powering off (the `-idle` archives). Both take
+   the same `/var/tmp/zomboid-backup.lock`, so they cannot overlap; the shutdown path waits up
+   to 15 minutes rather than skipping, because powering the machine off in the middle of the
+   other one would leave a torn archive.
 
 Retention in the bucket is enforced by an object storage lifecycle rule, 30 days by default.
 

@@ -1,0 +1,25 @@
+# Dispara zomboid-backup.service una vez por dia.
+#
+# Persistent=true es el punto de todo esto. La VM se apaga sola por inactividad y pasa la
+# madrugada apagada, justo cuando caia el cron que hacia el backup: cron no recupera una
+# pasada perdida, asi que si la maquina no esta a esa hora ese backup simplemente no existe.
+# Fue lo que dejo al mundo dos dias sin copia. Con Persistent, systemd anota en disco cuando
+# corrio por ultima vez y dispara la pendiente apenas la maquina vuelve a arrancar.
+[Unit]
+Description=Backup diario del mundo de Project Zomboid
+Documentation=https://github.com/lucbece/zomboid-server
+
+[Timer]
+# La hora sale de backup_hour, que cloud-init y `make backup-install` escriben en el drop-in
+# /etc/systemd/system/zomboid-backup.timer.d/hora.conf. El drop-in vacia OnCalendar antes de
+# fijar la suya: en systemd los calendarios se acumulan, no se pisan.
+OnCalendar=*-*-* 06:00
+Persistent=true
+# Al arrancar la VM entran jugadores y se chequean mods: unos minutos de dispersion no cambian
+# nada y evitan que todo pase a la vez.
+RandomizedDelaySec=5min
+AccuracySec=1min
+Unit=zomboid-backup.service
+
+[Install]
+WantedBy=timers.target

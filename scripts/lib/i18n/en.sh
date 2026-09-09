@@ -823,6 +823,8 @@ MSG[make.require_bot_ip]="No BOT_IP. Options:
   cd %s && tofu output -raw bot_public_ip   (needs bot_enabled = true)"
 MSG[make.remote_diff.note]="If there are changes, bring them into the repository by hand and commit them; the VM is re-cloned on every tofu apply."
 MSG[make.watchdog.installed]="watchdog: installed. First check in under 2 minutes; see it with 'make watchdog-status'."
+MSG[make.backup.installed]="backup: timer installed and enabled. It runs every day at the BACKUP_HOUR hour."
+MSG[make.backup.persistent]="backup: if the VM was off at that hour, the backup runs on the next boot (Persistent=true)."
 MSG[make.watchdog.discord]="watchdog: for Discord alerts, set DISCORD_WEBHOOK_URL in the .env ON THE VM (see docs/self-healing.md)."
 MSG[make.modupd.installed]="mod-updater: installed. First check in under 5 minutes; see it with 'make mod-updater-status'."
 MSG[make.modupd.policy]="mod-updater: the restart policy comes from the .env ON THE VM (MOD_UPDATE_*, see docs/mods.md)."
