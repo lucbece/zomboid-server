@@ -19,6 +19,15 @@ locals {
   # ninguna clave privada en la VM. Un repo privado se clona por SSH (git@... o ssh://...) y
   # ahi si hace falta la deploy key que genera este modulo.
   use_deploy_key = !startswith(lower(trimspace(var.repo_url)), "https://")
+
+  # La linea de authorized_keys del bot que pregunta, compuesta aca y no tomada escrita: asi el
+  # command= forzado y el restrict no son opcionales para quien use el template. Vacia si no
+  # hay clave configurada, y en ese caso cloud-init no escribe ninguna entrada.
+  bot_ssh_from_prefix = trimspace(var.bot_ssh_from) == "" ? "" : format("from=\"%s\",", trimspace(var.bot_ssh_from))
+  bot_ssh_line = trimspace(var.bot_ssh_public_key) == "" ? "" : format(
+    "%scommand=\"%s/scripts/ask.sh --read\",restrict %s",
+    local.bot_ssh_from_prefix, var.repo_dir, trimspace(var.bot_ssh_public_key)
+  )
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -359,6 +368,7 @@ resource "oci_core_instance" "this" {
     user_data = base64encode(templatefile("${path.module}/../../../cloud-init.yaml", {
       vm_user            = var.vm_user
       ssh_public_key     = trimspace(var.ssh_public_key)
+      bot_ssh_line       = local.bot_ssh_line
       use_deploy_key     = local.use_deploy_key
       deploy_private_key = local.use_deploy_key ? tls_private_key.deploy[0].private_key_openssh : ""
       repo_url           = var.repo_url

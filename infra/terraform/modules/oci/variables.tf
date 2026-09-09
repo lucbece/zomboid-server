@@ -165,6 +165,29 @@ variable "ssh_public_key" {
   }
 }
 
+# La clave del bot que hace preguntas habladas (scripts/ask.sh). Se configura la clave pelada,
+# no la linea de authorized_keys: el modulo le agrega el command= forzado y el restrict, para
+# que no exista la forma de instalarla sin candado. Vacia (el default) no instala nada.
+variable "bot_ssh_public_key" {
+  description = "Clave publica del bot que pregunta por SSH (scripts/ask.sh). Vacia: no se instala."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.bot_ssh_public_key == "" || can(regex("^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) ", trimspace(var.bot_ssh_public_key)))
+    error_message = "bot_ssh_public_key tiene que estar vacia o ser una clave publica OpenSSH completa."
+  }
+}
+
+# IP desde la que se acepta esa clave (el from= de authorized_keys). Es un candado barato y
+# vale la pena cuando el bot vive en una maquina de IP fija; si esa IP cambia, la puerta deja
+# de abrir sin decir por que, asi que vacia (desde cualquier lado) es un default honesto.
+variable "bot_ssh_from" {
+  description = "IP del bot, para el from= de authorized_keys. Vacia: se acepta desde cualquier origen."
+  type        = string
+  default     = ""
+}
+
 variable "vm_user" {
   description = "Usuario de la VM que corre el server. cloud-init lo crea con docker y sudo."
   type        = string

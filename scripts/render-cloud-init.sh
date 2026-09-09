@@ -18,6 +18,12 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOFU="${TOFU:-tofu}"
 
 mode="${1:-https}"
+
+# La linea de la clave del bot que se usa para renderizar: el modo ssh la pone y el modo https
+# la deja vacia, asi los dos lados del condicional del template quedan validados. La clave es
+# de ejemplo (TEST-NET-3 y una publica de descarte), no la real de nadie.
+EJEMPLO_BOT_SSH_LINE='from="203.0.113.10",command="/opt/zomboid-server/scripts/ask.sh --read",restrict ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJEMPLOEJEMPLOEJEMPLOEJEMPLOEJEMPLO bot'
+
 out="${2:-}"
 
 # shellcheck source=scripts/lib/i18n.sh
@@ -30,9 +36,9 @@ die() {
 
 case "${mode}" in
   # https renderiza con un mods.txt de ejemplo (ejercita el bloque de write_files); ssh sin mods.
-  https) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="$(cat "${REPO_DIR}/config/mods.example.txt")" ;;
-  ssh) use_deploy_key=true; repo_url="git@github.com:lucbece/zomboid-server.git"; mods_txt="" ;;
-  bot) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="" ;;
+  https) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="$(cat "${REPO_DIR}/config/mods.example.txt")"; bot_ssh_line="" ;;
+  ssh) use_deploy_key=true; repo_url="git@github.com:lucbece/zomboid-server.git"; mods_txt=""; bot_ssh_line="${EJEMPLO_BOT_SSH_LINE}" ;;
+  bot) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt=""; bot_ssh_line="" ;;
   *) die "$(t cloudinit.unknown_mode "${mode}")" ;;
 esac
 
@@ -93,11 +99,13 @@ variable "use_deploy_key" { type = bool }
 variable "deploy_private_key" { type = string }
 variable "repo_url" { type = string }
 variable "mods_txt" { type = string }
+variable "bot_ssh_line" { type = string }
 
 output "rendered" {
   value = templatefile(var.template, {
     vm_user            = "pz"
     ssh_public_key     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJEMPLOEJEMPLOEJEMPLOEJEMPLOEJEMPLO usuario@pc"
+    bot_ssh_line       = var.bot_ssh_line
     use_deploy_key     = var.use_deploy_key
     deploy_private_key = var.deploy_private_key
     repo_url           = var.repo_url
@@ -136,7 +144,8 @@ TF
   -var "use_deploy_key=${use_deploy_key}" \
   -var "deploy_private_key=${fake_key}" \
   -var "repo_url=${repo_url}" \
-  -var "mods_txt=${mods_txt}" >/dev/null
+  -var "mods_txt=${mods_txt}" \
+  -var "bot_ssh_line=${bot_ssh_line}" >/dev/null
 "${TOFU}" -chdir="${work}" output -raw rendered >"${out}"
 
 printf '%s\n' "$(t cloudinit.done "${mode}" "${out}")"

@@ -37,6 +37,20 @@ variable "ssh_public_key" {
   type        = string
 }
 
+# Clave del bot que hace preguntas habladas por SSH (scripts/ask.sh). El modulo la instala con
+# command= forzado y restrict, en modo lectura. Vacia: no se instala ninguna.
+variable "bot_ssh_public_key" {
+  description = "Clave publica del bot que pregunta por SSH. Vacia: no se instala."
+  type        = string
+  default     = ""
+}
+
+variable "bot_ssh_from" {
+  description = "IP del bot, para el from= de authorized_keys. Vacia: desde cualquier origen."
+  type        = string
+  default     = ""
+}
+
 variable "alert_email" {
   description = "Mail que recibe las alertas de presupuesto."
   type        = string
