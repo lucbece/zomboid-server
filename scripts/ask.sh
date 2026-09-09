@@ -197,13 +197,22 @@ PROMPT="$(render)"
 #
 # `docker compose logs` va con --tail obligatorio: `make logs` es `logs -f` y se colgaria hasta
 # el timeout, que del otro lado son cinco minutos de silencio esperando un error.
-HERRAMIENTAS_LECTURA="${ASK_READ_TOOLS:-Bash(make status:*),Bash(make doctor:*),Bash(docker compose ps:*),Bash(docker compose logs --tail:*),Bash(./scripts/rcon.sh players),Bash(df:*),Bash(free:*),Bash(uptime:*),Read,Grep,Glob}"
+HERRAMIENTAS_LECTURA="${ASK_READ_TOOLS:-Bash(make status:*),Bash(make doctor:*),Bash(docker compose ps:*),Bash(docker compose logs --tail:*),Bash(./scripts/rcon.sh players),Bash(df:*),Bash(free:*),Bash(uptime:*),Read,Glob}"
 HERRAMIENTAS_COMPLETO="${ASK_FULL_TOOLS:-${HERRAMIENTAS_LECTURA},Bash(make up:*),Bash(make down:*),Bash(make restart:*),Bash(make render:*),Bash(./scripts/rcon.sh:*),Bash(./scripts/restart.sh:*),Bash(./scripts/stop.sh:*),Bash(./scripts/backup.sh:*),Edit}"
 
 # Lo que no se puede tocar en ningun modo. Redundante con la lista blanca a proposito: la
 # blanca dice que se puede correr y esta dice que no se puede leer, y el .env es un archivo
 # adentro del repo, o sea adentro del directorio de trabajo.
-PROHIBIDO="${ASK_DENIED_TOOLS:-Read(./.env),Read(.env),Read(./.env.*),Bash(cat:*),Bash(grep:*),Bash(tail:*),Bash(head:*),Bash(env:*),Bash(printenv:*),Bash(sudo:*),Bash(docker exec:*),Bash(ssh:*),Bash(curl:*),Bash(wget:*)}"
+#
+# Grep no esta en la lista blanca, y no por olvido: devuelve las lineas que matchean CON su
+# contenido, asi que `Grep("PASSWORD", path=".env")` entrega el password sin pasar por Read y
+# sin que la regla `Read(./.env)` tenga nada que decir. Queda igual en la lista de denegados,
+# por si alguna vez vuelve a la blanca.
+#
+# Y el .env no es el unico archivo con secretos adentro del directorio de trabajo: el ini
+# renderizado, `data/zomboid/Server/*.ini`, tiene RCONPassword y Password en texto plano. La
+# regla blanda de tools/ask/CLAUDE.md le pide al modelo que no los mire; esta hace que no pueda.
+PROHIBIDO="${ASK_DENIED_TOOLS:-Read(./.env),Read(.env),Read(./.env.*),Read(./data/zomboid/Server/*.ini),Grep,Bash(cat:*),Bash(grep:*),Bash(tail:*),Bash(head:*),Bash(env:*),Bash(printenv:*),Bash(sudo:*),Bash(docker exec:*),Bash(ssh:*),Bash(curl:*),Bash(wget:*)}"
 
 if [[ "${MODO}" == "completo" ]]; then
   HERRAMIENTAS="${HERRAMIENTAS_COMPLETO}"
