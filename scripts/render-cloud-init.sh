@@ -36,9 +36,9 @@ die() {
 
 case "${mode}" in
   # https renderiza con un mods.txt de ejemplo (ejercita el bloque de write_files); ssh sin mods.
-  https) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="$(cat "${REPO_DIR}/config/mods.example.txt")"; ask_ssh_line="" ;;
-  ssh) use_deploy_key=true; repo_url="git@github.com:lucbece/zomboid-server.git"; mods_txt=""; ask_ssh_line="${EJEMPLO_ASK_SSH_LINE}" ;;
-  bot) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt=""; ask_ssh_line="" ;;
+  https) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt="$(cat "${REPO_DIR}/config/mods.example.txt")"; ask_ssh_line=""; ask_ssh_cidr="" ;;
+  ssh) use_deploy_key=true; repo_url="git@github.com:lucbece/zomboid-server.git"; mods_txt=""; ask_ssh_line="${EJEMPLO_ASK_SSH_LINE}"; ask_ssh_cidr="203.0.113.10/32" ;;
+  bot) use_deploy_key=false; repo_url="https://github.com/lucbece/zomboid-server.git"; mods_txt=""; ask_ssh_line=""; ask_ssh_cidr="" ;;
   *) die "$(t cloudinit.unknown_mode "${mode}")" ;;
 esac
 
@@ -100,12 +100,14 @@ variable "deploy_private_key" { type = string }
 variable "repo_url" { type = string }
 variable "mods_txt" { type = string }
 variable "ask_ssh_line" { type = string }
+variable "ask_ssh_cidr" { type = string }
 
 output "rendered" {
   value = templatefile(var.template, {
     vm_user            = "pz"
     ssh_public_key     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEJEMPLOEJEMPLOEJEMPLOEJEMPLOEJEMPLO usuario@pc"
     ask_ssh_line       = var.ask_ssh_line
+    ask_ssh_cidr       = var.ask_ssh_cidr
     use_deploy_key     = var.use_deploy_key
     deploy_private_key = var.deploy_private_key
     repo_url           = var.repo_url
@@ -145,7 +147,8 @@ TF
   -var "deploy_private_key=${fake_key}" \
   -var "repo_url=${repo_url}" \
   -var "mods_txt=${mods_txt}" \
-  -var "ask_ssh_line=${ask_ssh_line}" >/dev/null
+  -var "ask_ssh_line=${ask_ssh_line}" \
+  -var "ask_ssh_cidr=${ask_ssh_cidr}" >/dev/null
 "${TOFU}" -chdir="${work}" output -raw rendered >"${out}"
 
 printf '%s\n' "$(t cloudinit.done "${mode}" "${out}")"

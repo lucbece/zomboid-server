@@ -393,6 +393,7 @@ resource "oci_core_instance" "this" {
       vm_user            = var.vm_user
       ssh_public_key     = trimspace(var.ssh_public_key)
       ask_ssh_line       = local.ask_ssh_line
+      ask_ssh_cidr       = trimspace(var.ask_ssh_cidr)
       use_deploy_key     = local.use_deploy_key
       deploy_private_key = local.use_deploy_key ? tls_private_key.deploy[0].private_key_openssh : ""
       repo_url           = var.repo_url

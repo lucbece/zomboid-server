@@ -256,6 +256,11 @@ runcmd:
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow from ${admin_cidr} to any port 22 proto tcp comment 'SSH admin'
+%{ if ask_ssh_cidr != "" ~}
+  # La otra mitad de la puerta de preguntas: sin esto el paquete del bot pasa el NSG, llega a
+  # la VM y lo descarta ufw. Da timeout y parece la maquina dormida.
+  - ufw allow from ${ask_ssh_cidr} to any port 22 proto tcp comment 'SSH del bot que pregunta'
+%{ endif ~}
   - ufw allow from ${admin_cidr} to any port ${rcon_port} proto tcp comment 'RCON admin'
   - ufw allow ${game_port}:${game_udp_port}/udp comment 'Project Zomboid'
   - ufw --force enable
