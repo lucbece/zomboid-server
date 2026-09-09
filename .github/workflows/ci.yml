@@ -144,36 +144,36 @@ jobs:
 
           # RCON lista al jugador mientras carga: dos lecturas iguales y la reconciliacion lo anota.
           noti, pub = titulos()
-          noti.reconciliar(1, {"rand1"})
-          noti.reconciliar(1, {"rand1"})
+          noti.reconciliar(1, {"Fulano"})
+          noti.reconciliar(1, {"Fulano"})
           noti.vaciar()
           # Minutos despues llega el 'fully connected' del log, con el steamid: es el mismo.
-          noti.entra("76561198000000000", "rand1")
+          noti.entra("76561198000000000", "Fulano")
           noti.vaciar()
-          assert pub.enviados == ["rand1 entró · 1 en línea"], pub.enviados
+          assert pub.enviados == ["Fulano entró · 1 en línea"], pub.enviados
           assert list(noti.presentes) == ["76561198000000000"], noti.presentes
 
           # La salida la avisa el log una sola vez; RCON ya no ve ninguna diferencia.
-          noti.sale("76561198000000000", "rand1")
+          noti.sale("76561198000000000", "Fulano")
           noti.vaciar()
           noti.reconciliar(0, set())
           noti.reconciliar(0, set())
           noti.vaciar()
-          assert pub.enviados == ["rand1 entró · 1 en línea", "rand1 salió · 0 en línea"], pub.enviados
+          assert pub.enviados == ["Fulano entró · 1 en línea", "Fulano salió · 0 en línea"], pub.enviados
 
           # Y al reves: primero el log, despues RCON. Tampoco duplica.
           noti, pub = titulos()
-          noti.entra("76561198000000001", "Totito")
+          noti.entra("76561198000000001", "Mengana")
           noti.vaciar()
-          noti.reconciliar(1, {"Totito"})
-          noti.reconciliar(1, {"Totito"})
+          noti.reconciliar(1, {"Mengana"})
+          noti.reconciliar(1, {"Mengana"})
           noti.vaciar()
-          assert pub.enviados == ["Totito entró · 1 en línea"], pub.enviados
+          assert pub.enviados == ["Mengana entró · 1 en línea"], pub.enviados
 
           # Se va mientras carga: nunca hubo 'fully connected', la salida se avisa igual.
-          noti.sale("76561198000000001", "Totito")
+          noti.sale("76561198000000001", "Mengana")
           noti.vaciar()
-          assert pub.enviados[-1] == "Totito salió · 0 en línea", pub.enviados
+          assert pub.enviados[-1] == "Mengana salió · 0 en línea", pub.enviados
           print("OK: una entrada y una salida por jugador, venga del log o de RCON")
           EOF
 

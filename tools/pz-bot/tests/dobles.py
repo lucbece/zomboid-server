@@ -50,7 +50,7 @@ class A2SFalso:
         self.reloj = reloj
         self.responde_desde = responde_desde
         self.info = info or a2s.InfoServidor(
-            nombre="PandaParkour",
+            nombre="My Zomboid Server",
             mapa="Muldraugh, KY",
             juego="Project Zomboid",
             jugadores=jugadores,

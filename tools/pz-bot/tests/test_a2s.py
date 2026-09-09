@@ -22,7 +22,7 @@ class TestParseo(unittest.TestCase):
 
     def test_respuesta_real(self):
         info = a2s.parsear_info(self.datos)
-        self.assertEqual(info.nombre, "PandaParkour")
+        self.assertEqual(info.nombre, "My Zomboid Server")
         self.assertEqual(info.mapa, "Muldraugh, KY")
         self.assertEqual(info.juego, "Project Zomboid")
         self.assertEqual(info.max_jugadores, 16)
@@ -81,7 +81,7 @@ class TestConsulta(unittest.TestCase):
     def test_resuelve_el_challenge(self):
         info = a2s.consultar("203.0.113.10", 16261,
                              transporte=self._transporte([CHALLENGE, self.info]))
-        self.assertEqual(info.nombre, "PandaParkour")
+        self.assertEqual(info.nombre, "My Zomboid Server")
         self.assertEqual(len(self.enviados), 2)
         self.assertEqual(self.enviados[0], a2s.PEDIDO)
         # El segundo pedido es el mismo con los cuatro bytes del challenge pegados al final.
@@ -103,7 +103,7 @@ class TestConsulta(unittest.TestCase):
         # challenge. El segundo intento arranca de cero y funciona.
         guion = [CHALLENGE, CHALLENGE, CHALLENGE, self.info]
         info = a2s.consultar("203.0.113.10", transporte=self._transporte(guion))
-        self.assertEqual(info.nombre, "PandaParkour")
+        self.assertEqual(info.nombre, "My Zomboid Server")
 
     def test_consultar_o_none(self):
         self.assertIsNone(a2s.consultar_o_none(

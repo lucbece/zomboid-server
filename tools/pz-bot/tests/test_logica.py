@@ -40,7 +40,7 @@ class TestStart(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Tarda ~3 minutos", pasos[0])
         self.assertTrue(any("Prendiendo el server…" in p for p in pasos[1:-1]))
         self.assertIn("En línea", pasos[-1])
-        self.assertIn("PandaParkour", pasos[-1])
+        self.assertIn("My Zomboid Server", pasos[-1])
         self.assertIn("203.0.113.10:16261", pasos[-1])
         # Y queda registrado el momento del arranque, sin el ~ de "aproximado".
         self.assertIsNotNone(ctx.estado.encendida_desde)
@@ -131,7 +131,7 @@ class TestStatus(unittest.IsolatedAsyncioTestCase):
         pasos = await recolectar(accion_status(ctx))
 
         # El nombre y el mapa salen del propio A2S, no estan hardcodeados en el bot.
-        self.assertIn("PandaParkour", pasos[0])
+        self.assertIn("My Zomboid Server", pasos[0])
         self.assertIn("Muldraugh, KY", pasos[0])
         self.assertIn("2 jugadores de 16", pasos[0])
         self.assertIn("versión 42.20", pasos[0])
