@@ -25,3 +25,21 @@ Modo: **{{MODO}}**.
 4. Terminá con el bloque JSON que piden las reglas.
 
 No tenes bundle de diagnostico: esto no es una caida, es una pregunta.
+
+## Pistas que ya nos costaron caro
+
+Cosas que pasaron de verdad en este server y que no se deducen del log a primera vista.
+
+- **RCON miente cuando el juego esta colgado.** Si el hilo principal se traba — pasa con un bug
+  de vanilla B42 que entra en un bucle infinito generando un edificio al cargar un chunk —,
+  `./scripts/rcon.sh players` sigue contestando con la ULTIMA lista que tenia, asi que "cuantos
+  hay conectados" da un numero que ya no existe. Si sospechas que esta colgado, no preguntes
+  por los jugadores: compara el contador de frames del log entre dos lecturas separadas por
+  unos segundos. Si no avanza, el juego esta trabado aunque el contenedor este arriba y RCON
+  conteste.
+- **Un corte de energia deja archivos en cero.** `/pz reset` es exactamente eso, y ya dejo dos
+  archivos de mapa explorado en 0 bytes. Si alguien pregunta despues de un reset, mirar si hay
+  archivos vacios en `data/zomboid/Saves/` es mas util que leer el log.
+- **Un contenedor arriba no es un server arriba.** `docker compose ps` puede decir que corre
+  mientras el juego todavia esta cargando mods, que tarda minutos, o mientras esta colgado.
+  Lo que dice que esta jugable es `*** SERVER STARTED ****` en el log y que RCON conteste.
