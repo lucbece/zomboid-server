@@ -177,6 +177,39 @@ Alerts are colour-coded: green for recovery, yellow for an action taken, red for
 needs somebody. The same escalation is not reposted for an hour, so a server that is down
 overnight produces one message, not thirty.
 
+## Two doors, one operator
+
+The persona in `tools/autorepair/CLAUDE.md` — what it may do, what it may never do, when to stop
+— is reached two ways, and the rules do not change between them:
+
+| | `scripts/autorepair.sh` | `scripts/ask.sh` |
+|---|---|---|
+| Who opens it | The watchdog, when its own playbook failed | The Discord bot, when somebody asks out loud |
+| When | Three in the morning, nobody awake | Mid-call, with the person who asked right there |
+| Input | A diagnostic bundle | A question, on stdin |
+| Latitude | Acts: better one restart too many than a server down until noon | Asks: when in doubt it says what it would look at, because somebody can answer in five seconds (`tools/ask/CLAUDE.md`) |
+| Default tools | The repair set | Read-only, unless the caller passes `--completo` |
+| Turns / timeout | 40 / 40m | 12 / 5m — a voice call is not a maintenance window |
+| Quota | 1/hour, 3/day | 15/hour, 40/day |
+| Output | A report posted to Discord | One line of JSON: `spoken` for the voice, `detail` for the text channel |
+| Switch | `CLAUDE_AUTOREPAIR=1` | `CLAUDE_ASK=1` |
+
+The two switches are deliberately separate. Letting the watchdog repair the server unattended and
+letting a room full of people ask it questions are different decisions, and turning one on should
+not turn the other on.
+
+`ask.sh` reads the question from stdin because the bot's SSH key is pinned to it with `command=`
+in `authorized_keys`: that key cannot open a shell, cannot forward a port and cannot run anything
+else, so the door is exactly one script, in this repo, in git.
+
+```
+command="/opt/zomboid-server/scripts/ask.sh --read",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... man-in-the-mirror
+```
+
+It always writes one line of JSON to stdout, whatever happens — a closed door, no quota, no
+credential, a run that timed out — because on the other end there is a bot that has to say
+something, and silence is not an answer.
+
 ## Layer 2: Claude Code
 
 Off by default. When it is on and the watchdog's own playbook has failed, `scripts/autorepair.sh`
