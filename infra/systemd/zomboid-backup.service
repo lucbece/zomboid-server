@@ -1,0 +1,31 @@
+# Backup diario del mundo (ver docs/runbook.md, "Backups"). No se arranca sola: la dispara
+# zomboid-backup.timer. La instala cloud-init en las VMs nuevas y `make backup-install` en las
+# que ya existen.
+#
+# Type=oneshot: pide un save por RCON si el server esta arriba, arma el tar, lo sube al bucket
+# y sale.
+[Unit]
+Description=Backup diario del mundo de Project Zomboid
+Documentation=https://github.com/lucbece/zomboid-server
+After=docker.service zomboid.service network-online.target
+Wants=network-online.target
+
+ConditionPathExists=/opt/zomboid-server/scripts/backup.sh
+
+[Service]
+Type=oneshot
+User=pz
+Group=pz
+WorkingDirectory=/opt/zomboid-server
+# El mismo lock que toma el backup del apagado por inactividad: los dos escriben en backups/ y
+# los dos piden un save. Si el otro esta corriendo, flock sale 1 y systemd lo registra como
+# pasada fallida, que es lo que uno quiere ver en el journal.
+ExecStart=/usr/bin/flock -n /var/tmp/zomboid-backup.lock /opt/zomboid-server/scripts/backup.sh daily
+StandardOutput=append:/var/log/zomboid/backup.log
+StandardError=append:/var/log/zomboid/backup.log
+
+# Comprimir el mundo y subirlo puede tardar: son cientos de MB por la red de la VM.
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

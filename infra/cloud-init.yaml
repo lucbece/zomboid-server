@@ -18,7 +18,7 @@
 #   - actualizador de mods habilitado (timer cada 5 minutos; ver docs/mods.md)
 #   - avisos de estado a Discord habilitados (daemon; ver docs/discord.md)
 #   - rclone contra Object Storage por instance principal (sin claves en disco)
-#   - cron de backup diario a las 0${backup_hour}:00 hora de ${timezone}
+#   - timer de backup diario a las ${backup_hour}:00 hora de ${timezone}
 #
 # Validar cambios antes de un apply (ver docs/runbook.md):
 #   tofu console -> templatefile("../../../cloud-init.yaml", {...})
@@ -136,6 +136,7 @@ write_files:
       RCLONE_REMOTE=oci
       BACKUP_BUCKET=${bucket_name}
       BACKUP_KEEP_LOCAL_DAYS=3
+      BACKUP_HOUR=${backup_hour}
 
       # --- Fase 3: apagado por inactividad (todavia sin cron) ---
       IDLE_MINUTES=30
@@ -182,18 +183,29 @@ write_files:
       compartment = ${compartment_ocid}
       region = ${region}
 
-  # --- Backup diario ----------------------------------------------------------------------
-  # flock evita que dos backups se pisen si uno tarda mas de un dia (no deberia).
-  # La linea de idle-shutdown queda comentada a proposito: es de la Fase 3 y hasta que el bot
-  # de Discord exista, apagar la VM sola dejaria a los amigos sin forma de prenderla.
+  # --- Tareas periodicas ------------------------------------------------------------------
+  # El backup diario NO va aca: es un timer de systemd (zomboid-backup.timer), porque esta VM
+  # se apaga sola de madrugada y cron no recupera la pasada que se pierde mientras esta
+  # apagada. La linea de idle-shutdown queda comentada a proposito: es de la Fase 3 y hasta
+  # que el bot de Discord exista, apagar la VM sola dejaria a los amigos sin forma de
+  # prenderla. La descomenta `make idle-shutdown-install`.
   - path: /etc/cron.d/zomboid
     owner: root:root
     permissions: "0644"
     content: |
       SHELL=/bin/bash
       PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      0 ${backup_hour} * * * ${vm_user} cd ${repo_dir} && flock -n /var/tmp/zomboid-backup.lock ./scripts/backup.sh >> /var/log/zomboid/backup.log 2>&1
       #*/5 * * * * ${vm_user} cd ${repo_dir} && flock -n /var/tmp/zomboid-idle.lock ./scripts/idle-shutdown.sh >> /var/log/zomboid/idle.log 2>&1
+
+  # La hora del backup diario. OnCalendar se vacia primero porque en systemd los calendarios
+  # de un timer se acumulan: sin la linea vacia quedarian los dos, el del repo y este.
+  - path: /etc/systemd/system/zomboid-backup.timer.d/hora.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* ${backup_hour}:00
 
   - path: /etc/logrotate.d/zomboid
     owner: root:root
@@ -310,6 +322,14 @@ runcmd:
   - install -d -m 0755 -o ${vm_user} -g ${vm_user} /var/tmp/zomboid-watchdog
   - systemctl daemon-reload
   - systemctl enable --now zomboid-watchdog.timer
+
+  # --- Backup diario -------------------------------------------------------------------------
+  # Timer y no cron: la VM se apaga sola de madrugada y cron no recupera la pasada perdida.
+  # Persistent=true hace que el backup que caia con la maquina apagada corra al arrancar.
+  - install -m 0644 ${repo_dir}/infra/systemd/zomboid-backup.service /etc/systemd/system/zomboid-backup.service
+  - install -m 0644 ${repo_dir}/infra/systemd/zomboid-backup.timer /etc/systemd/system/zomboid-backup.timer
+  - systemctl daemon-reload
+  - systemctl enable --now zomboid-backup.timer
 
   # --- Mods al dia con el Workshop -----------------------------------------------------------
   # El server baja los mods solo al arrancar: cuando un autor publica una version nueva, los

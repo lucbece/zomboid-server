@@ -215,6 +215,12 @@ into `backups/` as a `.tar.zst`, and copies it to object storage when `BACKUP_BU
 `.env`. Local archives older than `BACKUP_KEEP_LOCAL_DAYS` are removed. It also works with the
 server stopped, in which case the `save` step is skipped.
 
+On a cloud VM the same script runs daily on its own, from a systemd timer installed by
+cloud-init (`make backup-install` on a VM that already exists, `make backup-status` to check it).
+It is a timer rather than a cron job because a VM that powers on demand spends the night off,
+which is when a daily job is scheduled: cron skips the run and says nothing, while
+`Persistent=true` fires the missed one on the next boot.
+
 The game's own rolling backups are configured in `config/servertest.ini.tpl`
 (`BackupsCount`, `BackupsPeriod`, `BackupsOnStart`) and land in `data/zomboid/backups/`. They are
 a short-term safety net, not a substitute for off-machine copies.

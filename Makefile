@@ -29,6 +29,7 @@ DATA_GID := $(shell id -g)
 .PHONY: infra-init infra-plan infra-apply infra-destroy
 .PHONY: require-ip remote-status remote-logs remote-restart remote-down remote-up remote-rcon remote-backup remote-diff sync
 .PHONY: watchdog-install watchdog-status
+.PHONY: backup-install backup-status
 .PHONY: notifier-install notifier-status
 .PHONY: mod-updater-install mod-updater-status mods-check
 .PHONY: encuesta-up encuesta-down encuesta-estado encuesta-resultados encuesta-aplicar
@@ -195,6 +196,31 @@ watchdog-status: require-ip ## Watchdog state on the VM and the last lines of it
 	            systemctl status --no-pager --lines=5 zomboid-watchdog.service || true; \
 	            echo "--- /var/log/zomboid/watchdog.log ---"; \
 	            tail -n $${N:-20} /var/log/zomboid/watchdog.log 2>/dev/null || echo "$(NO_LOG)"'
+
+backup-install: require-ip ## Install and enable the daily backup on the VM (systemd timer) ## es: Instala y habilita el backup diario en la VM (timer de systemd)
+	@$(MAKE) sync VM_IP=$(VM_IP) >/dev/null
+	@$(REMOTE) "sudo install -m 644 -o root -g root \
+	              '$(VM_DIR)/infra/systemd/zomboid-backup.service' \
+	              '$(VM_DIR)/infra/systemd/zomboid-backup.timer' /etc/systemd/system/ && \
+	            sudo install -d -m 755 -o $(VM_USER) -g $(VM_USER) /var/log/zomboid && \
+	            hora=\$$(grep -oE '^BACKUP_HOUR=[0-9]+' $(VM_DIR)/.env | cut -d= -f2); \
+	            hora=\$${hora:-6} && \
+	            sudo install -d -m 755 /etc/systemd/system/zomboid-backup.timer.d && \
+	            printf '[Timer]\\nOnCalendar=\\nOnCalendar=*-*-* %02d:00\\n' \$$hora \
+	              | sudo tee /etc/systemd/system/zomboid-backup.timer.d/hora.conf >/dev/null && \
+	            sudo sed -i '/backup.sh/d' /etc/cron.d/zomboid && \
+	            sudo systemctl daemon-reload && \
+	            sudo systemctl enable --now zomboid-backup.timer"
+	@bash -c '$(I18N); t make.backup.installed; echo'
+	@bash -c '$(I18N); t make.backup.persistent; echo'
+
+backup-status: require-ip ## Daily backup state on the VM and the last lines of its log ## es: Estado del backup diario en la VM y ultimas lineas de su log
+	@$(REMOTE) 'systemctl list-timers --no-pager zomboid-backup.timer; \
+	            systemctl status --no-pager --lines=5 zomboid-backup.service || true; \
+	            echo "--- backups en la VM ---"; \
+	            ls -lh $(VM_DIR)/backups/ 2>/dev/null | tail -5; \
+	            echo "--- /var/log/zomboid/backup.log ---"; \
+	            tail -n $${N:-20} /var/log/zomboid/backup.log 2>/dev/null || echo "$(NO_LOG)"'
 
 # =============================================================================================
 # Mods al dia con el Workshop (docs/mods.md, "Mod updates")

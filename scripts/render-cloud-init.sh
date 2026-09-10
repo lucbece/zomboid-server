@@ -114,7 +114,7 @@ output "rendered" {
     repo_branch        = "main"
     repo_dir           = "/opt/zomboid-server"
     timezone           = "America/Argentina/Buenos_Aires"
-    backup_hour        = 6
+    backup_hour        = "06"
 
     admin_cidr    = "203.0.113.10/32"
     game_port     = 16261
