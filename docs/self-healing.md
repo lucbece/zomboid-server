@@ -189,8 +189,8 @@ The persona in `tools/autorepair/CLAUDE.md` — what it may do, what it may neve
 | Input | A diagnostic bundle | A question, on stdin |
 | Latitude | Acts: better one restart too many than a server down until noon | Asks: when in doubt it says what it would look at, because somebody can answer in five seconds (`tools/ask/CLAUDE.md`) |
 | Default tools | The repair set | Read-only, unless the caller passes `--completo` |
-| Turns / timeout | 40 / 40m | 12 / 5m — a voice call is not a maintenance window |
-| Quota | 1/hour, 3/day | 15/hour, 40/day |
+| Turns / timeout | 40 / 40m | 6 reading, 12 acting / 5m — a voice call is not a maintenance window, and looking should cost less than repairing |
+| Quota | 1/hour, 3/day | 15/hour, 40/day **and USD 5/day** — the first real question cost 0.74, so a count-only quota is 11 dollars an hour |
 | Output | A report posted to Discord | One line of JSON: `spoken` for the voice, `detail` for the text channel |
 | Switch | `CLAUDE_AUTOREPAIR=1` | `CLAUDE_ASK=1` |
 
