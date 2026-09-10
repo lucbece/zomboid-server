@@ -109,6 +109,12 @@ done < <(
 MAX_POR_DIA="${ASK_MAX_PER_DAY:-40}"
 MAX_POR_HORA="${ASK_MAX_PER_HOUR:-15}"
 MAX_TURNS="${ASK_MAX_TURNS:-12}"
+# Leer cuesta menos que arreglar y tiene que costar menos. Medido en la VM: una pregunta de
+# estado se fue a trece turnos y a USD 0.74 — la mayor parte en volver a mandar la conversacion
+# entera una vez por turno. Seis alcanzan de sobra para mirar un log y contestar; el que
+# necesita mas es el que va a cambiar algo, y ese pide modo completo.
+MAX_TURNS_LECTURA="${ASK_READ_MAX_TURNS:-6}"
+MAX_USD_POR_DIA="${ASK_MAX_USD_PER_DAY:-5}"
 TIMEOUT="${ASK_TIMEOUT:-5m}"
 MODELO="${ASK_MODEL:-}"
 
@@ -137,14 +143,35 @@ fi
 # Cupo propio, separado del auto-arreglo. Una pregunta hablada cuesta plata y hay una sala
 # entera que puede hacerlas de a una por segundo.
 MARCAS="${STATE_DIR}/invocaciones"
+# Dos marcas distintas en el mismo archivo: "epoch<TAB>lectura|completo" cuando se pregunta, y
+# "epoch<TAB>costo<TAB>USD" cuando la respuesta vuelve. Se anexan y no se reescriben, asi no hay
+# carrera entre la que se escribe antes de la llamada y la que se escribe minutos despues.
 contar_desde() {
-  local corte ts n=0
+  local corte ts modo n=0
   corte=$(( $(date +%s) - $1 ))
   [[ -f "${MARCAS}" ]] || { echo 0; return 0; }
-  while IFS=$'\t' read -r ts _; do
-    [[ "${ts}" =~ ^[0-9]+$ ]] && (( ts >= corte )) && n=$(( n + 1 ))
+  while IFS=$'\t' read -r ts modo _; do
+    [[ "${ts}" =~ ^[0-9]+$ ]] || continue
+    [[ "${modo}" == "lectura" || "${modo}" == "completo" ]] || continue
+    (( ts >= corte )) && n=$(( n + 1 ))
   done < "${MARCAS}"
   echo "${n}"
+}
+
+# Lo gastado en la ventana, en centavos: bash no hace cuentas con decimales y una comparacion
+# de plata no puede depender de la locale.
+#
+# `LC_ALL=C` no es adorno. mawk lee los decimales segun la locale, y en una maquina con
+# es_AR — la de todos los que tocan esto — "0.74" se suma como CERO. El tope habria existido
+# sin frenar nada, que es peor que no tenerlo: uno cree que esta cubierto. Encontrado probando
+# el tope con ocho preguntas de 0.74 que pasaron todas.
+gastado_desde() {
+  local corte
+  corte=$(( $(date +%s) - $1 ))
+  [[ -f "${MARCAS}" ]] || { echo 0; return 0; }
+  LC_ALL=C awk -F'\t' -v corte="${corte}" '
+    $1 ~ /^[0-9]+$/ && $2 == "costo" && $1 >= corte { total += $3 }
+    END { printf "%d\n", (total * 100) + 0.5 }' "${MARCAS}"
 }
 
 # Leer el contador y anexar la marca tienen que ser una sola cosa: con una sala preguntando a
@@ -167,6 +194,17 @@ en_dia="$(contar_desde 86400)"
 if (( en_hora >= MAX_POR_HORA )) || (( en_dia >= MAX_POR_DIA )); then
   registrar "sin cupo (${en_hora}/${MAX_POR_HORA} por hora, ${en_dia}/${MAX_POR_DIA} por dia)"
   responder 0 "Ya me preguntaron demasiado por hoy, esperá un rato." "" '{"error":"sin cupo"}'
+  exit 0
+fi
+
+# Un cupo contado en preguntas no es un cupo de plata: quince por hora a lo que salio la
+# primera son once dolares la hora. El tope del workspace frena el desastre, pero un tope no es
+# un plan. Este cuenta lo que de verdad se gasto, que es lo unico que importa.
+gastado_centavos="$(gastado_desde 86400)"
+tope_centavos=$(( ${MAX_USD_POR_DIA%%.*} * 100 ))
+if (( gastado_centavos >= tope_centavos )); then
+  registrar "sin cupo de gasto (USD $((gastado_centavos / 100)).$(printf '%02d' $((gastado_centavos % 100))) de ${MAX_USD_POR_DIA} hoy)"
+  responder 0 "Ya gasté lo que tenía para hoy en preguntas al server." "" '{"error":"sin cupo de gasto"}'
   exit 0
 fi
 
@@ -221,6 +259,7 @@ else
   HERRAMIENTAS="${HERRAMIENTAS_LECTURA}"
   # Nada que aceptar: en lectura no hay ninguna herramienta que escriba.
   MODO_PERMISOS="${ASK_PERMISSION_MODE:-dontAsk}"
+  MAX_TURNS="${MAX_TURNS_LECTURA}"
 fi
 
 SALIDA="${STATE_DIR}/ultima.json"
@@ -249,28 +288,81 @@ printf '%s\t%s\n' "$(date +%s)" "${MODO}" >> "${MARCAS}"
 exec 9>&-
 registrar "preguntando (${MODO}): ${PREGUNTA:0:120}"
 
+# El stderr va a un archivo propio y no al log: mezclado con nuestras lineas, "la ultima linea
+# del log" terminaba siendo lo ultimo que escribimos nosotros, y el primer fallo de verdad
+# llego del otro lado como "el proceso termino con codigo 1" y nada mas.
+ERRORES="${STATE_DIR}/ultimo-stderr"
 rc=0
-"${cmd[@]}" > "${SALIDA}" 2>>"${LOG_FILE}" || rc=$?
+"${cmd[@]}" > "${SALIDA}" 2>"${ERRORES}" || rc=$?
+cat "${ERRORES}" >> "${LOG_FILE}" 2>/dev/null || true
 
-if (( rc != 0 )) || [[ ! -s "${SALIDA}" ]]; then
-  # La ultima linea del log va en el detalle: un flag que esta version del CLI no acepta y un
-  # modelo que fallo suenan igual desde afuera — "me quedé sin poder contestar" — y son
-  # problemas completamente distintos.
-  motivo="$(tail -n 1 "${LOG_FILE}" 2>/dev/null || true)"
-  registrar "claude salio con codigo ${rc}"
-  responder 0 "Me quedé sin poder contestar eso." "El proceso terminó con código ${rc}.
-${motivo}" "$(printf '{"error":"claude rc %s"}' "${rc}")"
+# Salida primero, codigo despues. `claude -p` puede terminar con codigo distinto de cero y
+# haber escrito igual un JSON perfectamente bueno — un turno que termino en error, un limite
+# alcanzado, una negativa. Descartarlo por el codigo tiraba la respuesta y decia "no pude",
+# que es a la vez falso y menos util que lo que ya teniamos en la mano.
+if [[ ! -s "${SALIDA}" ]]; then
+  motivo="$(tail -n 3 "${ERRORES}" 2>/dev/null | tr '\n' ' ' | head -c 400)"
+  registrar "claude salio con codigo ${rc} sin escribir nada: ${motivo:-sin stderr}"
+  responder 0 "Me quedé sin poder contestar eso." "El proceso terminó con código ${rc} y no escribió nada.
+${motivo:-Sin stderr: puede ser el timeout de ${TIMEOUT}.}" "$(printf '{"error":"claude rc %s"}' "${rc}")"
   exit 0
 fi
+if (( rc != 0 )); then
+  registrar "claude salio con codigo ${rc} pero escribio salida; se usa igual"
+fi
+
+# Lo que costo, anexado para que el cupo de plata de arriba lo vea. Se anota pase lo que pase:
+# una corrida que fallo a los diez turnos costo igual.
+costo_real="$(python3 -c '
+import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get("total_cost_usd") or 0)
+except Exception:
+    print(0)
+' "${SALIDA}" 2>/dev/null || echo 0)"
+printf '%s\tcosto\t%s\n' "$(date +%s)" "${costo_real}" >> "${MARCAS}"
+registrar "costo de esta pregunta: USD ${costo_real} (hoy van USD $(( $(gastado_desde 86400) / 100 )).$(printf '%02d' $(( $(gastado_desde 86400) % 100 ))) de ${MAX_USD_POR_DIA})"
 
 # El informe util es `result`. El bloque JSON que pedimos esta al final de ese texto; si no
 # vino, lo de siempre: el texto entero es el detalle y la primera frase es lo que se dice.
-SALIDA="${SALIDA}" python3 - <<'PY'
+SALIDA="${SALIDA}" ERRORES="${ERRORES}" RC="${rc}" python3 - <<'PY'
 import json, os, re
 
-raw = json.load(open(os.environ["SALIDA"]))
+try:
+    raw = json.load(open(os.environ["SALIDA"]))
+except (json.JSONDecodeError, OSError) as err:
+    # Salida que no es JSON: pasa si el CLI cambia de formato o si escribio a medias. El otro
+    # lado tiene que poder decir algo, asi que se dice esto y no se rompe.
+    stderr = ""
+    try:
+        stderr = open(os.environ.get("ERRORES", "/dev/null")).read()[-400:].strip()
+    except OSError:
+        pass
+    print(json.dumps({
+        "ok": False,
+        "spoken": "El server contestó algo que no pude leer.",
+        "detail": f"No pude parsear la salida ({err}). Código {os.environ.get('RC')}.\n{stderr}",
+        "error": "salida ilegible",
+    }, ensure_ascii=False))
+    raise SystemExit(0)
+
 text = (raw.get("result") or "").strip()
-out = {"ok": not raw.get("is_error", False), "turns": raw.get("num_turns"), "cost": raw.get("total_cost_usd")}
+rc = os.environ.get("RC") or "0"
+out = {
+    "ok": not raw.get("is_error", False) and rc == "0",
+    "turns": raw.get("num_turns"),
+    "cost": raw.get("total_cost_usd"),
+}
+if raw.get("is_error") or rc != "0":
+    # Que fallo y que alcanzo a decir son dos cosas distintas, y las dos sirven del otro lado.
+    stderr = ""
+    try:
+        stderr = open(os.environ.get("ERRORES", "/dev/null")).read()[-400:].strip()
+    except OSError:
+        pass
+    out["error"] = raw.get("subtype") or raw.get("error") or f"rc {rc}"
+    if stderr:
+        out["stderr"] = stderr
 
 bloque = None
 for m in re.finditer(r"\{[^{}]*\"spoken\"[^{}]*\}", text, re.S):
