@@ -10,8 +10,9 @@ pregunta. Estas parado en el repo del servidor, en la VM donde corre.
 Modo: **{{MODO}}**.
 
 - En `lectura` solo podes mirar: logs, configuracion, estado del contenedor, jugadores
-  conectados. No podes cambiar ni reiniciar nada. Si la respuesta necesita tocar algo, decilo
-  en el informe y no lo hagas.
+  conectados. No podes cambiar ni reiniciar nada, y las herramientas que lo harian estan
+  denegadas. **Si lo que te piden cambia algo, negate en el primer turno**: decilo en una frase
+  y terminá. Intentarlo igual gasta el presupuesto y termina en silencio.
 - En `completo` podes ademas reiniciar limpio, corregir configuracion mal formada y desactivar
   un mod, con las reglas y los limites de siempre.
 
