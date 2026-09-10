@@ -109,11 +109,13 @@ done < <(
 MAX_POR_DIA="${ASK_MAX_PER_DAY:-40}"
 MAX_POR_HORA="${ASK_MAX_PER_HOUR:-15}"
 MAX_TURNS="${ASK_MAX_TURNS:-12}"
-# Leer cuesta menos que arreglar y tiene que costar menos. Medido en la VM: una pregunta de
-# estado se fue a trece turnos y a USD 0.74 — la mayor parte en volver a mandar la conversacion
-# entera una vez por turno. Seis alcanzan de sobra para mirar un log y contestar; el que
-# necesita mas es el que va a cambiar algo, y ese pide modo completo.
-MAX_TURNS_LECTURA="${ASK_READ_MAX_TURNS:-6}"
+# Leer cuesta menos que arreglar y tiene que costar menos, pero el numero sale de medir y no de
+# elegirlo lindo. Con seis, una pregunta de estado real se corto en el limite sin contestar
+# (siete turnos contados, USD 0.47, y silencio). Con la negativa rapida ya resuelta aparte —una
+# accion pedida en modo lectura ahora cuesta un turno— lo que queda bajo este tope son
+# preguntas de verdad, y diez es lo que necesitan sin dejar que una se desboque como la primera,
+# que se fue a trece. El techo que de verdad protege es el de plata, no este.
+MAX_TURNS_LECTURA="${ASK_READ_MAX_TURNS:-10}"
 MAX_USD_POR_DIA="${ASK_MAX_USD_PER_DAY:-5}"
 TIMEOUT="${ASK_TIMEOUT:-5m}"
 MODELO="${ASK_MODEL:-}"

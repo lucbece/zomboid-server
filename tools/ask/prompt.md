@@ -41,6 +41,11 @@ Cosas que pasaron de verdad en este server y que no se deducen del log a primera
 - **Un corte de energia deja archivos en cero.** `/pz reset` es exactamente eso, y ya dejo dos
   archivos de mapa explorado en 0 bytes. Si alguien pregunta despues de un reset, mirar si hay
   archivos vacios en `data/zomboid/Saves/` es mas util que leer el log.
+- **Con el server vacio el contador de frames se queda quieto, y eso es correcto.** El ini
+  tiene `PauseEmpty=true`: sin nadie conectado el juego pausa la simulacion a proposito. Asi
+  que un contador congelado **solo** es sintoma de cuelgue si hay alguien jugando. Con cero
+  jugadores no hace falta verificar nada: mirá `rcon players`, y si dice cero, esta pausado y
+  ya esta. Esto ya nos costo una corrida entera de presupuesto verificandolo desde cero.
 - **Un contenedor arriba no es un server arriba.** `docker compose ps` puede decir que corre
   mientras el juego todavia esta cargando mods, que tarda minutos, o mientras esta colgado.
   Lo que dice que esta jugable es `*** SERVER STARTED ****` en el log y que RCON conteste.
