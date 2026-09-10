@@ -380,8 +380,25 @@ if not out.get("spoken"):
     # Sin el bloque: la primera frase es lo que se dice y el resto queda escrito. Peor que el
     # contrato, mucho mejor que el silencio.
     primera = re.split(r"(?<=[.!?])\s", text.replace("\n", " ").strip(), maxsplit=1)
-    out["spoken"] = (primera[0] if primera else "").strip()[:300] or "Miré, pero no me salió un resumen corto."
+    out["spoken"] = (primera[0] if primera else "").strip()[:300]
     out["detail"] = text
+
+if not out.get("spoken"):
+    # Nada que decir, y el motivo importa. Quedarse sin turnos y no tener un resumen corto son
+    # dos cosas distintas: la primera es que lo cortaron a la mitad, la segunda es que se fue
+    # por las ramas. "No me salió un resumen" para un turno cortado suena a modelo vago y manda
+    # a la sala a mirar el lado equivocado.
+    if raw.get("subtype") == "error_max_turns":
+        out["spoken"] = "Me quedé sin turnos antes de poder contestar."
+        out["detail"] = out.get("detail") or (
+            f"La corrida se cortó en el límite de turnos ({raw.get('num_turns')}) sin escribir "
+            "la respuesta. Si era un pedido de acción hecho en modo lectura, la negativa "
+            "tendría que llegar en el primer turno; si era una pregunta de verdad, necesita "
+            "más presupuesto."
+        )
+    else:
+        out["spoken"] = "Miré, pero no me salió un resumen corto."
+        out["detail"] = out.get("detail") or text
 elif text and not out.get("detail"):
     out["detail"] = text
 
