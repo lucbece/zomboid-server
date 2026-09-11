@@ -40,6 +40,22 @@ No tenes bundle de diagnostico: esto no es una caida, es una pregunta.
 
 Cosas que pasaron de verdad en este server y que no se deducen del log a primera vista.
 
+- **Un log es el pasado, no el presente.** `watchdog.log` y el journal guardan meses. Una linea
+  de hace cinco dias NO dice como esta configurado el server hoy. Antes de reportar una
+  configuracion como actual, verificala donde vive: si el watchdog esta en modo observacion se
+  ve en `/etc/systemd/system/zomboid-watchdog.service.d/` (si no existe, esta en modo real), no
+  en lineas viejas que digan "[observación]". Lo mismo con los patrones fatales: dispararon
+  hasta el 6/9 con la lista vieja y no volvieron a disparar. **Mira siempre la fecha de la linea
+  antes de contarla como si fuera de ahora.**
+
+- **`stop: the container is not running, nothing to do` antes de un arranque es NORMAL.** No es
+  un corte sucio. El apagado por inactividad llama a `stop.sh` el mismo (guarda por RCON, hace
+  el backup) y despues, al apagarse la maquina, systemd llama a `stop.sh` de nuevo: esa segunda
+  llamada no encuentra nada y dice eso. Un apagado limpio deja el rastro completo en el journal
+  —`stop: save`, `World saved`, `stop: quit`, `stop: ok`— y un backup `-idle` del mismo minuto
+  en `backups/`. Si vas a decir que hubo un corte duro, comprobá que NO esten esas dos cosas;
+  si estan, fue limpio. Confundirlos es alarmar a una sala entera por nada.
+
 - **El mapa explorado que se pierde es un zip en 0 bytes.** Vive en
   `data/zomboid/Saves/Multiplayer/servertest/map_visited_server/<jugador>.zip`. Un corte duro de
   la VM —un `/pz reset`, que es cortarle la energia— mientras el juego lo esta reescribiendo lo
