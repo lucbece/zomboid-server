@@ -170,7 +170,9 @@ reiniciar() {
   fi
 
   log "$(t modupd.restarting "${warn}" "${titulos}")"
-  if ! WARN_SECONDS="${warn}" "${REPO_DIR}/scripts/restart.sh" >> "${LOG_FILE}" 2>&1; then
+  # Sin marca de mantenimiento: este reinicio es automatico, no lo pidio nadie. Si quedara,
+  # un arranque fallido dejaria mudo al watchdog en vez de hacerlo reaccionar.
+  if ! ZOMBOID_MANTENIMIENTO=/dev/null WARN_SECONDS="${warn}" "${REPO_DIR}/scripts/restart.sh" >> "${LOG_FILE}" 2>&1; then
     avisar error "No se pudo reiniciar por la actualizacion de mods" \
       "scripts/restart.sh salio con error. Mods pendientes: ${titulos}"
     limpiar_ciclo

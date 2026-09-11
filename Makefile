@@ -76,6 +76,7 @@ render: dirs ## Render config/ + .env -> data/zomboid/Server/ ## es: Renderiza c
 
 up: render ## Render the configuration and start the server ## es: Renderiza la config y levanta el server
 	@$(COMPOSE) up -d
+	@rm -f $${ZOMBOID_MANTENIMIENTO:-/var/tmp/zomboid-mantenimiento}
 	@bash -c '$(I18N); t make.up.started; echo'
 
 down: ## Clean shutdown: warning + save + quit over RCON (never a bare 'docker stop') ## es: Apagado limpio: aviso + save + quit por RCON (nunca 'docker stop' a secas)

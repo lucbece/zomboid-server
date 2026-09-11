@@ -32,6 +32,7 @@ LOG_FILE="${WATCHDOG_LOG:-/var/log/zomboid/watchdog.log}"
 # watchdog y scripts/mod-updater.sh. Ademas de excluirse entre si, le sirve a cada uno de
 # "una corrida a la vez".
 OPS_LOCK="${ZOMBOID_OPS_LOCK:-/var/tmp/zomboid-ops.lock}"
+MANTENIMIENTO="${ZOMBOID_MANTENIMIENTO:-/var/tmp/zomboid-mantenimiento}"
 SERVICE="zomboid"
 UNIT="zomboid.service"
 CONTENEDOR="${WATCHDOG_CONTAINER:-zomboid-server}"
@@ -349,7 +350,10 @@ playbook_rcon() {
   fi
 
   marcar reinicios rcon
-  if WARN_SECONDS=0 "${REPO_DIR}/scripts/restart.sh" >> "${LOG_FILE}" 2>&1; then
+  # ZOMBOID_MANTENIMIENTO=/dev/null: la marca es para apagados que pide una persona. Si el
+  # watchdog se la dejara a si mismo y despues su arranque fallara, la proxima pasada
+  # veria "lo apagaron a proposito" y se quedaria callada en vez de reintentar.
+  if ZOMBOID_MANTENIMIENTO=/dev/null WARN_SECONDS=0 "${REPO_DIR}/scripts/restart.sh" >> "${LOG_FILE}" 2>&1; then
     escribir_estado rcon-fallos 0
     rebasar_crash_loop
     notificar info "Reinicio lanzado" "El server esta arrancando. Se verifica en la proxima pasada."
@@ -382,7 +386,7 @@ playbook_critico() {
   # Apagado limpio primero: 'docker compose down' es el ultimo recurso y solo si stop.sh no
   # pudo (el mundo se guarda por RCON, no por SIGKILL).
   log "$(t watchdog.stopping)"
-  if ! WARN_SECONDS=0 "${REPO_DIR}/scripts/stop.sh" >> "${LOG_FILE}" 2>&1; then
+  if ! ZOMBOID_MANTENIMIENTO=/dev/null WARN_SECONDS=0 "${REPO_DIR}/scripts/stop.sh" >> "${LOG_FILE}" 2>&1; then
     log "$(t watchdog.stop_failed)"
     dc down --remove-orphans >> "${LOG_FILE}" 2>&1 || true
   fi
@@ -523,6 +527,31 @@ main() {
     # shellcheck source=/dev/null
     source "${REPO_DIR}/.env"
     set +a
+  fi
+
+  # --- Apagados a proposito -------------------------------------------------------------
+  # Dos formas de que el server este caido sin que sea una falla, y en las dos el watchdog
+  # hacia exactamente lo que no hay que hacer: avisar una falla critica y volver a levantarlo.
+
+  # a) La VM se esta apagando. Entre que stop.sh termina y el kernel se va hay una ventana de
+  #    minutos donde el contenedor no esta y nadie tiene la culpa.
+  local sistema
+  sistema="$(systemctl is-system-running 2>/dev/null || true)"
+  if [[ "${sistema}" == "stopping" ]]; then
+    log "$(t watchdog.system_stopping)"
+    return "${EXIT_OK}"
+  fi
+
+  # b) Alguien lo apago. scripts/stop.sh deja la marca y 'make up' la borra, asi que la marca
+  #    con el contenedor caido significa "esta asi porque lo pidieron". Si el contenedor esta
+  #    vivo la marca quedo vieja (lo levantaron por fuera de 'make up') y se limpia sola.
+  if [[ -f "${MANTENIMIENTO}" ]]; then
+    if [[ "$(docker inspect --format '{{.State.Running}}' "${CONTENEDOR}" 2>/dev/null || true)" == "true" ]]; then
+      rm -f "${MANTENIMIENTO}"
+    else
+      log "$(t watchdog.planned_stop "${MANTENIMIENTO}")"
+      return "${EXIT_OK}"
+    fi
   fi
 
   local problema="" DETALLE=""

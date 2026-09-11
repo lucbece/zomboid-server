@@ -765,6 +765,8 @@ MSG[watchdog.autorepair_call]="llamando a scripts/autorepair.sh (intento %s de h
 MSG[watchdog.autorepair_rc]="autorepair.sh salio con codigo %s (ver %s)"
 MSG[watchdog.lock_unwritable]="ADVERTENCIA: no se puede escribir el lock %s: se saltea esta pasada"
 MSG[watchdog.lock_busy]="ya hay una operacion en curso (watchdog o mod-updater), se saltea esta"
+MSG[watchdog.system_stopping]="la VM se esta apagando: no hay nada que chequear"
+MSG[watchdog.planned_stop]="apagado a proposito (%s): el server esta caido porque lo pidieron, no se toca"
 MSG[watchdog.healthy]="sano: unit activa, contenedor arriba, RCON responde, log limpio"
 
 # --- scripts/mod-updater.sh -------------------------------------------------------------------------

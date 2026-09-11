@@ -19,6 +19,14 @@ source "${REPO_DIR}/scripts/lib/i18n.sh"
 log() { echo "stop: $*"; }
 rcon() { "${REPO_DIR}/scripts/rcon.sh" "$@"; }
 
+# Marca de apagado a proposito. El watchdog corre cada 2 minutos y, si encuentra el contenedor
+# caido, avisa "falla critica" y lo vuelve a levantar con 'make up'. Durante un apagado
+# planificado eso son dos problemas: una alarma falsa —que ademas entrena a la gente a ignorar
+# las alarmas— y un arranque del server justo mientras la VM se esta apagando, con el mundo
+# escribiendose a medias. La marca la borra 'make up', que es lo unico que levanta el server.
+MANTENIMIENTO="${ZOMBOID_MANTENIMIENTO:-/var/tmp/zomboid-mantenimiento}"
+date +%s > "${MANTENIMIENTO}" 2>/dev/null || true
+
 container_id="$(docker compose ps -q "${SERVICE}" 2>/dev/null || true)"
 if [[ -z "${container_id}" ]]; then
   log "$(t stop.not_running)"

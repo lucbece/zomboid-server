@@ -766,6 +766,8 @@ MSG[watchdog.autorepair_call]="calling scripts/autorepair.sh (attempt %s today f
 MSG[watchdog.autorepair_rc]="autorepair.sh exited with code %s (see %s)"
 MSG[watchdog.lock_unwritable]="WARNING: cannot write the lock %s: skipping this pass"
 MSG[watchdog.lock_busy]="an operation is already in progress (watchdog or mod-updater), skipping this one"
+MSG[watchdog.system_stopping]="the VM is shutting down: nothing to check"
+MSG[watchdog.planned_stop]="deliberate shutdown (%s): the server is down because somebody asked, leaving it alone"
 MSG[watchdog.healthy]="healthy: unit active, container up, RCON answering, log clean"
 
 # --- scripts/mod-updater.sh -------------------------------------------------------------------------

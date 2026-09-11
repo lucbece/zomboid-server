@@ -66,6 +66,25 @@ Checks run in this order and stop at the first problem, except the disk check, w
 The RCON check has a five-minute grace period after `State.StartedAt`: a server that is loading
 200 mods does not answer RCON, and restarting it for that reason would produce an infinite loop.
 
+Before any of that, two situations make every check moot, and until 2026-09-11 the watchdog
+handled both exactly backwards — it reported a critical failure and then started the server back
+up:
+
+- **The machine is shutting down.** `systemctl is-system-running` says `stopping`. There is a
+  window of minutes between `stop.sh` finishing and the kernel going away in which the container
+  is legitimately gone.
+- **Somebody stopped it.** `scripts/stop.sh` writes `/var/tmp/zomboid-mantenimiento` and
+  `make up` deletes it, so that file plus a stopped container means "it is down because it was
+  asked to be". If the container is running, the marker is stale — somebody started the server
+  outside `make up` — and it is cleaned up on the spot.
+
+Both paths exit quietly: no Discord message, no recovery. This matters beyond the noise. A false
+critical alert on every planned shutdown teaches everyone to ignore the alerts, and the recovery
+it triggered could start the game again while the VM was powering off, which writes the world
+half way. The automatic restarts — the watchdog's own and the mod updater's — pass
+`ZOMBOID_MANTENIMIENTO=/dev/null` so they never leave a marker for themselves: if one of those
+restarts failed, a marker would keep the watchdog quiet instead of making it react.
+
 Check 5 is the one that needs care. A Project Zomboid log is full of `ERROR` and `SEVERE` lines
 that mean nothing — a mod referencing a texture that was renamed, a map cell with bad room
 metadata, a building lot whose sign tiles are not defined (`SEVERE: Missing tile definition`).
