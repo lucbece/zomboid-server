@@ -38,6 +38,7 @@ set +a
 # Variables agregadas despues de que existieran .env en produccion: con default, para que un
 # .env viejo siga rendereando. Las nuevas de verdad siguen siendo obligatorias.
 export UPNP="${UPNP:-false}"
+export TRASH_DELETE_ALL="${TRASH_DELETE_ALL:-false}"
 
 # --- Mods: config/mods.txt -> MODS / WORKSHOP_ITEMS ---------------------------------------
 # MOD_ID_PREFIX permite probar el prefijo "\" por Mod ID que pedia B42 temprano.

@@ -125,6 +125,7 @@ write_files:
 
       MOD_ID_PREFIX=
       UPNP=false
+      TRASH_DELETE_ALL=false
 
       DISCORD_ENABLE=false
       DISCORD_TOKEN=

@@ -306,7 +306,7 @@ BanKickGlobalSound=true
 RemovePlayerCorpsesOnCorpseRemoval=false
 
 # If true, player can use the "delete all" button on bins.
-TrashDeleteAll=false
+TrashDeleteAll=${TRASH_DELETE_ALL}
 
 # If true, player can hit again when struck by another player.
 PVPMeleeWhileHitReaction=false
