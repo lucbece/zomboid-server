@@ -237,7 +237,17 @@ PROMPT="$(render)"
 #
 # `docker compose logs` va con --tail obligatorio: `make logs` es `logs -f` y se colgaria hasta
 # el timeout, que del otro lado son cinco minutos de silencio esperando un error.
-HERRAMIENTAS_LECTURA="${ASK_READ_TOOLS:-Bash(make status:*),Bash(make doctor:*),Bash(docker compose ps:*),Bash(docker compose logs --tail:*),Bash(./scripts/rcon.sh players),Bash(df:*),Bash(free:*),Bash(uptime:*),Read,Glob}"
+#
+# journalctl, --since, ls/stat/find: sirven para mirar ATRAS. Sin eso el operador solo ve el
+# presente, y las preguntas que llegan por voz son casi siempre sobre algo que ya paso ("a
+# algunos se les borro el mapa hace unos dias"). journalctl cuenta reinicios, apagados y OOM;
+# --since trae el log del juego de un rato puntual en vez de las ultimas N lineas; find y stat
+# encuentran archivos vacios o viejos, que fue exactamente la forma del incidente de los mapas.
+# ls y stat no muestran contenido, solo nombres y tamanos, asi que no alcanzan un secreto.
+# tail sigue denegado a proposito: un tail permitido llega al .env, y la denegacion le gana al
+# permiso, asi que no se puede abrir "solo para /var/log". Para ese log esta Read, que tiene
+# denegadas las rutas con secretos.
+HERRAMIENTAS_LECTURA="${ASK_READ_TOOLS:-Bash(make status:*),Bash(make doctor:*),Bash(docker compose ps:*),Bash(docker compose logs --tail:*),Bash(docker compose logs --since:*),Bash(./scripts/rcon.sh players),Bash(journalctl:*),Bash(ls:*),Bash(stat:*),Bash(find /opt/zomboid-server/data:*),Bash(df:*),Bash(free:*),Bash(uptime:*),Read,Glob}"
 HERRAMIENTAS_COMPLETO="${ASK_FULL_TOOLS:-${HERRAMIENTAS_LECTURA},Bash(make up:*),Bash(make down:*),Bash(make restart:*),Bash(make render:*),Bash(./scripts/rcon.sh:*),Bash(./scripts/restart.sh:*),Bash(./scripts/stop.sh:*),Bash(./scripts/backup.sh:*),Edit}"
 
 # Lo que no se puede tocar en ningun modo. Redundante con la lista blanca a proposito: la
