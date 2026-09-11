@@ -98,8 +98,13 @@ done < <(
       # shellcheck source=/dev/null
       source "${REPO_DIR}/.env"
       set +a
+      # Toda clave que el script sepa leer tiene que estar en esta lista: lo que no este aca
+      # no se exporta, y una variable puesta en el .env que no aparezca se ignora en silencio.
+      # Paso con ASK_READ_MAX_TURNS y ASK_MAX_USD_PER_DAY, que existian en el codigo pero no
+      # aca: el tope de gasto no se podia configurar y nadie se enteraba.
       for clave in CLAUDE_ASK ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN \
-        ASK_MAX_PER_DAY ASK_MAX_PER_HOUR ASK_MAX_TURNS ASK_TIMEOUT ASK_MODEL ASK_PERMISSION_MODE; do
+        ASK_MAX_PER_DAY ASK_MAX_PER_HOUR ASK_MAX_TURNS ASK_READ_MAX_TURNS ASK_MAX_USD_PER_DAY \
+        ASK_TIMEOUT ASK_MODEL ASK_PERMISSION_MODE; do
         [[ -n "${!clave-}" ]] && printf '%s=%s\n' "${clave}" "${!clave}"
       done
     )

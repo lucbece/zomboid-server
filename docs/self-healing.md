@@ -208,7 +208,7 @@ The persona in `tools/autorepair/CLAUDE.md` — what it may do, what it may neve
 | Input | A diagnostic bundle | A question, on stdin |
 | Latitude | Acts: better one restart too many than a server down until noon | Asks: when in doubt it says what it would look at, because somebody can answer in five seconds (`tools/ask/CLAUDE.md`) |
 | Default tools | The repair set | Read-only, unless the caller passes `--completo` |
-| Turns / timeout | 40 / 40m | 6 reading, 12 acting / 5m — a voice call is not a maintenance window, and looking should cost less than repairing |
+| Turns / timeout | 40 / 40m | 18 reading, 12 acting / 5m — see the measurements below; a voice call is not a maintenance window |
 | Quota | 1/hour, 3/day | 15/hour, 40/day **and USD 5/day** — the first real question cost 0.74, so a count-only quota is 11 dollars an hour |
 | Output | A report posted to Discord | One line of JSON: `spoken` for the voice, `detail` for the text channel |
 | Switch | `CLAUDE_AUTOREPAIR=1` | `CLAUDE_ASK=1` |
@@ -228,6 +228,39 @@ command="/opt/zomboid-server/scripts/ask.sh --read",no-port-forwarding,no-agent-
 It always writes one line of JSON to stdout, whatever happens — a closed door, no quota, no
 credential, a run that timed out — because on the other end there is a bot that has to say
 something, and silence is not an answer.
+
+### What a question actually costs
+
+Measured on this server, same question each time (*"some players lost their explored map a few
+days ago, go find out what happened"*), which is the shape that matters: an investigation, not a
+status check.
+
+| Model | Turn budget | Result | Cost |
+|---|---|---|---|
+| Opus 5 | 10 | ran out of turns, no answer | 0.68 |
+| Opus 5 | 10, after the prompt was tuned | answered | 0.80 |
+| Sonnet 5 | 10 | ran out of turns, no answer | 0.27 |
+| Sonnet 5 | 18 | answered | 0.43 |
+
+Three things came out of that, and they are worth more than the numbers:
+
+**Running out of turns is the worst outcome**, because the answer is written last: you pay the
+whole run and get nothing. Two of the four runs ended that way.
+
+**The fix for an expensive question is rarely more turns.** The first Opus run burned 351k tokens
+of context in 10 turns — it was not doing many things, it was hauling whole logs. What fixed it
+was telling the operator to look at names and sizes first (`ls -l`, `find -size 0`) and open a log
+only once it knows which minute to open. See `tools/ask/prompt.md`.
+
+**A smaller model is cheaper per turn but not automatically cheaper per answer.** Sonnet costs
+about a third of Opus per turn, yet it read *more* volume (425k vs 351k) and needed a bigger turn
+budget to finish. It still ends up roughly half the price for the same answer, which is why
+`ASK_MODEL=claude-sonnet-5` and `ASK_READ_MAX_TURNS=18` are what this server runs. Set both in
+`.env`; the defaults in the script are deliberately conservative for somebody who has not
+measured their own.
+
+The real ceiling is the daily spend cap, not the turn budget. Turns are a patience ceiling; only
+`ASK_MAX_USD_PER_DAY` is a money one.
 
 ## Layer 2: Claude Code
 
