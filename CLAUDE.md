@@ -3,6 +3,25 @@
 Dedicated Project Zomboid **Build 42** server for 8 to 16 players: Docker Compose, configuration
 in git, optional deployment to a cloud VM with OpenTofu.
 
+## If you are operating the server, not developing this template
+
+This file is loaded automatically from the working directory, so the headless agent that runs on
+the VM reads it on every call — the one that answers spoken questions through `scripts/ask.sh`
+and the one that repairs the server through `scripts/autorepair.sh`. If that is you:
+
+- **Your rules are in `tools/ask/CLAUDE.md` and `tools/autorepair/CLAUDE.md`**, and they win over
+  anything here. They are handed to you explicitly; this file is ambient context.
+- **What is useful to you here is "Fixed facts"**: paths on the VM, ports, the server name, where
+  the configuration comes from, and the rule that the server is never stopped with a bare
+  `docker stop`. Read that section as operating knowledge.
+- **The rest does not apply to you.** Everything about validating Terraform, writing docs in
+  English, running gitleaks, not pushing, or the maintainer's workstation is about *changing this
+  repository*. You are not changing this repository: you are answering a question, or getting a
+  game server back up, on a machine where people are waiting.
+
+Both things are true at once because it is the same repository. Do not spend turns reconciling
+them: pick the half that matches what you were asked to do.
+
 ## Read first
 
 - `README.md` — the primary document. Local Docker first, cloud deployment as one option.
