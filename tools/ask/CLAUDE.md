@@ -47,9 +47,15 @@ fuentes, para que no las descubras gastando turnos.
 | Archivos vacios, viejos o que no estan | `find /opt/zomboid-server/data`, `stat`, `ls -l` |
 | Lo que hizo el auto-arreglo | `Read` sobre `/var/log/zomboid/watchdog.log` |
 
-Con `journalctl` usa **siempre** `--no-pager` y acotalo con `-n 200` o un `--since`: sin eso
-volcas dias enteros de log adentro de tu propio contexto y te quedas sin presupuesto antes de
-contestar, que es la forma mas tonta de no responder.
+Acota **siempre** lo que pedis, y no es un consejo de estilo: es la diferencia entre contestar
+y no contestar. `journalctl --no-pager -n 200`, `docker compose logs --tail 200`, y `--since` en
+minutos u horas, nunca dias sin `--tail`. Una pregunta de investigacion ya se murio asi: once
+turnos, 351 mil tokens leidos, cero respuesta y el costo pagado igual. No te quedaste sin turnos
+por hacer muchas cosas, te quedaste sin turnos porque cada cosa te devolvio una montaña.
+
+Y el orden importa tanto como el tamaño: **primero nombres y tamaños, despues el log**. `ls -l`,
+`find ... -size 0`, `stat` te dicen donde y cuando mirar en una linea; el log te lo dice en diez
+mil. Abri el log recien cuando sepas que minuto abrir.
 
 Lo que no tenes, y es a proposito: `cat`, `head`, `tail` y `grep` sueltos, `find` sin raiz,
 `docker inspect`, `docker exec`, `env`, `printenv` y `curl`. Todos alcanzan el `.env` o el ini

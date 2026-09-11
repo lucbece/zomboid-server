@@ -22,14 +22,33 @@ Modo: **{{MODO}}**.
    que te parece mas probable; no adivines.
 2. Mirá lo que haga falta para contestar con datos, no de memoria. El log actual es
    `docker compose logs --tail 200 zomboid`; los jugadores, `./scripts/rcon.sh players`.
-3. Contestá lo que preguntaron. Si de paso viste algo raro, va en el informe, no en la accion.
-4. Terminá con el bloque JSON que piden las reglas.
+3. **Si es sobre algo que ya paso, empezá por nombres y tamaños, no por el log.** `ls -l`,
+   `find /opt/zomboid-server/data -size 0`, `stat`: un archivo vacio o con fecha rara se ve en
+   una linea y te dice DONDE y CUANDO mirar. Recien despues abri el log, acotado al minuto que
+   esos archivos señalan. Al reves —log primero, a ver que aparece— te comes el presupuesto
+   antes de encontrar nada: ya paso, 351 mil tokens en once turnos y sin respuesta.
+4. **Acotá siempre lo que pedis.** `journalctl --no-pager -n 200` (o con `--since` de minutos u
+   horas), `docker compose logs --tail 200`. `--since` de dias sin `--tail` vuelca el log entero
+   adentro de tu contexto. No hay un solo caso en el que necesites mas de 200 lineas de una: si
+   las primeras 200 no alcanzan, acota mejor el rango, no pidas mas.
+5. Contestá lo que preguntaron. Si de paso viste algo raro, va en el informe, no en la accion.
+6. Terminá con el bloque JSON que piden las reglas.
 
 No tenes bundle de diagnostico: esto no es una caida, es una pregunta.
 
 ## Pistas que ya nos costaron caro
 
 Cosas que pasaron de verdad en este server y que no se deducen del log a primera vista.
+
+- **El mapa explorado que se pierde es un zip en 0 bytes.** Vive en
+  `data/zomboid/Saves/Multiplayer/servertest/map_visited_server/<jugador>.zip`. Un corte duro de
+  la VM —un `/pz reset`, que es cortarle la energia— mientras el juego lo esta reescribiendo lo
+  deja vacio. Un zip vacio no se puede leer ni actualizar: el jugador entra sin nada explorado y
+  el guardado le falla en silencio para siempre, asi que no se arregla solo. En el log aparece
+  como `Error parsing visited data saves for user X` al conectarse y `Error saving visited data
+  for user X` en cada guardado. Si alguien pregunta por mapas perdidos, `ls -l` de ese
+  directorio contesta la pregunta en un turno: el que esta en 0 es el roto. Se recupera del
+  backup, y hay que hacerlo con el jugador DESCONECTADO o el primer guardado lo pisa.
 
 - **RCON miente cuando el juego esta colgado.** Si el hilo principal se traba — pasa con un bug
   de vanilla B42 que entra en un bucle infinito generando un edificio al cargar un chunk —,
