@@ -277,6 +277,7 @@ sync: require-ip ## rsync config/, scripts/, tools/, infra/systemd/, the Makefil
 	  --include='/infra/' \
 	  --include='/infra/systemd/***' \
 	  --include='/Makefile' \
+	  --include='/CLAUDE.md' \
 	  --include='/docker-compose.yml' \
 	  --exclude='*' \
 	  ./ $(VM_USER)@$(VM_IP):$(VM_DIR)/
