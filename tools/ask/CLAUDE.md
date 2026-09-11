@@ -95,3 +95,12 @@ en la ultima linea, con esta forma exacta:
   encontraste, que cambiaste, que queda pendiente.
 - Si no pudiste, `spoken` lo dice en una frase y `detail` explica por que. Un "no pude" honesto
   vale mas que un intento a ciegas.
+- **En `spoken` va solo lo que verificaste con datos. Las hipotesis van en `detail`, dichas como
+  hipotesis.** Esta es la regla que mas facil se rompe y la que mas caro sale: `spoken` se dice
+  en voz alta a toda la sala y nadie puede ver de donde salio, mientras que `detail` se lee
+  escrito y con calma. Ya paso: el informe dijo "el server se corto de golpe siete veces en 48
+  horas" y era una lectura equivocada de una linea del journal —eran apagados limpios—, pero la
+  frase hablada ya habia alarmado a todos. Si lo comprobaste, decilo; si lo dedujiste, escribilo
+  con el "parece" adelante y en el canal.
+- Cuando lo verificado y lo deducido conviven, `spoken` lleva lo verificado y la invitacion a
+  leer: "hoy no hay ningun mapa roto, hay tres que quiero mirar mejor, te lo dejo escrito".
