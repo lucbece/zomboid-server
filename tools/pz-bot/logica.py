@@ -130,13 +130,23 @@ def texto_en_linea(info: InfoServidor, direccion: str) -> str:
 # --- Comandos ------------------------------------------------------------------------------
 
 async def accion_start(ctx: Contexto) -> AsyncIterator[str]:
-    """Prende la VM si hace falta y sigue el arranque hasta que el juego contesta por A2S."""
+    """Prende la VM y sigue el arranque hasta que el juego responde.
+
+    En un arranque en frio (la VM estaba apagada) hace ademas UN reinicio automatico despues de
+    que el server levanta, antes de avisar que esta listo. Es la cura del bug del arranque: el
+    connect por el relay de Steam queda a veces a medias en el boot en frio (el puerto y A2S
+    responden, pero el cliente ve "no responde"), y un reinicio con la red ya caliente lo
+    re-registra. Como no se puede detectar, se hace siempre en el arranque en frio. Recien
+    despues del reinicio se anuncia "en linea", para no mandar a nadie a conectarse a un server
+    que va a fallar.
+    """
     try:
         estado = await ctx.estado_vm()
     except Exception as exc:
         yield f"No se pudo consultar el estado del server. {exc}"
         return
 
+    arranque_frio = False
     if estado == RUNNING:
         info = await ctx.info_juego()
         if info is not None:
@@ -145,6 +155,7 @@ async def accion_start(ctx: Contexto) -> AsyncIterator[str]:
             return
         yield "El server está prendido y el juego todavía no responde. Esperando…"
     elif estado == STOPPED:
+        arranque_frio = True
         yield "Prendiendo el server. Tarda ~3 minutos."
         try:
             await ctx.ejecutar(ctx.oci.arrancar)
@@ -160,8 +171,58 @@ async def accion_start(ctx: Contexto) -> AsyncIterator[str]:
         yield f"El server está {estado_legible(estado)}. No se puede prender desde acá."
         return
 
-    async for paso in _seguir_arranque(ctx, "Prendiendo"):
+    # Primer arranque: si NO es en frio, se avisa y listo (no se reinicia algo que ya venia bien).
+    if not arranque_frio:
+        async for paso in _seguir_arranque(ctx, "Prendiendo"):
+            yield paso
+        return
+
+    # Arranque en frio: esperar el primer arranque SIN anunciar "en linea".
+    salida: dict = {}
+    async for paso in _esperar_juego(ctx, "Prendiendo", salida):
         yield paso
+    if salida.get("info") is None:
+        yield ("El server no respondió después de "
+               f"{duracion_legible(ctx.espera_maxima)}. Probá `/pz status` en unos minutos.")
+        return
+
+    # El reinicio que cura el connect de Steam. Nadie esta conectado todavia.
+    yield "El server respondió. Lo reinicio una vez para asegurar la conexión (arreglo del bug del arranque); un minuto más…"
+    try:
+        await ctx.ejecutar(ctx.oci.reiniciar)
+    except Exception as exc:
+        # Si el reinicio falla, al menos entregar lo que hay: puede que funcione igual.
+        yield f"No pude reiniciarlo ({exc}). Probá conectarte igual; si dice \"no responde\", usá `/pz reset`."
+        yield texto_en_linea(salida["info"], ctx.direccion)
+        return
+
+    salida2: dict = {}
+    async for paso in _esperar_juego(ctx, "Reiniciando", salida2):
+        yield paso
+    if salida2.get("info") is None:
+        yield ("El server no respondió después del reinicio. Probá `/pz status` en unos minutos.")
+        return
+    ctx.estado.marcar_encendida(ctx.ahora(), aproximado=False)
+    yield texto_en_linea(salida2["info"], ctx.direccion)
+
+
+async def _esperar_juego(ctx: Contexto, verbo: str, salida: dict) -> AsyncIterator[str]:
+    """Espera a que el juego conteste por A2S, mostrando el progreso. NO anuncia \"en linea\".
+
+    Deja el resultado en salida["info"]: el info del juego si respondio, None si vencio la
+    espera. Se usa cuando despues hay que hacer algo mas (el reinicio del arranque en frio)
+    antes de darle la bienvenida a la gente.
+    """
+    inicio = ctx.ahora()
+    limite = inicio + ctx.espera_maxima
+    while ctx.ahora() < limite:
+        await ctx.dormir(ctx.intervalo)
+        info = await ctx.info_juego()
+        if info is not None:
+            salida["info"] = info
+            return
+        yield f"{verbo} el server… {duracion_legible(ctx.ahora() - inicio)}"
+    salida["info"] = None
 
 
 async def _seguir_arranque(ctx: Contexto, verbo: str) -> AsyncIterator[str]:

@@ -73,7 +73,7 @@ they appear immediately. Global registration takes up to an hour.
 
 | Command | Who | What it does |
 |---|---|---|
-| `/pz start` | any member (or `PZ_BOT_ALLOWED_ROLE_IDS`) | Starts the VM if it is `STOPPED`, answers "Prendiendo el server, tarda ~3 minutos" immediately, then edits that message every few seconds until A2S answers, ending in "En línea · IP:puerto". If the VM is already running it reports the player count instead. |
+| `/pz start` | any member (or `PZ_BOT_ALLOWED_ROLE_IDS`) | Starts the VM if it is `STOPPED`, answers "Prendiendo el server, tarda ~3 minutos" immediately, then edits that message every few seconds until A2S answers. **On a cold boot (the VM was off) it then restarts the server once before announcing it is ready** — the Steam connection relay sometimes comes up half-registered on a cold boot (the port and A2S answer, but the game client sees "server no responde"), and a restart with the network already warm re-registers it. Since that state cannot be detected, the restart is unconditional on a cold boot; the message ends in "En línea · IP:puerto" only after it. If the VM was already running it does not restart (it reports the player count, or follows the boot already in progress). |
 | `/pz status` | same | Lifecycle state of the VM. If it is running, the name, map, player count and version reported by the server itself over A2S, plus how long it has been up. |
 | `/pz stop` | `PZ_BOT_ADMIN_USER_IDS`, or anyone if that is empty | Refuses unless A2S reports zero players, and refuses if A2S does not answer at all — an unreachable server is not the same as an empty one. Otherwise issues `SOFTSTOP`. |
 | `/pz reset [forzar]` | `PZ_BOT_ADMIN_USER_IDS` or a role in `PZ_BOT_RESET_ROLES`; nobody if both are empty | Hard power cycle (`RESET`) for an instance that OCI reports `RUNNING` while the game does not answer. Refuses while A2S reports players unless `forzar:True`, sends you to `/pz start` when the VM is `STOPPED`, then follows the boot like `/pz start`. |
@@ -211,7 +211,7 @@ the backstop.
 
 | What happens | What the player sees | What to do |
 |---|---|---|
-| The game VM is `STOPPED` and `/pz start` is issued | "Prendiendo el server, tarda ~3 minutos", then "En línea" | nothing |
+| The game VM is `STOPPED` and `/pz start` is issued | "Prendiendo el server, tarda ~3 minutos", one restart to cure the Steam relay, then "En línea" | a single automatic RESET after the first boot |
 | The VM boots but the server does not answer A2S within 7 minutes | "El server no respondió después de 7 min" | `make remote-logs`; usually a mod that fails to load |
 | Two people run `/pz start` at once | The second one sees "El server ya se está prendiendo" | nothing; `START` on a running instance is not issued twice |
 | `/pz stop` while someone is connected | "Hay N jugadores conectados: no se apaga" | nothing |

@@ -27,24 +27,38 @@ from tests.dobles import A2SFalso, OCIFalso, Reloj, contexto, recolectar
 
 
 class TestStart(unittest.IsolatedAsyncioTestCase):
-    async def test_prende_una_vm_apagada_y_espera_al_juego(self):
+    async def test_arranque_en_frio_reinicia_una_vez_antes_de_avisar(self):
+        # Arranque en frio (VM apagada): prende, espera, REINICIA una vez (cura del bug del
+        # connect de Steam) y recien despues avisa "en linea".
         reloj = Reloj()
         oci = OCIFalso(["STOPPED"])
-        # El juego contesta recien a los 100 s simulados.
         sonda = A2SFalso(reloj, responde_desde=100)
         ctx = contexto(oci, sonda, reloj, intervalo=10, espera_maxima=420)
 
         pasos = await recolectar(accion_start(ctx))
 
         self.assertEqual(oci.arrancadas, 1)
+        self.assertEqual(oci.reinicios, 1)   # el reinicio automatico del arranque en frio
         self.assertIn("Tarda ~3 minutos", pasos[0])
-        self.assertTrue(any("Prendiendo el server…" in p for p in pasos[1:-1]))
+        self.assertTrue(any("reinicio" in p.lower() for p in pasos))  # avisa que reinicia
         self.assertIn("En línea", pasos[-1])
         self.assertIn("My Zomboid Server", pasos[-1])
         self.assertIn("203.0.113.10:16261", pasos[-1])
-        # Y queda registrado el momento del arranque, sin el ~ de "aproximado".
         self.assertIsNotNone(ctx.estado.encendida_desde)
         self.assertFalse(ctx.estado.aproximado)
+
+    async def test_arranque_en_frio_si_el_reinicio_falla_igual_entrega(self):
+        # Si el reinicio falla, no deja al usuario sin nada: avisa y entrega la info que hay.
+        reloj = Reloj()
+        oci = OCIFalso(["STOPPED"], falla_en={"reiniciar"})
+        sonda = A2SFalso(reloj, responde_desde=100)
+        ctx = contexto(oci, sonda, reloj, intervalo=10, espera_maxima=420)
+
+        pasos = await recolectar(accion_start(ctx))
+
+        self.assertEqual(oci.arrancadas, 1)
+        self.assertTrue(any("no pude reiniciar" in p.lower() or "no responde" in p.lower() for p in pasos))
+        self.assertIn("En línea", pasos[-1])   # igual entrega el estado del juego
 
     async def test_si_ya_esta_en_linea_lo_dice_y_no_toca_nada(self):
         reloj = Reloj()
